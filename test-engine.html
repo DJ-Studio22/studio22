@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Studio 22 — Engine Debug (throwaway)</title>
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <style>
+    /* THROWAWAY TEST FILE — delete once the engine modules are verified. */
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--color-bg-0);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+      font-size: 1.1rem;
+      touch-action: none;
+    }
+
+    /* The GameCanvas mounts here. Sized in viewport units so resizing the
+       window changes this box's aspect ratio — which is exactly what makes
+       the letterbox/pillarbox bars visibly swap sides. */
+    #stage {
+      position: relative;
+      height: 46vh;
+      min-height: 200px;
+      border-bottom: 2px solid var(--color-bg-3);
+    }
+
+    .wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-md);
+      padding: var(--space-md);
+      align-items: flex-start;
+    }
+
+    .panel {
+      background: var(--color-bg-1);
+      border: 1px solid var(--color-bg-3);
+      border-radius: var(--radius-md);
+      padding: var(--space-md);
+    }
+
+    h2 {
+      margin: 0 0 var(--space-sm) 0;
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--color-text-secondary);
+      font-weight: 600;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-lg);
+      align-items: baseline;
+      padding: 2px 0;
+    }
+
+    .label { color: var(--color-text-secondary); font-size: 0.95rem; }
+
+    .value {
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      color: var(--color-accent);
+      min-width: 4ch;
+      text-align: right;
+    }
+
+    .value.wide { min-width: 11ch; }
+
+    /* --- Button indicators --- */
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+
+    .btn {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      text-align: center;
+      padding: var(--space-sm) 4px;
+      border-radius: var(--radius-sm);
+      background: var(--color-bg-2);
+      color: var(--color-text-disabled);
+      border: 2px solid var(--color-bg-3);
+      /* Color only — never layout properties. */
+      transition: background-color 60ms linear, color 60ms linear, border-color 60ms linear;
+    }
+
+    .btn.on {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: var(--color-bg-0);
+    }
+
+    /* --- Left stick visualizer --- */
+
+    .stick-box {
+      position: relative;
+      width: 170px;
+      height: 170px;
+      background: var(--color-bg-2);
+      border: 2px solid var(--color-bg-3);
+      border-radius: var(--radius-sm);
+    }
+
+    .stick-box::before,
+    .stick-box::after { content: ''; position: absolute; background: var(--color-bg-3); }
+    .stick-box::before { left: 0; right: 0; top: 50%; height: 1px; }
+    .stick-box::after { top: 0; bottom: 0; left: 50%; width: 1px; }
+
+    /* Deadzone radius (0.15 of the 85px half-width). */
+    .ring-deadzone {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 25px; height: 25px;
+      margin: -12.5px 0 0 -12.5px;
+      border: 1px dashed var(--color-accent-2);
+      border-radius: var(--radius-full);
+      opacity: 0.6;
+    }
+
+    .dot {
+      position: absolute;
+      left: 50%; top: 50%;
+      width: 14px; height: 14px;
+      margin: -7px 0 0 -7px;
+      border-radius: var(--radius-full);
+      background: var(--color-accent);
+      will-change: transform;
+    }
+
+    /* --- Loop controls --- */
+
+    .controls { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+
+    .controls button {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      padding: var(--space-sm) var(--space-md);
+      background: var(--color-bg-2);
+      color: var(--color-text-primary);
+      border: 2px solid var(--color-bg-3);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+
+    .controls button:hover { border-color: var(--color-accent); }
+
+    .hint {
+      color: var(--color-text-disabled);
+      font-size: 0.85rem;
+      margin-top: var(--space-sm);
+      line-height: 1.5;
+      max-width: 42ch;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+
+  <div class="wrap">
+
+    <div class="panel">
+      <h2>Loop</h2>
+      <div class="row"><span class="label">fps</span><span class="value" id="fps">0</span></div>
+      <div class="row"><span class="label">state</span><span class="value wide" id="loop-state">—</span></div>
+      <div class="row"><span class="label">alpha</span><span class="value" id="alpha">0.00</span></div>
+      <div class="row"><span class="label">ticks</span><span class="value wide" id="ticks">0</span></div>
+      <div class="controls" style="margin-top: var(--space-sm);">
+        <button id="btn-start">start</button>
+        <button id="btn-stop">stop</button>
+        <button id="btn-pause">pause</button>
+        <button id="btn-resume">resume</button>
+        <button id="btn-fps">fps</button>
+        <button id="btn-tv">tv mode</button>
+      </div>
+      <div class="hint">
+        Ticks should climb at ~60/sec regardless of your monitor's refresh
+        rate. Alpha varies on displays that aren't 60Hz.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Canvas</h2>
+      <div class="row"><span class="label">game</span><span class="value wide" id="c-game">—</span></div>
+      <div class="row"><span class="label">display</span><span class="value wide" id="c-display">—</span></div>
+      <div class="row"><span class="label">backing</span><span class="value wide" id="c-backing">—</span></div>
+      <div class="row"><span class="label">dpr</span><span class="value" id="c-dpr">—</span></div>
+      <div class="row"><span class="label">scale</span><span class="value" id="c-scale">—</span></div>
+      <div class="row"><span class="label">uiScale</span><span class="value" id="c-uiscale">—</span></div>
+      <div class="row"><span class="label">bars</span><span class="value wide" id="c-bars">—</span></div>
+      <div class="hint">
+        Resize the window: bars should swap between left/right and top/bottom,
+        all four corner markers must stay visible, and the square must never
+        stretch. Backing = display × dpr.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Device</h2>
+      <div class="row"><span class="label">active</span><span class="value wide" id="device">—</span></div>
+      <div class="row"><span class="label">pads</span><span class="value wide" id="pads">none</span></div>
+      <div class="row"><span class="label">x</span><span class="value" id="ax-x">0.00</span></div>
+      <div class="row"><span class="label">y</span><span class="value" id="ax-y">0.00</span></div>
+      <div class="row"><span class="label">aimX</span><span class="value" id="ax-aimx">0.00</span></div>
+      <div class="row"><span class="label">aimY</span><span class="value" id="ax-aimy">0.00</span></div>
+      <div class="row"><span class="label">mag</span><span class="value" id="ax-mag">0.00</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Left stick</h2>
+      <div class="stick-box">
+        <div class="ring-deadzone"></div>
+        <div class="dot" id="dot"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="flex: 1 1 340px;">
+      <h2>Buttons</h2>
+      <div class="buttons" id="buttons"></div>
+      <div class="hint">
+        WASD / arrows move · Space or Enter = A (flashes the square) ·
+        Shift = B · Escape = Back. Tap or click inside the play area to drop a
+        screenToGame() marker.
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { Input } from '/engine/input.js';
+    import { GameCanvas } from '/engine/canvas.js';
+    import { GameLoop } from '/engine/loop.js';
+
+    // Colors come from tokens.css rather than being hardcoded here — canvas
+    // fillStyle can't read a CSS var directly, so resolve them once up front.
+    const rootStyles = getComputedStyle(document.documentElement);
+    const token = (name) => rootStyles.getPropertyValue(name).trim();
+    const COLOR_PLAY_AREA = token('--color-bg-2');
+    const COLOR_EDGE = token('--color-bg-3');
+    const COLOR_ACCENT = token('--color-accent');
+    const COLOR_ACCENT_2 = token('--color-accent-2');
+    const COLOR_TEXT = token('--color-text-secondary');
+
+    const stage = document.getElementById('stage');
+    const screenCanvas = new GameCanvas({ width: 960, height: 540, parent: stage });
+
+    // --- Game state -------------------------------------------------------
+
+    const PLAYER_SPEED = 320; // game units per second
+    const PLAYER_SIZE = 48;
+
+    const player = {
+      x: (960 - PLAYER_SIZE) / 2,
+      y: (540 - PLAYER_SIZE) / 2,
+      prevX: (960 - PLAYER_SIZE) / 2,
+      prevY: (540 - PLAYER_SIZE) / 2,
+      flash: 0,
+    };
+
+    let tapMarker = null;
+    let tickCount = 0;
+
+    // Verifies screenToGame(): the marker must land exactly under the
+    // pointer at any window size, and taps on the letterbox bars land
+    // outside 0..960 / 0..540 and are ignored.
+    screenCanvas.canvas.addEventListener('pointerdown', (event) => {
+      const p = screenCanvas.screenToGame(event.clientX, event.clientY);
+      tapMarker = p;
+    });
+
+    // --- Fixed-timestep update -------------------------------------------
+
+    function update(dt) {
+      tickCount++;
+
+      // Snapshot for render()'s interpolation before moving.
+      player.prevX = player.x;
+      player.prevY = player.y;
+
+      const state = Input.get(0);
+      player.x += state.x * PLAYER_SPEED * dt;
+      player.y += state.y * PLAYER_SPEED * dt;
+
+      // Keep the square inside game space so the play-area edges are easy
+      // to check against the letterboxing.
+      player.x = Math.min(Math.max(player.x, 0), screenCanvas.width - PLAYER_SIZE);
+      player.y = Math.min(Math.max(player.y, 0), screenCanvas.height - PLAYER_SIZE);
+
+      // Edge detection: fires once per press, not once per held frame.
+      if (Input.pressed('a')) player.flash = 1;
+      if (player.flash > 0) player.flash = Math.max(0, player.flash - dt * 3);
+    }
+
+    // --- Render -----------------------------------------------------------
+
+    function render(alpha) {
+      const ctx = screenCanvas.ctx;
+      const w = screenCanvas.width;
+      const h = screenCanvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = COLOR_PLAY_AREA;
+      ctx.fillRect(0, 0, w, h);
+
+      // Play-area border + center crosshair. If letterboxing is right, this
+      // full border stays visible at every window size.
+      ctx.strokeStyle = COLOR_EDGE;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(2, 2, w - 4, h - 4);
+      ctx.beginPath();
+      ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h);
+      ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Corner markers — all four must be on screen, or the fit math is wrong.
+      ctx.fillStyle = COLOR_ACCENT_2;
+      for (const [cx, cy] of [[0, 0], [w - 24, 0], [0, h - 24], [w - 24, h - 24]]) {
+        ctx.fillRect(cx, cy, 24, 24);
+      }
+
+      if (tapMarker) {
+        ctx.strokeStyle = COLOR_ACCENT_2;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(tapMarker.x, tapMarker.y, 14, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Interpolated between the last two simulation steps — this is what
+      // keeps motion smooth on a 144Hz display running a 60Hz simulation.
+      const x = player.prevX + (player.x - player.prevX) * alpha;
+      const y = player.prevY + (player.y - player.prevY) * alpha;
+      ctx.fillStyle = player.flash > 0 ? COLOR_ACCENT_2 : COLOR_ACCENT;
+      ctx.fillRect(x, y, PLAYER_SIZE, PLAYER_SIZE);
+
+      // HUD text scales with tvMode without the game doing any math.
+      ctx.fillStyle = COLOR_TEXT;
+      ctx.font = `${14 * screenCanvas.uiScale}px ${token('--font-mono')}`;
+      ctx.fillText(
+        `960 x 540 game space · uiScale ${screenCanvas.uiScale}`,
+        16, 20 + 14 * screenCanvas.uiScale,
+      );
+
+      updateReadout(alpha);
+    }
+
+    // --- Debug readout ----------------------------------------------------
+
+    const BUTTON_NAMES = ['a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt'];
+
+    const buttonEls = {};
+    const buttonsRoot = document.getElementById('buttons');
+    for (const name of BUTTON_NAMES) {
+      const el = document.createElement('div');
+      el.className = 'btn';
+      el.textContent = name;
+      buttonsRoot.appendChild(el);
+      buttonEls[name] = el;
+    }
+
+    const el = (id) => document.getElementById(id);
+    const dot = el('dot');
+    const fmt = (n) => n.toFixed(2);
+
+    // Only touch the DOM when a value actually changed — avoids pointless
+    // style recalculation 60+ times a second.
+    function setText(node, text) {
+      if (node.textContent !== text) node.textContent = text;
+    }
+
+    function updateReadout(alpha) {
+      const s = Input.get(0);
+
+      setText(el('device'), Input.getActiveDevice());
+      const pads = Input.getConnectedPads();
+      setText(el('pads'), pads.length ? pads.join(', ') : 'none');
+
+      setText(el('ax-x'), fmt(s.x));
+      setText(el('ax-y'), fmt(s.y));
+      setText(el('ax-aimx'), fmt(s.aimX));
+      setText(el('ax-aimy'), fmt(s.aimY));
+      setText(el('ax-mag'), fmt(Math.hypot(s.x, s.y)));
+
+      dot.style.transform = `translate(${s.x * 85}px, ${s.y * 85}px)`;
+      for (const name of BUTTON_NAMES) buttonEls[name].classList.toggle('on', s[name]);
+
+      setText(el('fps'), String(loop.fps));
+      setText(el('loop-state'), loop.isPaused ? 'paused' : loop.isRunning ? 'running' : 'stopped');
+      setText(el('alpha'), fmt(alpha));
+      setText(el('ticks'), String(tickCount));
+
+      // Canvas metrics, including the letterbox bar sizes.
+      const stageRect = stage.getBoundingClientRect();
+      const canvasRect = screenCanvas.canvas.getBoundingClientRect();
+      const barX = Math.round((stageRect.width - canvasRect.width) / 2);
+      const barY = Math.round((stageRect.height - canvasRect.height) / 2);
+
+      setText(el('c-game'), `${screenCanvas.width}x${screenCanvas.height}`);
+      setText(el('c-display'), `${Math.round(canvasRect.width)}x${Math.round(canvasRect.height)}`);
+      setText(el('c-backing'), `${screenCanvas.canvas.width}x${screenCanvas.canvas.height}`);
+      setText(el('c-dpr'), String(window.devicePixelRatio || 1));
+      setText(el('c-scale'), fmt(screenCanvas.scale));
+      setText(el('c-uiscale'), fmt(screenCanvas.uiScale));
+      setText(el('c-bars'), `${barX} x ${barY}`);
+    }
+
+    // --- Loop + controls --------------------------------------------------
+
+    const loop = new GameLoop({
+      update,
+      render,
+      showFps: true,
+      onPause: () => setText(el('loop-state'), 'paused'),
+    });
+
+    // blur() after each click so a focused button doesn't swallow Space.
+    const wire = (id, fn) => el(id).addEventListener('click', (e) => { fn(); e.currentTarget.blur(); });
+
+    wire('btn-start', () => loop.start());
+    wire('btn-stop', () => loop.stop());
+    wire('btn-pause', () => loop.pause());
+    wire('btn-resume', () => loop.resume());
+    wire('btn-fps', () => loop.toggleFps());
+    wire('btn-tv', () => screenCanvas.setTvMode(screenCanvas.uiScale === 1));
+
+    loop.start();
+  </script>
+</body>
+</html>
