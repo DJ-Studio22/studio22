@@ -48,7 +48,12 @@ const JOYSTICK_MAX_RADIUS_PX = 55;
 // The full set of digital buttons in the normalized state object. Kept as a
 // list (rather than re-typing it everywhere) so merge/copy helpers below
 // can loop instead of repeating ten field names.
-const BUTTON_NAMES = ['a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt'];
+// ls/rs are the stick clicks (L3/R3) -- pressing straight down on a thumb
+// stick. Gamepad and keyboard only: there is no thumb-stick to click on a
+// touchscreen, so the virtual controls never produce them.
+const BUTTON_NAMES = [
+  'a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt', 'ls', 'rs',
+];
 
 // Arrow keys and space scroll the page by default; that's the one browser
 // behavior every game needs suppressed during play.
@@ -73,6 +78,12 @@ const DEFAULT_PLAYER0_LAYOUT = {
   y: [],
   start: [],
   back: ['Escape'],
+  // Q and E sit either side of the WASD cluster, so a left hand already on
+  // the movement keys can reach both stick clicks without moving -- which
+  // matches how L3/R3 feel on a pad (thumb already on the stick). Neither
+  // collides with the movement keys, Space/Enter, Shift, or Escape.
+  ls: ['KeyQ'],
+  rs: ['KeyE'],
 };
 
 // Named presets for party mode, so four people can share one keyboard
@@ -85,21 +96,25 @@ const KEYBOARD_LAYOUTS = {
     up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
     a: ['KeyF'], b: ['KeyG'], x: ['KeyR'], y: ['KeyT'],
     start: ['Digit1'], back: ['Escape'],
+    ls: ['KeyQ'], rs: ['KeyE'],
   },
   ARROWS: {
     up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
     a: ['Slash'], b: ['Period'], x: ['Comma'], y: ['KeyM'],
     start: ['Digit0'], back: ['Escape'],
+    ls: ['Semicolon'], rs: ['Quote'],
   },
   IJKL: {
     up: ['KeyI'], down: ['KeyK'], left: ['KeyJ'], right: ['KeyL'],
     a: ['KeyU'], b: ['KeyO'], x: ['KeyY'], y: ['KeyP'],
     start: ['Digit9'], back: ['Escape'],
+    ls: ['KeyH'], rs: ['KeyN'],
   },
   NUMPAD: {
     up: ['Numpad8'], down: ['Numpad5'], left: ['Numpad4'], right: ['Numpad6'],
     a: ['Numpad0'], b: ['NumpadEnter'], x: ['Numpad7'], y: ['Numpad9'],
     start: ['NumpadAdd'], back: ['Escape'],
+    ls: ['Numpad1'], rs: ['Numpad3'],
   },
 };
 
@@ -406,6 +421,11 @@ export class Input {
       lt: buttonValue(6) > TRIGGER_THRESHOLD || buttonPressed(6),
       rt: buttonValue(7) > TRIGGER_THRESHOLD || buttonPressed(7),
       back: buttonPressed(8), start: buttonPressed(9),
+      // Stick clicks. Indices 10/11 sit between the two menu buttons and the
+      // d-pad in the standard mapping, so they are present on any pad the
+      // browser normalizes -- and simply never fire on one that has no
+      // clickable sticks.
+      ls: buttonPressed(10), rs: buttonPressed(11),
     };
   }
 
@@ -431,8 +451,11 @@ export class Input {
     return {
       x, y, aimX: 0, aimY: 0,
       a: held(layout.a), b: held(layout.b), btnX: held(layout.x), btnY: held(layout.y),
+      // Shoulders and triggers have no keyboard binding in any layout, so
+      // they stay false; the stick clicks do, hence the lookup.
       lb: false, rb: false, lt: false, rt: false,
       back: held(layout.back), start: held(layout.start),
+      ls: held(layout.ls), rs: held(layout.rs),
     };
   }
 

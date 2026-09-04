@@ -75,9 +75,10 @@
 
     /* --- Button indicators --- */
 
+    /* Six columns so the twelve buttons fill exactly two rows. */
     .buttons {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 4px;
     }
 
@@ -100,7 +101,7 @@
       color: var(--color-bg-0);
     }
 
-    /* --- Left stick visualizer --- */
+    /* --- Stick visualizers (left = x/y, right = aimX/aimY) --- */
 
     .stick-box {
       position: relative;
@@ -135,6 +136,45 @@
       border-radius: var(--radius-full);
       background: var(--color-accent);
       will-change: transform;
+    }
+
+    /* The aim dot is tinted differently so the two squares can't be confused
+       at a glance while both sticks are moving. */
+    .dot.aim { background: var(--color-accent-2); }
+
+    /* --- Virtual touch buttons ---
+       These are drawn from the exact same ratio config handed to
+       Input.setTouchLayout(), so what you see is precisely what the engine
+       hit-tests. They only get created on touch devices, matching the
+       engine's own auto-enable rule. */
+
+    .touch-pad {
+      position: fixed;
+      border-radius: var(--radius-full);
+      border: 2px solid var(--color-bg-3);
+      background: var(--color-bg-2);
+      color: var(--color-text-secondary);
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.55;
+      /* Must not swallow the touch — the engine listens on window, and a
+         pad that captured its own taps would break the very thing we're
+         trying to verify. */
+      pointer-events: none;
+      z-index: 50;
+      /* Color and opacity only, never layout. */
+      transition: background-color 60ms linear, color 60ms linear,
+                  border-color 60ms linear, opacity 60ms linear;
+    }
+
+    .touch-pad.on {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: var(--color-bg-0);
+      opacity: 1;
     }
 
     /* --- Loop controls --- */
@@ -223,13 +263,24 @@
       </div>
     </div>
 
+    <div class="panel">
+      <h2>Right stick</h2>
+      <div class="stick-box">
+        <div class="ring-deadzone"></div>
+        <div class="dot aim" id="dot-aim"></div>
+      </div>
+    </div>
+
     <div class="panel" style="flex: 1 1 340px;">
       <h2>Buttons</h2>
       <div class="buttons" id="buttons"></div>
       <div class="hint">
         WASD / arrows move · Space or Enter = A (flashes the square) ·
-        Shift = B · Escape = Back. Tap or click inside the play area to drop a
-        screenToGame() marker.
+        Shift = B · Escape = Back · Q = LS · E = RS (stick clicks).
+        Tap or click inside the play area to drop a screenToGame() marker.<br />
+        On a touch device, four action pads appear bottom-right and the left
+        half of the screen spawns the virtual joystick — drag there while
+        tapping pads to check multitouch.
       </div>
     </div>
 
@@ -356,7 +407,10 @@
 
     // --- Debug readout ----------------------------------------------------
 
-    const BUTTON_NAMES = ['a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt'];
+    // Mirrors the engine's own button list, including the ls/rs stick clicks.
+    const BUTTON_NAMES = [
+      'a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt', 'ls', 'rs',
+    ];
 
     const buttonEls = {};
     const buttonsRoot = document.getElementById('buttons');
@@ -368,8 +422,56 @@
       buttonEls[name] = el;
     }
 
+    // --- Virtual touch controls ------------------------------------------
+
+    // Four action buttons in a controller-style face cluster on the right
+    // half of the screen: Y top, X left, B right, A bottom. Positions are
+    // fractions of the viewport so they hold their place across phone sizes
+    // and survive an orientation flip. `name` must match a button field in
+    // Input.get(); `label` is only for the visual pad below.
+    //
+    // All four sit well right of the halfway line, which keeps them clear of
+    // the left-half region where the engine spawns its virtual joystick --
+    // that separation is what makes stick-plus-button multitouch testable.
+    // The horizontal spread and radius are sized so X and B never overlap
+    // even on a narrow portrait phone (~375px): overlapping hit regions
+    // would be silently broken, because the engine returns the first match
+    // in array order, so the second button could never be pressed.
+    const TOUCH_LAYOUT = [
+      { name: 'btnY', label: 'Y', xRatio: 0.81, yRatio: 0.45, radius: 30 },
+      { name: 'btnX', label: 'X', xRatio: 0.71, yRatio: 0.63, radius: 30 },
+      { name: 'b',    label: 'B', xRatio: 0.91, yRatio: 0.63, radius: 30 },
+      { name: 'a',    label: 'A', xRatio: 0.81, yRatio: 0.81, radius: 30 },
+    ];
+
+    Input.setTouchLayout(TOUCH_LAYOUT);
+
+    // The engine only attaches touch listeners on touch-capable devices, so
+    // mirror that rule here instead of cluttering the desktop view with pads
+    // that could never light up.
+    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    const touchPadEls = {};
+
+    if (isTouchDevice) {
+      for (const pad of TOUCH_LAYOUT) {
+        const node = document.createElement('div');
+        node.className = 'touch-pad';
+        node.textContent = pad.label;
+        node.style.width = `${pad.radius * 2}px`;
+        node.style.height = `${pad.radius * 2}px`;
+        node.style.left = `${pad.xRatio * 100}%`;
+        node.style.top = `${pad.yRatio * 100}%`;
+        // Centers the circle on the ratio point — the same point the engine
+        // measures its hit-test radius from.
+        node.style.transform = 'translate(-50%, -50%)';
+        document.body.appendChild(node);
+        touchPadEls[pad.name] = node;
+      }
+    }
+
     const el = (id) => document.getElementById(id);
     const dot = el('dot');
+    const dotAim = el('dot-aim');
     const fmt = (n) => n.toFixed(2);
 
     // Only touch the DOM when a value actually changed — avoids pointless
@@ -391,8 +493,17 @@
       setText(el('ax-aimy'), fmt(s.aimY));
       setText(el('ax-mag'), fmt(Math.hypot(s.x, s.y)));
 
+      // 85px = half the stick box, so a full-deflection 1.0 lands the dot on
+      // the edge. Both sticks share the scale so they read identically.
       dot.style.transform = `translate(${s.x * 85}px, ${s.y * 85}px)`;
-      for (const name of BUTTON_NAMES) buttonEls[name].classList.toggle('on', s[name]);
+      dotAim.style.transform = `translate(${s.aimX * 85}px, ${s.aimY * 85}px)`;
+
+      for (const name of BUTTON_NAMES) {
+        buttonEls[name].classList.toggle('on', s[name]);
+        // Same state drives the on-screen touch pad, so a lit pad is proof
+        // the engine registered that touch — not just that it was drawn.
+        if (touchPadEls[name]) touchPadEls[name].classList.toggle('on', s[name]);
+      }
 
       setText(el('fps'), String(loop.fps));
       setText(el('loop-state'), loop.isPaused ? 'paused' : loop.isRunning ? 'running' : 'stopped');
