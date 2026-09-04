@@ -222,6 +222,20 @@
         <button id="btn-fps">fps</button>
         <button id="btn-tv">tv mode</button>
       </div>
+      <h2 style="margin-top: var(--space-md);">Shell</h2>
+      <div class="controls">
+        <button id="btn-shell-pause">pause menu</button>
+        <button id="btn-shell-gameover">game over</button>
+        <button id="btn-shell-howto">how to play</button>
+        <button id="btn-shell-loading">loading 2s</button>
+        <button id="btn-session">clear session</button>
+      </div>
+      <div class="hint">
+        Menus are drawn in-canvas, so they letterbox and TV-scale with the
+        game. Navigate with D-pad / left stick / arrow keys, A confirms,
+        B or Escape backs out. Add <code>?tournament=1</code> to the URL to
+        swap "Play Again" for "Pass to next player".
+      </div>
       <div class="hint">
         Ticks should climb at ~60/sec regardless of your monitor's refresh
         rate. Alpha varies on displays that aren't 60Hz.
@@ -290,6 +304,8 @@
     import { Input } from '/engine/input.js';
     import { GameCanvas } from '/engine/canvas.js';
     import { GameLoop } from '/engine/loop.js';
+    import { GameShell } from '/engine/shell.js';
+    import { Session } from '/engine/session.js';
 
     // Colors come from tokens.css rather than being hardcoded here — canvas
     // fillStyle can't read a CSS var directly, so resolve them once up front.
@@ -320,10 +336,18 @@
     let tapMarker = null;
     let tickCount = 0;
 
+    // Fake HUD values so the shell's HUD helpers have something to draw.
+    let fakeScore = 0;
+    let fakeLives = 3;
+    let fakeTimer = 0;
+    let fakeLevel = 1;
+
     // Verifies screenToGame(): the marker must land exactly under the
     // pointer at any window size, and taps on the letterbox bars land
-    // outside 0..960 / 0..540 and are ignored.
+    // outside 0..960 / 0..540 and are ignored. Skipped while a shell overlay
+    // is up, so tapping a menu button doesn't also drop a marker behind it.
     screenCanvas.canvas.addEventListener('pointerdown', (event) => {
+      if (shell && shell.isOverlayOpen) return;
       const p = screenCanvas.screenToGame(event.clientX, event.clientY);
       tapMarker = p;
     });
@@ -331,7 +355,16 @@
     // --- Fixed-timestep update -------------------------------------------
 
     function update(dt) {
+      // The shell gets first refusal on every tick. It returns false when a
+      // menu owns the frame, which is this game's cue to skip its logic.
+      if (!shell.update(dt)) return;
+
       tickCount++;
+
+      // Drive the HUD demo values.
+      fakeTimer += dt;
+      fakeScore += Math.round(Math.abs(Input.get(0).x) * 3);
+      fakeLevel = 1 + Math.floor(fakeTimer / 10);
 
       // Snapshot for render()'s interpolation before moving.
       player.prevX = player.x;
@@ -394,13 +427,23 @@
       ctx.fillStyle = player.flash > 0 ? COLOR_ACCENT_2 : COLOR_ACCENT;
       ctx.fillRect(x, y, PLAYER_SIZE, PLAYER_SIZE);
 
-      // HUD text scales with tvMode without the game doing any math.
+      // Moved to the bottom edge so it doesn't sit under the shell's score.
       ctx.fillStyle = COLOR_TEXT;
       ctx.font = `${14 * screenCanvas.uiScale}px ${token('--font-mono')}`;
       ctx.fillText(
         `960 x 540 game space · uiScale ${screenCanvas.uiScale}`,
-        16, 20 + 14 * screenCanvas.uiScale,
+        16, h - 16,
       );
+
+      // Shell chrome goes on last, over the game. drawHud() takes only the
+      // fields this "game" has; omit one and it simply isn't drawn.
+      shell.drawHud({
+        score: fakeScore,
+        lives: fakeLives,
+        timer: fakeTimer,
+        level: fakeLevel,
+      });
+      shell.render();
 
       updateReadout(alpha);
     }
@@ -525,13 +568,51 @@
       setText(el('c-bars'), `${barX} x ${barY}`);
     }
 
-    // --- Loop + controls --------------------------------------------------
+    // --- Loop + shell -----------------------------------------------------
+
+    // Declared before the loop because onPause below closes over it: the
+    // loop's auto-pause (tab hidden / window blurred) should raise the
+    // shell's menu, not just silently stop the game.
+    let shell;
 
     const loop = new GameLoop({
       update,
       render,
       showFps: true,
-      onPause: () => setText(el('loop-state'), 'paused'),
+      onPause: () => {
+        setText(el('loop-state'), 'paused');
+        // Safe to call straight back into the shell: pause() is idempotent,
+        // so shell.pause() -> loop.pause() -> here -> shell.pause() stops.
+        shell?.pause();
+      },
+    });
+
+    shell = new GameShell({
+      gameId: 'test-engine',
+      title: 'Engine Debug Harness',
+      canvas: screenCanvas,
+      loop,
+      // A real reset instead of the default page reload.
+      onRestart: () => {
+        fakeScore = 0;
+        fakeLives = 3;
+        fakeTimer = 0;
+        fakeLevel = 1;
+        player.x = player.prevX = (960 - PLAYER_SIZE) / 2;
+        player.y = player.prevY = (540 - PLAYER_SIZE) / 2;
+        tapMarker = null;
+      },
+      // One row per action; the overlay renders whichever column matches
+      // Input.getActiveDevice(). The last row has no touch entry on purpose,
+      // to show that a row without a binding for the active device is
+      // dropped rather than shown blank.
+      controls: [
+        { action: 'Move', gamepad: 'Left stick / D-pad', keyboard: 'WASD / Arrows', touch: 'Drag left half' },
+        { action: 'Aim', gamepad: 'Right stick', keyboard: '(none)', touch: '(none)' },
+        { action: 'Flash the square', gamepad: 'A', keyboard: 'Space / Enter', touch: 'A pad' },
+        { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },
+        { action: 'Stick clicks', gamepad: 'L3 / R3', keyboard: 'Q / E' },
+      ],
     });
 
     // blur() after each click so a focused button doesn't swallow Space.
@@ -543,6 +624,28 @@
     wire('btn-resume', () => loop.resume());
     wire('btn-fps', () => loop.toggleFps());
     wire('btn-tv', () => screenCanvas.setTvMode(screenCanvas.uiScale === 1));
+
+    // Shell screens. Pause is also reachable from Start / Escape / the
+    // touch button, but a DOM button makes it testable without a controller.
+    wire('btn-shell-pause', () => shell.pause());
+    wire('btn-shell-howto', () => shell.showHowToPlay());
+    wire('btn-shell-loading', () => {
+      shell.setLoading(true);
+      setTimeout(() => shell.setLoading(false), 2000);
+    });
+    // Random score so "NEW BEST!" fires on some runs and not others.
+    wire('btn-shell-gameover', () => {
+      shell.showGameOver(Math.round(Math.random() * 1000), {
+        accuracy: Math.random(),
+        timeSurvived: fakeTimer,
+        level: fakeLevel,
+        cleanRun: Math.random() > 0.5,
+      });
+    });
+    wire('btn-session', () => {
+      Session.clear();
+      console.log('[test] session cleared — next game over starts from no best');
+    });
 
     loop.start();
   </script>
