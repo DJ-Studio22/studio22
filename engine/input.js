@@ -55,6 +55,20 @@ const BUTTON_NAMES = [
   'a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt', 'ls', 'rs',
 ];
 
+// Elements that own their own taps. A touch starting on one of these belongs
+// to the page, not to the game: claiming it would both steal the input and
+// suppress the click the element is waiting for. Games can opt any other
+// element out with data-no-game-input.
+const INTERACTIVE_SELECTOR = [
+  'button', 'a[href]', 'input', 'select', 'textarea', 'label', 'summary',
+  '[role="button"]', '[contenteditable=""]', '[contenteditable="true"]',
+  '[data-no-game-input]',
+].join(', ');
+
+function startedOnPageUi(target) {
+  return Boolean(target && typeof target.closest === 'function' && target.closest(INTERACTIVE_SELECTOR));
+}
+
 // Arrow keys and space scroll the page by default; that's the one browser
 // behavior every game needs suppressed during play.
 const PREVENT_DEFAULT_KEY_CODES = new Set([
@@ -209,6 +223,10 @@ export class Input {
     typeof window !== 'undefined' &&
     (('ontouchstart' in window) || (navigator.maxTouchPoints > 0));
   static #touchLayout = DEFAULT_TOUCH_LAYOUT;
+  // Distinct from #touchEnabled (a device capability, fixed at load): this is
+  // a runtime switch, so an overlay like the pause menu can stop the virtual
+  // stick and pads from firing underneath it.
+  static #touchControlsEnabled = true;
   static #joystick = { active: false, touchId: null, originX: 0, originY: 0, x: 0, y: 0 };
   static #touchButtonState = Object.fromEntries(BUTTON_NAMES.map((name) => [name, false]));
   static #touchButtonTouches = new Map(); // touch identifier -> button name
@@ -359,6 +377,24 @@ export class Input {
     Input.#touchButtonTouches.clear();
   }
 
+  /**
+   * Turns the virtual stick and action pads on or off without changing the
+   * layout. Menus use this: while a pause screen is up, a thumb on the left
+   * half should not still be steering the player, and the A pad should not
+   * be confirming menu items the moment it is tapped.
+   *
+   * Disabling releases anything currently held, so nothing sticks down while
+   * the controls are off.
+   */
+  static setTouchControlsEnabled(enabled) {
+    Input.#touchControlsEnabled = Boolean(enabled);
+    if (!Input.#touchControlsEnabled) Input.#releaseAllTouches();
+  }
+
+  static get touchControlsEnabled() {
+    return Input.#touchControlsEnabled;
+  }
+
   // Radial deadzone applied to both sticks on every gamepad, 0-1.
   static setDeadzone(value) {
     Input.#deadzone = Math.min(Math.max(value, 0), 0.9);
@@ -483,6 +519,18 @@ export class Input {
 
   // Checks whether (x, y) landed on a configured touch button; returns the
   // button's name, or null if it didn't hit any of them.
+  // Drops every in-progress touch. Shared by the blur handler and by
+  // setTouchControlsEnabled(false), so a stick or pad can never be left
+  // stuck down after the touches that owned it stop being delivered.
+  static #releaseAllTouches() {
+    Input.#joystick.active = false;
+    Input.#joystick.touchId = null;
+    Input.#joystick.x = 0;
+    Input.#joystick.y = 0;
+    for (const name of BUTTON_NAMES) Input.#touchButtonState[name] = false;
+    Input.#touchButtonTouches.clear();
+  }
+
   static #hitTestTouchButton(x, y) {
     for (const button of Input.#touchLayout) {
       const bx = button.xRatio * window.innerWidth;
@@ -492,7 +540,27 @@ export class Input {
     return null;
   }
 
+  // The rule this handler follows, and the reason it is written this way:
+  // CLAIM FIRST, THEN preventDefault -- never the other way round.
+  //
+  // preventDefault() on a touch event suppresses the compatibility mouse
+  // events the browser would otherwise synthesize, which means it suppresses
+  // `click`. Calling it unconditionally on a window-level listener therefore
+  // kills every button, link, and form control on the page for touch users,
+  // everywhere, for the entire session -- while leaving mouse and keyboard
+  // working perfectly, so it looks like a phone-only mystery. So the default
+  // is only prevented for touches this module has actually taken ownership
+  // of, and untouched taps pass through to whatever the player aimed at.
   static #onTouchStart(event) {
+    // Still a touch device even when the tap isn't ours, so UI hints should
+    // switch to touch variants regardless of who ends up handling it.
+    Input.#activeDevice = 'touch';
+
+    if (!Input.#touchControlsEnabled) return;
+    if (startedOnPageUi(event.target)) return;
+
+    let claimed = false;
+
     for (const touch of event.changedTouches) {
       const x = touch.clientX;
       const y = touch.clientY;
@@ -500,6 +568,7 @@ export class Input {
       if (buttonName) {
         Input.#touchButtonTouches.set(touch.identifier, buttonName);
         Input.#touchButtonState[buttonName] = true;
+        claimed = true;
       } else if (!Input.#joystick.active && x < window.innerWidth / 2) {
         // Left half of the screen, and no stick running yet: this touch
         // spawns the virtual joystick right where the thumb landed.
@@ -509,17 +578,23 @@ export class Input {
         Input.#joystick.originY = y;
         Input.#joystick.x = 0;
         Input.#joystick.y = 0;
+        claimed = true;
       }
     }
-    Input.#activeDevice = 'touch';
-    // Stops the page from scrolling/zooming while the player is dragging
-    // the stick or mashing buttons.
-    event.preventDefault();
+
+    // Only now, having taken the touch, is it ours to stop scrolling with.
+    if (claimed) event.preventDefault();
   }
 
   static #onTouchMove(event) {
+    // Same claim rule: only swallow the scroll for fingers we're tracking,
+    // so a drag that started on the page can still scroll it.
+    let tracking = false;
+
     for (const touch of event.changedTouches) {
+      if (Input.#touchButtonTouches.has(touch.identifier)) tracking = true;
       if (touch.identifier !== Input.#joystick.touchId) continue;
+      tracking = true;
       const dx = touch.clientX - Input.#joystick.originX;
       const dy = touch.clientY - Input.#joystick.originY;
       const distance = Math.hypot(dx, dy);
@@ -535,24 +610,32 @@ export class Input {
       Input.#joystick.x = (dx / distance) * (clampedDistance / JOYSTICK_MAX_RADIUS_PX);
       Input.#joystick.y = (dy / distance) * (clampedDistance / JOYSTICK_MAX_RADIUS_PX);
     }
-    event.preventDefault();
+
+    if (tracking) event.preventDefault();
   }
 
   static #onTouchEnd(event) {
+    // touchend matters as much as touchstart here: preventing its default
+    // also cancels the click the browser was about to synthesize.
+    let tracking = false;
+
     for (const touch of event.changedTouches) {
       if (touch.identifier === Input.#joystick.touchId) {
         Input.#joystick.active = false;
         Input.#joystick.touchId = null;
         Input.#joystick.x = 0;
         Input.#joystick.y = 0;
+        tracking = true;
       }
       const buttonName = Input.#touchButtonTouches.get(touch.identifier);
       if (buttonName) {
         Input.#touchButtonState[buttonName] = false;
         Input.#touchButtonTouches.delete(touch.identifier);
+        tracking = true;
       }
     }
-    event.preventDefault();
+
+    if (tracking) event.preventDefault();
   }
 
   // -------------------------------------------------------------------
@@ -588,12 +671,7 @@ export class Input {
     // touches: a touch interrupted by a system gesture never sends touchend.
     window.addEventListener('blur', () => {
       Input.#heldKeys.clear();
-      Input.#joystick.active = false;
-      Input.#joystick.touchId = null;
-      Input.#joystick.x = 0;
-      Input.#joystick.y = 0;
-      for (const name of BUTTON_NAMES) Input.#touchButtonState[name] = false;
-      Input.#touchButtonTouches.clear();
+      Input.#releaseAllTouches();
     });
 
     if (Input.#touchEnabled) {

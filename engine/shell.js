@@ -64,9 +64,22 @@ const ITEM_GAP = 10;
 const PANEL_PAD = 28;
 const PANEL_MAX_WIDTH = 560;
 
-// Touch-only pause button, top-right corner.
+// Touch-only pause button, top-right corner. These are MINIMUMS in game
+// units; the real size is worked out per frame -- see #minTouchUnits.
 const TOUCH_PAUSE_SIZE = 44;
 const TOUCH_PAUSE_MARGIN = 16;
+
+// The smallest a touch target may be ON SCREEN, in CSS pixels, which is the
+// number both Apple and Android publish as the reliable minimum.
+//
+// This exists because game units are not screen pixels. A 44-unit button in a
+// 960x540 game is 44 CSS pixels only when the canvas happens to render 1:1.
+// On a phone the canvas scales down to about 0.4, so that same button lands
+// at roughly 18 physical pixels -- far too small to hit, which reads to the
+// player as a button that simply ignores them. Anything a finger has to find
+// must therefore be sized in screen pixels and converted back into game
+// units, never fixed in game units.
+const MIN_TOUCH_PX = 44;
 
 // Run stats are a debug-ish courtesy, not a scoreboard -- cap them so a game
 // that reports twenty fields can't overflow the panel.
@@ -347,6 +360,12 @@ export class GameShell {
     this.#navLatch = 0;
 
     if (wasPlaying) this.#suspendLoop();
+    // Hand the touchscreen back to the menu. Left running, the virtual stick
+    // would scroll the selection whenever a thumb rested on the left half,
+    // and the A pad -- which sits at a fixed screen position that can land on
+    // top of a menu row -- would confirm whatever was highlighted the instant
+    // it was tapped.
+    Input.setTouchControlsEnabled(false);
     this.#applyAudio();
     this.#startOverlayLoop();
   }
@@ -354,6 +373,7 @@ export class GameShell {
   #closeScreen() {
     this.#screen = null;
     this.#stopOverlayLoop();
+    Input.setTouchControlsEnabled(true);
     this.#applyAudio();
     // No-op if the game never started its loop (a how-to shown before play).
     this.#loop?.resume();
@@ -552,12 +572,29 @@ export class GameShell {
     }
   };
 
+  // How many game units currently make up MIN_TOUCH_PX on screen. Grows as
+  // the canvas shrinks, which is exactly the point.
+  #minTouchUnits() {
+    const scale = this.#canvas.scale;
+    if (!scale || scale <= 0) return MIN_TOUCH_PX; // pre-layout; harmless
+    return MIN_TOUCH_PX / scale;
+  }
+
   #touchPauseRect() {
+    // Whichever is bigger: the designed size, or enough game units to make a
+    // finger-sized target on this particular screen. Capped at an eighth of
+    // the play area so a very small canvas can't produce a button that eats
+    // the corner of the game.
+    const size = Math.min(
+      Math.max(TOUCH_PAUSE_SIZE, this.#minTouchUnits()),
+      this.#canvas.width / 8,
+    );
+    const margin = Math.max(TOUCH_PAUSE_MARGIN, this.#minTouchUnits() * 0.25);
     return {
-      x: this.#canvas.width - TOUCH_PAUSE_MARGIN - TOUCH_PAUSE_SIZE,
-      y: TOUCH_PAUSE_MARGIN,
-      w: TOUCH_PAUSE_SIZE,
-      h: TOUCH_PAUSE_SIZE,
+      x: this.#canvas.width - margin - size,
+      y: margin,
+      w: size,
+      h: size,
     };
   }
 
@@ -571,8 +608,9 @@ export class GameShell {
     const headerHeight = this.#headerHeight();
 
     const panelW = Math.min(PANEL_MAX_WIDTH, w * 0.62);
+    const itemHeight = this.#itemHeight(itemCount, headerHeight);
     const itemsHeight = itemCount > 0
-      ? itemCount * ITEM_HEIGHT + (itemCount - 1) * ITEM_GAP
+      ? itemCount * itemHeight + (itemCount - 1) * ITEM_GAP
       : 0;
     const panelH = headerHeight + itemsHeight + PANEL_PAD;
     const panelX = (w - panelW) / 2;
@@ -582,13 +620,25 @@ export class GameShell {
     for (let i = 0; i < itemCount; i++) {
       itemRects.push({
         x: panelX + PANEL_PAD,
-        y: panelY + headerHeight + i * (ITEM_HEIGHT + ITEM_GAP),
+        y: panelY + headerHeight + i * (itemHeight + ITEM_GAP),
         w: panelW - PANEL_PAD * 2,
-        h: ITEM_HEIGHT,
+        h: itemHeight,
       });
     }
 
     return { panelX, panelY, panelW, panelH, headerHeight, itemRects };
+  }
+
+  // Menu rows grow on small screens for the same reason the pause button
+  // does, but with a ceiling: a row tall enough to push the last button off
+  // the bottom of the play area is worse than a slightly tight one, since
+  // "Back to Arcade" being unreachable would strand the player in the game.
+  #itemHeight(itemCount, headerHeight) {
+    if (itemCount <= 0) return ITEM_HEIGHT;
+    const wanted = Math.max(ITEM_HEIGHT, this.#minTouchUnits());
+    const available = this.#canvas.height - headerHeight - PANEL_PAD - 32;
+    const fits = (available - (itemCount - 1) * ITEM_GAP) / itemCount;
+    return Math.max(ITEM_HEIGHT, Math.min(wanted, fits));
   }
 
   // Space above the buttons, which varies with what each screen has to say.
