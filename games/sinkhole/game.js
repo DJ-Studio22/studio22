@@ -222,7 +222,10 @@ function update(dt) {
     });
   }
 
-  const previousBottom = P.y + PLAYER_R;
+  // Both bodies move this tick, so both endpoints are needed to test the
+  // crossing. bottomBefore is sampled while the ledges are still where they
+  // were; `rise` lets landOnLedges put them back there.
+  const bottomBefore = P.y + PLAYER_R;
   P.y += P.vy * dt;
 
   // The world rises. Everything moves up by the same amount, which is what
@@ -234,7 +237,7 @@ function update(dt) {
   particles.shift(0, -rise);
 
   P.onGround = false;
-  landOnLedges(previousBottom);
+  landOnLedges(bottomBefore, rise);
 
   // Standing on a rising ledge carries the player up with it. Without this
   // the player would sink through a ledge that is moving underneath them.
@@ -254,19 +257,62 @@ function update(dt) {
   particles.update(dt);
 }
 
-function landOnLedges(previousBottom) {
-  const bottom = P.y + PLAYER_R;
+/**
+ * Does the player fit through this ledge's gap?
+ *
+ * The WHOLE player has to fit. The first version asked only whether the
+ * player overlapped the gap at all, which made every gap effectively a
+ * player-width wider than it looked and meant clipping the very edge of one
+ * dropped you through it. Steering to actually line up is the game.
+ */
+function fitsThroughGap(ledge) {
+  return P.x - PLAYER_R >= ledge.gapX
+    && P.x + PLAYER_R <= ledge.gapX + ledge.gapW;
+}
+
+/**
+ * Lands the player on the first solid ledge their feet crossed this tick.
+ *
+ * SWEPT AGAINST A MOVING PLANE, and that is the whole point. Both bodies
+ * move every tick: the player falls, and the ledges rise. The first version
+ * sampled the player's position BEFORE the ledges moved and then compared it
+ * against where the ledges ended up, which is two different moments of the
+ * world in one test. A player resting on a ledge therefore measured as being
+ * already below it — its own floor was skipped, and it fell through every
+ * platform in the game without ever needing to find a gap.
+ *
+ * That was NOT tunnelling. Instrumenting it showed the player's feet
+ * overshooting the plane by about one unit, exactly the distance the ledge
+ * had risen; tunnelling at this game's speeds would need nineteen. Capping
+ * the fall speed or thickening the ledges would have hidden it without
+ * fixing it.
+ *
+ * Testing the player's travel against the LEDGE'S OWN travel over the same
+ * interval fixes it and is swept, so no fall speed can slip through either.
+ */
+function landOnLedges(bottomBefore, rise) {
   if (P.vy < 0) return;
+  const bottomAfter = P.y + PLAYER_R;
 
+  // Every ledge whose plane the feet crossed this tick. Normally none or
+  // one: at terminal dive speed the player covers about 23 units and the
+  // ledges are 132 apart.
+  const crossed = [];
   for (const ledge of ledges) {
-    // Only the downward crossing counts: passing the plane this step, rather
-    // than merely overlapping, so a fast fall cannot tunnel through a ledge.
-    if (previousBottom > ledge.y || bottom < ledge.y) continue;
+    const yBefore = ledge.y + rise;   // where this ledge was at the top of the tick
+    const yAfter = ledge.y;
+    if (bottomBefore > yBefore) continue;   // already below it when the tick began
+    if (bottomAfter < yAfter) continue;     // still above it when the tick ended
+    crossed.push(ledge);
+  }
+  if (crossed.length === 0) return;
 
-    // Through the gap, which is the point of the game.
-    const inGap = P.x + PLAYER_R * 0.55 > ledge.gapX
-      && P.x - PLAYER_R * 0.55 < ledge.gapX + ledge.gapW;
-    if (inGap) continue;
+  // Highest first, so a fast fall stops at the first thing it should have
+  // hit rather than at whichever happened to be first in the array.
+  crossed.sort((a, b) => a.y - b.y);
+
+  for (const ledge of crossed) {
+    if (fitsThroughGap(ledge)) continue;
 
     if (ledge.spiked) {
       hurt();

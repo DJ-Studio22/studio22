@@ -199,6 +199,10 @@ function makeCar(color, dark) {
   return {
     x: 0, y: 0, angle: 0, speed: 0,
     s: 0, travelled: 0, laps: 0,
+    // Its own chequered flag. The race-level `finished` flag only ever meant
+    // "the player is done", which left the rival lapping the circuit on its
+    // own after it had taken its third lap.
+    done: false,
     offset: 0, targetOffset: 0,
     color, dark,
   };
@@ -226,6 +230,7 @@ function placeOnGrid(car, offsetAcross, ahead) {
   car.s = projectToTrack(car.x, car.y).s;
   car.travelled = car.s;
   car.laps = 0;
+  car.done = false;
 }
 
 function reset() {
@@ -266,6 +271,8 @@ function update(dt) {
 }
 
 function drivePlayer(dt) {
+  if (player.done) { coastToStop(player, dt); return; }
+
   const pad = Input.get();
 
   // Up on the stick or the A button is throttle, down is the brake. Reading
@@ -353,6 +360,11 @@ function advanceLap(car, s) {
   const laps = Math.floor(car.travelled / TRACK_LENGTH);
   if (laps > car.laps) {
     car.laps = laps;
+    // Its race is over the moment it crosses the line for the last time.
+    // Both cars get this: the rival needs it because it finishes first more
+    // often than not, and the player needs it so a photo finish does not
+    // leave one car rolling while the other has stopped.
+    if (car.laps >= TOTAL_LAPS) car.done = true;
     if (car === player) onPlayerLap();
   } else if (laps < car.laps) {
     car.laps = laps;
@@ -397,6 +409,43 @@ function rivalAhead() {
   return rival.laps * TRACK_LENGTH + rival.s > player.laps * TRACK_LENGTH + player.s;
 }
 
+/**
+ * Brings a car that has finished its laps to a halt just past the line.
+ *
+ * Braking rather than freezing on the spot: a car that stops dead the
+ * instant it crosses looks like the game hitched. It still steers along the
+ * track while it slows, so it rolls to a stop on the tarmac instead of
+ * ploughing straight into the grass at whatever angle it happened to finish.
+ */
+function coastToStop(car, dt) {
+  // NOT applyDrive with the brake held. Its brake has no floor at zero, so a
+  // car that finished would decelerate straight past a standstill and reverse
+  // away down the track at the reverse cap — which is what the first version
+  // of this fix actually did. Braking is allowed to reverse a car the PLAYER
+  // is driving; a car that has finished must simply stop.
+  const decel = BRAKE * dt;
+  if (Math.abs(car.speed) <= decel) {
+    car.speed = 0;
+    return;
+  }
+  car.speed -= Math.sign(car.speed) * decel;
+
+  // Still steers along the track while it rolls, so it comes to rest on the
+  // tarmac rather than ploughing into the grass at whatever angle it crossed
+  // the line. advanceLap is deliberately not called: the race is over and no
+  // further laps should count.
+  const [tx, ty] = pointAt(car.s + 40);
+  let turn = Math.atan2(ty - car.y, tx - car.x) - car.angle;
+  while (turn > Math.PI) turn -= TAU;
+  while (turn < -Math.PI) turn += TAU;
+
+  const grip = clamp(Math.abs(car.speed) / 180, 0, 1);
+  car.angle += clamp(turn * 1.5, -1, 1) * TURN_RATE * grip * dt;
+  car.x = clamp(car.x + Math.cos(car.angle) * car.speed * dt, 10, W - 10);
+  car.y = clamp(car.y + Math.sin(car.angle) * car.speed * dt, 10, H - 10);
+  car.s = projectToTrack(car.x, car.y).s;
+}
+
 // --- The rival -----------------------------------------------------------
 
 /**
@@ -407,6 +456,8 @@ function rivalAhead() {
  * corner early instead of arriving at the apex and then noticing it.
  */
 function driveRival(dt) {
+  if (rival.done) { coastToStop(rival, dt); return; }
+
   const lookAhead = 70 + Math.abs(rival.speed) * 0.35;
   const target = rival.s + lookAhead;
 
