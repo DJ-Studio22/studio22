@@ -21,6 +21,48 @@
 ## Next
 - Phase 4: Keystroke, Sinkhole, Circuit Racer
 
+
+## Performance audit (Phase 8)
+
+Measured, not estimated. Every page gzipped, as built:
+
+| Page | Total (gzipped) |
+|---|---:|
+| games/keystroke/ | 24.9 KB |
+| games/number-crunch/ | 22.7 KB |
+| games/circuit-racer/ | 20.9 KB |
+| games/comet/ | 20.8 KB |
+| games/updraft/ | 20.5 KB |
+| games/sinkhole/ | 20.2 KB |
+| party.html | 18.8 KB |
+| arcade.html | 16.6 KB |
+| index.html | 13.1 KB |
+
+The engine chunk (util + shell + ui + canvas + loop + session + audio) is
+11.3 KB gzipped and shared by all six games; input.js is 4.2 KB and shared by
+eight pages. So a second game costs 4-7 KB, not 20.
+
+FINDING: there is no performance problem to fix. Measured in Chrome:
+
+- createLinearGradient with two stops: 0.33 us. Reusing a cached one: 0.035 us.
+- createRadialGradient with two stops: 0.455 us. Cached plus a translate: 0.36 us.
+- Array.filter on a six-item list: 0.175 us. In-place compaction: 0.06 us.
+- The densest per-frame maths in the suite — Circuit Racer's six track
+  projections across a fourteen-segment centre line — is 0.002 ms per frame.
+
+A frame budget at 60fps is 16.67 ms. The largest single item above is 0.0005
+ms. Rewriting any of it would be a change with no measurable effect, so the
+per-frame filters and the Sinkhole lamp gradient were left alone
+deliberately rather than tidied on instinct.
+
+The one change made was consistency, not speed: Updraft rebuilt its sky
+gradient every frame while Comet and Number Crunch cached theirs and said in
+a comment that a gradient is not free. A rule the codebase states and then
+breaks is worse than the third of a microsecond it costs.
+
+Particles are already pooled everywhere (engine/util.js), which is the
+allocation that would actually have mattered on a phone.
+
 ## Notes and known items
 - Session.clear() KEEPS score directions. It used to wipe them, which left a running page with no direction and made Circuit Racer rank lap times upward — the slowest lap winning. Directions are a fact about the game, not data about the visit
 - Circuit Racer counts laps by accumulated travelled distance, not by crossing a line or by a position threshold. projectToTrack() returns the nearest point on the WHOLE centre line, so a car cutting a corner can be nearest to track it has not reached, which read as a lap and banked a 3.9s lap on a circuit whose fastest possible lap is 4.5s

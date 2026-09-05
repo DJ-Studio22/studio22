@@ -85,7 +85,7 @@ A top-down time-trial racer.
 
 ---
 
-## 4. Phase 8 — performance audit — [ ]
+## 4. Phase 8 — performance audit — [x] DONE
 
 **Do**
 - Measure every page's weight, gzipped, and record the table.
