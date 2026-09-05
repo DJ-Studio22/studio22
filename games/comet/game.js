@@ -80,6 +80,15 @@ const INV_ON_HIT = 120 / TPS;    // grace after losing a life
 // The tail is a trail of past positions sampled once per tick, so its length
 // is counted in ticks rather than seconds — that is what it was in the
 // original and it is what keeps the trail the same shape.
+// How much stardust is on the field at once. Fixed, and refilled only as
+// pieces are collected.
+//
+// The original had a bug here: waves added five more and collection respawned
+// them, so the count only ever grew and by wave ten the arena was carpeted.
+// That made late waves survivable by walking through pickups rather than by
+// flying well, which is the opposite of what the escalation is for.
+const DUST_ON_FIELD = 6;
+
 const TAIL_START = 42;
 const TAIL_PER_DUST = 6;
 const TAIL_LOST_ON_HIT = 14;
@@ -228,11 +237,13 @@ function makeDust() {
 function spawnWave() {
   const count = 3 + wave * 2;
   for (let i = 0; i < count; i++) foes.push(makeFoe());
-  // Five MORE each wave, not five in total — the field of stardust thickens
-  // as the run goes on. That is what the original does and it is load-bearing:
-  // later waves are survivable only because the tail grows fast enough to
-  // keep up with them.
-  for (let i = 0; i < 5; i++) dust.push(makeDust());
+  // Deliberately does NOT spawn stardust. A wave adds threat, not supply.
+}
+
+// Tops the field back up to DUST_ON_FIELD. Called at the start of a run and
+// after a piece is collected, so the count is a constant rather than a drift.
+function refillDust() {
+  while (dust.length < DUST_ON_FIELD) dust.push(makeDust());
 }
 
 function boom(x, y, color, count) {
@@ -269,6 +280,7 @@ function reset() {
   P.vx = 0;
   P.vy = 0;
 
+  refillDust();
   spawnWave();
 }
 
@@ -356,7 +368,7 @@ function update(dt) {
       tailMax += TAIL_PER_DUST;
       boom(d.x, d.y, ART.bitsDust, 14);
       audio.play('collect');
-      dust.push(makeDust());
+      refillDust();
     }
   }
 

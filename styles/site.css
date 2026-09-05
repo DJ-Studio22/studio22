@@ -446,6 +446,87 @@ html.lit-fallback .lit .word {
   to   { transform: translate3d(-6vw, 10vh, 0); }
 }
 
+/* --- Hero video ----------------------------------------------------------
+   Scroll-scrubbed footage. The element is created by script and only when
+   there is actually a file to load, so with no asset present none of this
+   applies and the hero is the gradient hero it has always been.
+
+   Layer order inside the hero, back to front:
+     -3  the video
+     -2  the scrim that keeps the wordmark legible over it
+     -1  the drifting gradients, dimmed to a tint once footage is behind them
+      0  the text
+   -------------------------------------------------------------------------- */
+
+.hero__video {
+  position: absolute;
+  inset: 0;
+  z-index: -3;
+  overflow: hidden;
+  pointer-events: none;
+  /* Starts invisible and is faded up only once a frame has actually
+     decoded, so a slow or failing load never shows a black rectangle
+     where the gradients used to be. */
+  opacity: 0;
+  transition: opacity 700ms var(--ease-out);
+}
+
+.hero.has-video .hero__video {
+  opacity: 1;
+}
+
+.hero__video video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Sits between the footage and the type. Gameplay capture is bright and
+   busy in places, and the wordmark has to hold against all of it. */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-bg-0) 72%, transparent) 0%,
+      color-mix(in srgb, var(--color-bg-0) 46%, transparent) 45%,
+      color-mix(in srgb, var(--color-bg-0) 88%, transparent) 100%
+    );
+  /* Thickens as the hero scrubs away, so the section below it arrives out
+     of darkness rather than out of a bright frame. */
+  opacity: calc(0.7 + var(--hero-p, 0) * 0.3);
+}
+
+/* With footage behind them the blobs stop being the subject and become a
+   colour cast over it. */
+.hero.has-video .hero__blob {
+  opacity: 0.42;
+}
+
+/* The text layer moves at its own rate against the scrubbing footage --
+   slower than the scroll, which is what makes the two read as separate
+   planes rather than one flat image. Only ever a transform, and only while
+   there is video to move against. */
+.hero.has-video .hero__inner {
+  transform: translate3d(0, calc(var(--hero-p, 0) * -7vh), 0);
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Frozen on the first frame: the footage is still there as a still image,
+     but nothing tracks the scroll. */
+  .hero.has-video .hero__inner {
+    transform: none;
+  }
+  .hero__scrim {
+    opacity: 0.7;
+  }
+}
+
 .hero__inner {
   align-self: center;
   max-width: var(--maxw);

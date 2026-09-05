@@ -30,7 +30,23 @@
          phone GPU can be asked to do, and a gradient gives the same
          soft glow for almost nothing.
          ============================================================ -->
-    <section class="hero" aria-labelledby="hero-title">
+    <!--
+      data-hero-video is the switch for the scroll-scrubbed hero footage.
+
+      EMPTY MEANS OFF, and off is the shipping state: nothing is requested,
+      nothing is created, and the hero is exactly the gradient hero below.
+      To turn it on, put the path to the file in the attribute:
+
+          data-hero-video="/assets/video/hero.mp4"
+
+      That is the only edit needed. Encoding requirements are in HERO-VIDEO.md
+      at the project root -- they are not optional, because scrubbing a file
+      cut with normal keyframe spacing stutters badly.
+
+      The video is desktop-only by design (see the script at the foot of this
+      file): phones never download it and keep the gradient hero instead.
+    -->
+    <section class="hero" aria-labelledby="hero-title" data-hero-video="">
       <div class="hero__glow" aria-hidden="true">
         <span class="hero__blob hero__blob--a"></span>
         <span class="hero__blob hero__blob--b"></span>
@@ -464,6 +480,162 @@
         litObserver.observe(block);
       }
     }
+
+    // --- Hero video scrub -------------------------------------------------
+    //
+    // Scroll drives the playhead; the video is never played. play() would
+    // start a second clock racing the scroll position, and the two would
+    // fight every frame.
+    //
+    // Everything here is conditional on there actually being a file. With
+    // data-hero-video empty -- the shipping state until the footage exists --
+    // this function returns before creating an element or issuing a request,
+    // and the hero renders exactly as it does without it.
+
+    // Below this width the video is skipped ENTIRELY rather than swapped for
+    // a smaller encode. A phone on cellular should not spend megabytes on
+    // decoration, seeking is the most expensive thing a mobile decoder does,
+    // and the gradient hero already works there. This is a deliberate choice,
+    // not a to-do: there is no mobile encode to add.
+    const HERO_VIDEO_MIN_WIDTH = 1024;
+
+    // How fast the smoothed playhead chases the scroll position. Higher is
+    // tighter and more jittery; lower drifts behind the scroll.
+    const HERO_SCRUB_SMOOTHING = 8;
+
+    function initHeroVideo() {
+      const hero = document.querySelector('.hero');
+      if (!hero) return;
+
+      const src = (hero.dataset.heroVideo || '').trim();
+      if (!src) return;                                            // no asset yet
+      if (!window.matchMedia(`(min-width: ${HERO_VIDEO_MIN_WIDTH}px)`).matches) return;
+      // Data Saver is an explicit request not to spend the user's bytes on
+      // things like this.
+      if (navigator.connection && navigator.connection.saveData) return;
+
+      const layer = document.createElement('div');
+      layer.className = 'hero__video';
+      layer.setAttribute('aria-hidden', 'true');
+
+      const video = document.createElement('video');
+      // muted must be set as a property as well as an attribute: some
+      // browsers only honour the property, and an unmuted video here would
+      // be both rude and blocked.
+      video.muted = true;
+      video.defaultMuted = true;
+      video.setAttribute('muted', '');
+      video.playsInline = true;
+      video.setAttribute('playsinline', '');
+      video.setAttribute('disablepictureinpicture', '');
+      // Seeking needs data ahead of the playhead, so this one genuinely does
+      // want the whole file rather than metadata.
+      video.preload = 'auto';
+      video.loop = false;
+      video.tabIndex = -1;
+
+      const scrim = document.createElement('div');
+      scrim.className = 'hero__scrim';
+      scrim.setAttribute('aria-hidden', 'true');
+
+      let frame = 0;
+      let onScreen = false;
+      let observer = null;
+
+      // Any failure at all -- missing file, wrong codec, decode error --
+      // ends with the hero exactly as it was. Nothing half-applied.
+      function teardown() {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+        if (observer) observer.disconnect();
+        hero.classList.remove('has-video');
+        hero.style.removeProperty('--hero-p');
+        layer.remove();
+        scrim.remove();
+      }
+
+      video.addEventListener('error', teardown, { once: true });
+
+      video.addEventListener('loadeddata', () => {
+        const duration = video.duration;
+        // A zero-length or unseekable file would make every frame divide by
+        // nothing. Better to show the hero that always works.
+        if (!Number.isFinite(duration) || duration <= 0) {
+          teardown();
+          return;
+        }
+
+        hero.classList.add('has-video');
+
+        if (reduceMotion) {
+          // Frozen on the first frame. The footage is a still image and the
+          // scroll drives nothing.
+          try { video.currentTime = 0; } catch { /* seek not ready; frame 0 is already what shows */ }
+          return;
+        }
+
+        // How far the hero has travelled up past the top of the viewport,
+        // 0 at rest and 1 once its full height has scrolled by.
+        const progress = () => {
+          const rect = hero.getBoundingClientRect();
+          const range = rect.height || 1;
+          return Math.min(1, Math.max(0, -rect.top / range));
+        };
+
+        let current = 0;
+        let last = 0;
+
+        const tick = (now) => {
+          // Clamped so a backgrounded tab returning after ten seconds does
+          // not resolve the whole easing in a single step.
+          const dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+          last = now;
+
+          const p = progress();
+          const target = p * duration;
+
+          // Exponential smoothing, frame-rate independent: the same easing
+          // whether this runs at 60Hz or 120Hz.
+          current += (target - current) * (1 - Math.exp(-dt * HERO_SCRUB_SMOOTHING));
+
+          // Only seek when the move is worth a seek. Asking for a delta
+          // smaller than one frame of video makes the decoder thrash without
+          // changing a pixel.
+          if (Math.abs(video.currentTime - current) > 1 / 30) {
+            try { video.currentTime = current; } catch { /* mid-seek; the next frame retries */ }
+          }
+
+          // Raw progress, not the smoothed playhead: the text should track
+          // the scroll exactly. Only the video needs easing, because only
+          // the video is being seeked.
+          hero.style.setProperty('--hero-p', p.toFixed(4));
+
+          frame = onScreen ? requestAnimationFrame(tick) : 0;
+        };
+
+        // Gated on visibility rather than running forever, and driven by an
+        // observer rather than a scroll listener, like everything else on
+        // this page. Once the hero is gone the loop stops entirely.
+        observer = new IntersectionObserver((entries) => {
+          onScreen = entries[0].isIntersecting;
+          if (onScreen && !frame) {
+            last = 0;
+            frame = requestAnimationFrame(tick);
+          }
+        }, { threshold: 0 });
+
+        observer.observe(hero);
+      }, { once: true });
+
+      // src is set last, so every handler is attached before the request
+      // starts and a cached-and-instant failure cannot be missed.
+      video.src = src;
+      layer.append(video);
+      hero.prepend(scrim);
+      hero.prepend(layer);
+    }
+
+    initHeroVideo();
 
     // --- Reveals ----------------------------------------------------------
 
