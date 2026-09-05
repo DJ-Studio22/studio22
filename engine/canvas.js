@@ -43,6 +43,22 @@ const DEFAULT_GAME_HEIGHT = 540;
 // being a squint without eating the play area.
 const DEFAULT_TV_UI_SCALE = 1.5;
 
+// Optional ceiling on devicePixelRatio. OFF by default -- see below.
+//
+// Phones report ratios of 3 and up, so a full-screen landscape canvas can
+// allocate around 2.4 million pixels to clear and refill every frame.
+// Capping at 2 cuts that by more than half, and at normal phone viewing
+// distance the third pixel of detail is barely resolvable.
+//
+// It is deliberately not applied by default: capping trades away real
+// sharpness on every device to buy fill rate, and that is only worth doing
+// once a frame-rate problem has actually been traced to fill cost. Measure
+// first -- a phone in Low Power Mode, for instance, is throttled to 30Hz by
+// the OS and no amount of capping will move it. Games (or a diagnosis that
+// pins the blame on fill rate) can opt in with the maxPixelRatio option:
+// 2 is the usual choice, 1.5 for fill-heavy games, 1 for pixel art.
+const DEFAULT_MAX_PIXEL_RATIO = Infinity;
+
 export class GameCanvas {
   // --- Internal state -----------------------------------------------------
 
@@ -56,6 +72,15 @@ export class GameCanvas {
   #pixelArt;
   #tvMode;
   #tvUiScale;
+  #maxPixelRatio;
+
+  // Last applied layout, so repeated notifications that change nothing don't
+  // reallocate the backing store (which is destructive -- see #applyLayout).
+  #lastWidth = 0;
+  #lastHeight = 0;
+  #lastPixelRatio = 0;
+
+  #resizeObserver = null;
 
   #requireOrientation; // 'landscape' | 'portrait' | null
   #overlay = null;
@@ -73,6 +98,10 @@ export class GameCanvas {
    * @param {boolean} [options.pixelArt=false]   Disable image smoothing for crisp sprites.
    * @param {boolean} [options.tvMode=false]     Scale UI up for couch viewing distance.
    * @param {number}  [options.tvUiScale=1.5]    Multiplier used when tvMode is on.
+   * @param {number}  [options.maxPixelRatio=Infinity]  Ceiling on devicePixelRatio.
+   *                                             Uncapped by default; set 2 (or 1.5,
+   *                                             or 1 for pixel art) only once fill
+   *                                             rate is the confirmed bottleneck.
    * @param {string}  [options.requireOrientation]  'landscape' | 'portrait'. Shows a
    *                                             "rotate your device" overlay when the
    *                                             device is held the other way.
@@ -85,6 +114,7 @@ export class GameCanvas {
     this.#pixelArt = options.pixelArt ?? false;
     this.#tvMode = options.tvMode ?? false;
     this.#tvUiScale = options.tvUiScale ?? DEFAULT_TV_UI_SCALE;
+    this.#maxPixelRatio = options.maxPixelRatio ?? DEFAULT_MAX_PIXEL_RATIO;
     this.#requireOrientation = options.requireOrientation ?? null;
 
     this.#buildDom(options.rotateMessage ?? 'Rotate your device');
@@ -123,6 +153,13 @@ export class GameCanvas {
   // currently occupies.
   get scale() {
     return this.#scale;
+  }
+
+  // The pixel ratio actually in use after capping, which is not necessarily
+  // window.devicePixelRatio. Exposed so a debug readout can show what the
+  // canvas is really allocating rather than what the screen claims.
+  get pixelRatio() {
+    return Math.min(window.devicePixelRatio || 1, this.#maxPixelRatio);
   }
 
   // Multiplier games should apply to HUD text and UI element sizes. 1 at a
@@ -281,7 +318,24 @@ export class GameCanvas {
     const displayWidth = Math.floor(this.#gameWidth * fitScale);
     const displayHeight = Math.floor(this.#gameHeight * fitScale);
 
-    const dpr = window.devicePixelRatio || 1;
+    // Capped, not raw -- see DEFAULT_MAX_PIXEL_RATIO. This is the single
+    // biggest lever on frame rate for a phone, because every pixel here is
+    // one the GPU clears and refills on every single frame.
+    const dpr = Math.min(window.devicePixelRatio || 1, this.#maxPixelRatio);
+
+    // Nothing changed: skip the work entirely. Worth checking because a
+    // ResizeObserver fires for every layout change, not just meaningful
+    // ones, and reassigning canvas.width below throws away the pixel buffer
+    // and every piece of context state along with it.
+    if (displayWidth === this.#lastWidth
+      && displayHeight === this.#lastHeight
+      && dpr === this.#lastPixelRatio) {
+      return;
+    }
+    this.#lastWidth = displayWidth;
+    this.#lastHeight = displayHeight;
+    this.#lastPixelRatio = dpr;
+
     const backingWidth = Math.round(displayWidth * dpr);
     const backingHeight = Math.round(displayHeight * dpr);
 
@@ -340,6 +394,29 @@ export class GameCanvas {
       // the pre-rotation size. Waiting one frame lets the viewport settle.
       requestAnimationFrame(() => this.resize());
     });
+
+    // Watch the container itself, not just the window.
+    //
+    // This is the one that matters on a phone. The container's size changes
+    // for plenty of reasons that never fire a window resize: a mobile URL
+    // bar collapsing on first scroll (which changes what vh means), layout
+    // settling after a webfont loads, a parent element being restyled. Left
+    // to window events alone the canvas keeps whatever size it measured at
+    // construction, and the letterbox bars are then computed against a
+    // container that no longer exists -- the play area ends up too small
+    // for its box, with dead space around it that no amount of rotating
+    // the device clears up.
+    if (typeof ResizeObserver !== 'undefined') {
+      this.#resizeObserver = new ResizeObserver(() => this.resize());
+      this.#resizeObserver.observe(this.#container);
+    }
+
+    // Belt and braces for mobile Safari, where the visual viewport can move
+    // under the layout viewport (URL bar, on-screen keyboard) without either
+    // a window resize or a container resize being reported.
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => this.resize());
+    }
   }
 }
 

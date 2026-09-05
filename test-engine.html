@@ -194,30 +194,6 @@
 
     .controls button:hover { border-color: var(--color-accent); }
 
-    /* --- Touch diagnostics overlay ---
-       Shown automatically on touch devices (force with ?touchdebug=1, hide
-       with ?touchdebug=0). pointer-events:none so it can never itself be the
-       thing swallowing a tap. */
-    #touch-debug {
-      position: fixed;
-      left: 0; right: 0; bottom: 0;
-      max-height: 32vh;
-      overflow: hidden;
-      background: var(--color-bg-1);
-      border-top: 2px solid var(--color-accent);
-      color: var(--color-text-primary);
-      font-family: var(--font-mono);
-      font-size: 12px;
-      line-height: 1.45;
-      padding: var(--space-sm);
-      pointer-events: none;
-      z-index: 9999;
-      white-space: pre;
-    }
-
-    #touch-debug .caps { color: var(--color-accent); }
-    #touch-debug .hit { color: var(--color-accent-2); }
-
     .hint {
       color: var(--color-text-disabled);
       font-size: 0.85rem;
@@ -235,6 +211,9 @@
     <div class="panel">
       <h2>Loop</h2>
       <div class="row"><span class="label">fps</span><span class="value" id="fps">0</span></div>
+      <div class="row"><span class="label">display</span><span class="value wide" id="refresh">—</span></div>
+      <div class="row"><span class="label">frame work</span><span class="value wide" id="work">—</span></div>
+      <div class="row"><span class="label">verdict</span><span class="value wide" id="verdict">—</span></div>
       <div class="row"><span class="label">state</span><span class="value wide" id="loop-state">—</span></div>
       <div class="row"><span class="label">alpha</span><span class="value" id="alpha">0.00</span></div>
       <div class="row"><span class="label">ticks</span><span class="value wide" id="ticks">0</span></div>
@@ -361,7 +340,28 @@
     const COLOR_TEXT = token('--color-text-secondary');
 
     const stage = document.getElementById('stage');
-    const screenCanvas = new GameCanvas({ width: 960, height: 540, parent: stage });
+
+    // ?fullscreen=1 mounts the canvas straight to <body>, which GameCanvas
+    // fills with a fixed, viewport-sized container — the exact arrangement a
+    // real game under games/ will use. All the page chrome is hidden, so what
+    // you see on the phone is what a shipped game looks like, with nothing
+    // scrolling underneath it to confuse the letterboxing.
+    const pageParams = new URLSearchParams(window.location.search);
+    const fullscreenMode = pageParams.has('fullscreen') && pageParams.get('fullscreen') !== '0';
+
+    const screenCanvas = new GameCanvas({
+      width: 960,
+      height: 540,
+      parent: fullscreenMode ? document.body : stage,
+    });
+
+    if (fullscreenMode) {
+      // Hidden rather than removed: the readout code still writes to these
+      // elements every frame, and they stay valid targets while invisible.
+      stage.hidden = true;
+      document.querySelector('.wrap').hidden = true;
+      document.body.style.overflow = 'hidden';
+    }
 
     // No unlock() call anywhere — the manager wires itself to the first
     // pointerdown / touchstart / keydown. On iOS the "unlocked" readout below
@@ -389,6 +389,50 @@
     let tapMarker = null;
     let tickCount = 0;
 
+    // --- Refresh-rate probe -----------------------------------------------
+    //
+    // Answers the question the FPS counter alone cannot: is the display only
+    // offering 30Hz, or is it offering 60 and we are missing half of them?
+    //
+    // requestAnimationFrame fires at whatever cadence the device is willing
+    // to give. iOS throttles it to 30Hz in Low Power Mode, and on a hot or
+    // nearly flat battery, without telling the page — which looks identical
+    // to dropping frames if all you have is an FPS number.
+    //
+    // So two things get measured. The median rAF interval gives the cadence
+    // the device is actually offering. Separately, the time our own update
+    // and render take gives how much of that budget we are using. Low work
+    // plus a slow cadence means the device is throttling us; high work means
+    // we really are too slow. The pair is what makes the answer unambiguous.
+
+    const refreshSamples = [];
+    let lastProbeTime = 0;
+
+    function refreshProbe(now) {
+      if (lastProbeTime) {
+        const delta = now - lastProbeTime;
+        // Ignore absurd gaps: a backgrounded tab or a stall is not a cadence.
+        if (delta > 0 && delta < 200) {
+          refreshSamples.push(delta);
+          if (refreshSamples.length > 150) refreshSamples.shift();
+        }
+      }
+      lastProbeTime = now;
+      requestAnimationFrame(refreshProbe);
+    }
+    requestAnimationFrame(refreshProbe);
+
+    // Median, not mean: one stalled frame shouldn't drag the whole reading.
+    function medianFrameInterval() {
+      if (refreshSamples.length < 12) return 0;
+      const sorted = refreshSamples.slice().sort((a, b) => a - b);
+      return sorted[Math.floor(sorted.length / 2)];
+    }
+
+    // Rolling average of how long this game's own update + render take.
+    let frameWorkStart = 0;
+    let frameWorkMs = 0;
+
     // Fake HUD values so the shell's HUD helpers have something to draw.
     let fakeScore = 0;
     let fakeLives = 3;
@@ -408,6 +452,11 @@
     // --- Fixed-timestep update -------------------------------------------
 
     function update(dt) {
+      // First tick of this animation frame starts the work timer. The loop
+      // may run several fixed steps per frame, so it opens here and closes
+      // at the end of render().
+      if (frameWorkStart === 0) frameWorkStart = performance.now();
+
       // The shell gets first refusal on every tick. It returns false when a
       // menu owns the frame, which is this game's cue to skip its logic.
       if (!shell.update(dt)) return;
@@ -450,6 +499,8 @@
     // --- Render -----------------------------------------------------------
 
     function render(alpha) {
+      if (frameWorkStart === 0) frameWorkStart = performance.now();
+
       const ctx = screenCanvas.ctx;
       const w = screenCanvas.width;
       const h = screenCanvas.height;
@@ -493,11 +544,21 @@
       // Over the square, so a burst reads as coming out of it.
       particles.draw(ctx);
 
-      // Moved to the bottom edge so it doesn't sit under the shell's score.
+      // Bottom edge, so it doesn't sit under the shell's score. Carries the
+      // perf numbers too, because in fullscreen mode the DOM panels are
+      // hidden and this is the only place left to read them on a phone.
+      const interval = medianFrameInterval();
+      const hz = interval > 0 ? Math.round(1000 / interval) : 0;
       ctx.fillStyle = COLOR_TEXT;
-      ctx.font = `${14 * screenCanvas.uiScale}px ${token('--font-mono')}`;
+      ctx.font = `${13 * screenCanvas.uiScale}px ${token('--font-mono')}`;
       ctx.fillText(
-        `960 x 540 game space · uiScale ${screenCanvas.uiScale}`,
+        `960x540 · uiScale ${screenCanvas.uiScale} · dpr ${window.devicePixelRatio || 1}`
+        + ` · backing ${screenCanvas.canvas.width}x${screenCanvas.canvas.height}`,
+        16, h - 34,
+      );
+      ctx.fillText(
+        `display ${hz || '--'}Hz (${interval ? interval.toFixed(1) : '--'}ms)`
+        + ` · fps ${loop.fps} · work ${frameWorkMs.toFixed(1)}ms`,
         16, h - 16,
       );
 
@@ -512,6 +573,12 @@
       shell.render();
 
       updateReadout(alpha);
+
+      // Close the work timer. Exponential average so one janky frame doesn't
+      // dominate the reading.
+      const elapsed = performance.now() - frameWorkStart;
+      frameWorkMs = frameWorkMs === 0 ? elapsed : frameWorkMs * 0.9 + elapsed * 0.1;
+      frameWorkStart = 0;
     }
 
     // --- Debug readout ----------------------------------------------------
@@ -615,6 +682,27 @@
       }
 
       setText(el('fps'), String(loop.fps));
+
+      // Cadence the device is offering, vs how much of it we're using.
+      const interval = medianFrameInterval();
+      const hz = interval > 0 ? Math.round(1000 / interval) : 0;
+      setText(el('refresh'), hz ? `${hz}Hz (${interval.toFixed(1)}ms)` : 'sampling…');
+      setText(el('work'), `${frameWorkMs.toFixed(1)}ms`);
+
+      // The discriminator. If frames are far apart but our work is cheap,
+      // the device is rationing frames and nothing in our code will change
+      // it. If our work is near or over the interval, we are the problem.
+      let verdict = 'sampling…';
+      if (hz) {
+        if (frameWorkMs > interval * 0.8) {
+          verdict = 'we are too slow';
+        } else if (hz < 50) {
+          verdict = `device offers ${hz}Hz`;
+        } else {
+          verdict = 'healthy';
+        }
+      }
+      setText(el('verdict'), verdict);
       setText(el('loop-state'), loop.isPaused ? 'paused' : loop.isRunning ? 'running' : 'stopped');
       setText(el('alpha'), fmt(alpha));
       setText(el('ticks'), String(tickCount));
@@ -628,7 +716,9 @@
       setText(el('c-game'), `${screenCanvas.width}x${screenCanvas.height}`);
       setText(el('c-display'), `${Math.round(canvasRect.width)}x${Math.round(canvasRect.height)}`);
       setText(el('c-backing'), `${screenCanvas.canvas.width}x${screenCanvas.canvas.height}`);
-      setText(el('c-dpr'), String(window.devicePixelRatio || 1));
+      // Screen ratio -> what the canvas allocates. Uncapped by default, so
+      // these match unless a game sets maxPixelRatio.
+      setText(el('c-dpr'), `${window.devicePixelRatio || 1} → ${screenCanvas.pixelRatio}`);
       setText(el('c-scale'), fmt(screenCanvas.scale));
       setText(el('c-uiscale'), fmt(screenCanvas.uiScale));
       setText(el('c-bars'), `${barX} x ${barY}`);
@@ -741,95 +831,6 @@
         );
       }
     });
-
-    // --- Touch diagnostics -------------------------------------------------
-    //
-    // Reports what the browser actually delivers on a real phone: which
-    // events fire, where they land in both screen and game coordinates, and
-    // crucially whether anything called preventDefault() on them (which is
-    // what suppresses the synthetic click that HTML buttons rely on).
-    //
-    // Everything here is read-only observation in the CAPTURE phase, so it
-    // sees events before any engine handler and cannot alter them.
-
-    const debugParams = new URLSearchParams(window.location.search);
-    const showTouchDebug = debugParams.get('touchdebug') === '1'
-      || (debugParams.get('touchdebug') !== '0' && isTouchDevice);
-
-    if (showTouchDebug) {
-      const panel = document.createElement('div');
-      panel.id = 'touch-debug';
-      document.body.appendChild(panel);
-
-      const log = [];
-      const counts = { pointerdown: 0, touchstart: 0, touchend: 0, mousedown: 0, click: 0 };
-
-      const describeTarget = (t) => {
-        if (!t || !t.tagName) return '?';
-        const id = t.id ? `#${t.id}` : '';
-        return `${t.tagName.toLowerCase()}${id}`;
-      };
-
-      // Same formula the shell now uses, so you can see whether a tap landed
-      // inside the pause button without guessing.
-      const pauseRect = () => {
-        const scale = screenCanvas.scale || 1;
-        const size = Math.min(Math.max(44, 44 / scale), screenCanvas.width / 8);
-        const margin = Math.max(16, (44 / scale) * 0.25);
-        return { x: screenCanvas.width - margin - size, y: margin, w: size, h: size };
-      };
-
-      const render = () => {
-        const r = pauseRect();
-        const caps = [
-          `maxTouchPoints=${navigator.maxTouchPoints}  PointerEvent=${'PointerEvent' in window}  ontouchstart=${'ontouchstart' in window}`,
-          `scale=${screenCanvas.scale.toFixed(3)}  pauseBtn=${Math.round(r.w * screenCanvas.scale)}px on screen  game x${Math.round(r.x)}-${Math.round(r.x + r.w)} y${Math.round(r.y)}-${Math.round(r.y + r.h)}`,
-          `fired: pointerdown=${counts.pointerdown} touchstart=${counts.touchstart} touchend=${counts.touchend} mousedown=${counts.mousedown} click=${counts.click}`,
-        ].join('\n');
-        panel.innerHTML = `<span class="caps">${caps}</span>\n`
-          + log.map((l) => l.text).filter(Boolean).join('\n');
-      };
-
-      const record = (event) => {
-        counts[event.type] = (counts[event.type] ?? 0) + 1;
-
-        const touch = event.changedTouches ? event.changedTouches[0] : event;
-        const cx = touch && touch.clientX !== undefined ? touch.clientX : null;
-        const cy = touch && touch.clientY !== undefined ? touch.clientY : null;
-
-        let where = '';
-        let inPause = '';
-        if (cx !== null) {
-          const g = screenCanvas.screenToGame(cx, cy);
-          const r = pauseRect();
-          const inside = g.x >= r.x && g.x <= r.x + r.w && g.y >= r.y && g.y <= r.y + r.h;
-          where = ` screen(${Math.round(cx)},${Math.round(cy)}) game(${Math.round(g.x)},${Math.round(g.y)})`;
-          if (inside) inPause = ' <span class="hit">IN-PAUSE-BTN</span>';
-        }
-
-        // defaultPrevented is only final once every handler has run, so read
-        // it on the next tick rather than during capture.
-        const line = { text: '', };
-        log.unshift(line);
-        if (log.length > 7) log.pop();
-
-        setTimeout(() => {
-          line.text = `${event.type.padEnd(11)} ${describeTarget(event.target).padEnd(18)}${where}`
-            + (event.cancelable ? (event.defaultPrevented ? '  [prevented]' : '  [allowed]') : '')
-            + inPause;
-          render();
-        }, 0);
-      };
-
-      for (const type of ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click']) {
-        window.addEventListener(type, record, true); // capture: sees everything first
-      }
-
-      // Keep the header counters live (canvas scale changes on rotation) even
-      // when nothing is being tapped.
-      setInterval(render, 400);
-      render();
-    }
 
     loop.start();
   </script>
