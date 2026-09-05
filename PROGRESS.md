@@ -3,7 +3,7 @@
 ## Done
 - Phase 0: Node, Git, VS Code, Claude Code installed
 - Phase 1: Vite scaffold, GitHub repo, Cloudflare Pages auto-deploy live at studio22-anw.pages.dev
-- Phase 2: all eight engine modules — input.js, canvas.js, loop.js, session.js, ui.js, shell.js, audio.js, util.js. Verified on desktop keyboard, Xbox gamepad, and iPhone touch across input, canvas, loop, and shell. 60fps confirmed on device.
+- Phase 2: all eight engine modules — input.js, canvas.js, loop.js, session.js, ui.js, shell.js, audio.js, util.js. Verified on desktop keyboard, Xbox gamepad, and iPhone touch across input, canvas, loop, shell, and audio (iOS unlock confirmed on first tap). 60fps confirmed on device.
 
 ## In progress
 - Nothing in flight — Phase 3 is next
@@ -22,5 +22,4 @@
 - input.js only calls preventDefault() on touches it actually claims, and ignores touches starting on buttons/links/inputs. Calling it unconditionally kills the synthetic click and disables every DOM control on touch
 - test-engine.html is a throwaway debug page, delete before launch
 - DualSense over Bluetooth on Windows may report non-standard mapping — untested, USB should be fine
-- Audio unlock verified in desktop Chrome (context was genuinely blocked first); not yet confirmed on iOS
 - engine/ui.js holds the canvas drawing primitives shell.js uses; games can use it for their own title screens
