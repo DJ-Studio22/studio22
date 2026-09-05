@@ -2,36 +2,436 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Studio 22 — Arcade</title>
+  <meta name="description" content="Every Studio 22 game in one place. Pick one with a controller, a keyboard, or a thumb." />
+  <!-- Mirrors --color-bg-0. The one place a token value is duplicated: a
+       meta tag cannot read a custom property. -->
+  <meta name="theme-color" content="#0a0908" />
+
   <link rel="stylesheet" href="/styles/tokens.css" />
-  <style>
-    body {
-      margin: 0;
-      background: var(--color-bg-1);
-      color: var(--color-text-primary);
-      font-family: var(--font-body);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      gap: var(--space-md);
-    }
-    h1 { font-family: var(--font-display); color: var(--color-accent); }
-    nav a {
-      color: var(--color-accent-2);
-      margin: 0 var(--space-sm);
-    }
-  </style>
+  <link rel="stylesheet" href="/styles/site.css" />
+  <link rel="stylesheet" href="/styles/arcade.css" />
 </head>
 <body>
-  <h1>Arcade</h1>
-  <p>Hub placeholder — the game grid will live here.</p>
-  <nav>
-    <a href="/index.html">Home</a>
-    <a href="/party.html">Party</a>
-    <a href="/games/example-game/index.html">Example Game</a>
-  </nav>
+  <a class="skip-link" href="#grid">Skip to the games</a>
+
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <!-- Input glyphs defined once and referenced per card, rather than the
+       same paths repeated eighteen times. -->
+  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+    <symbol id="i-gamepad" viewBox="0 0 24 24">
+      <rect x="2" y="7" width="20" height="11" rx="4" />
+      <path d="M7 10.5v3M5.5 12h3M15.5 11.5h.01M18 13.5h.01" />
+    </symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24">
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+    </symbol>
+    <symbol id="i-touch" viewBox="0 0 24 24">
+      <path d="M10 11V6.5a1.5 1.5 0 0 1 3 0V13" />
+      <path d="M13 11.5a1.5 1.5 0 0 1 3 0V13" />
+      <path d="M16 12.5a1.5 1.5 0 0 1 3 0V16a5 5 0 0 1-5 5h-1.5a5 5 0 0 1-4.2-2.3L6 15a1.5 1.5 0 0 1 2.4-1.8L10 15" />
+    </symbol>
+  </svg>
+
+  <header class="topbar">
+    <a class="wordmark-link" href="/index.html" data-nav>Studio<span>22</span></a>
+    <a class="topbar__link" href="/party.html" data-nav>Party mode</a>
+  </header>
+
+  <main>
+    <div class="arcade-head">
+      <p class="eyebrow">Arcade</p>
+      <h1 class="arcade-head__title">Everything, in one place.</h1>
+      <!-- Filled from the manifest so the number can never drift from the
+           actual line-up. -->
+      <p class="arcade-head__count" id="count"></p>
+    </div>
+
+    <div class="controls">
+      <div class="tabs" role="tablist" aria-label="Filter by category" id="tabs"></div>
+      <label class="visually-hidden" for="search">Search games</label>
+      <input class="search" id="search" type="search" placeholder="Search games" autocomplete="off" data-nav />
+    </div>
+
+    <div class="grid" id="grid" role="list"></div>
+
+    <noscript>
+      <p class="empty">The game list needs JavaScript to load.</p>
+    </noscript>
+  </main>
+
+  <p class="navhint">
+    <span><b>↑↓←→</b>Move</span>
+    <span><b>A</b>Play</span>
+    <span><b>B</b>Back</span>
+    <span><b>Enter</b>Play</span>
+    <span><b>Esc</b>Back</span>
+  </p>
+
+  <script type="module">
+    import { Manifest, CATEGORIES } from '/engine/manifest.js';
+    import { Session } from '/engine/session.js';
+    import { Input } from '/engine/input.js';
+
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const grid = document.getElementById('grid');
+    const tabsHost = document.getElementById('tabs');
+    const search = document.getElementById('search');
+
+    // Declared up here rather than beside the cursor logic below, because
+    // applyFilters() reads it and runs during setup — a `let` further down
+    // leaves it in the temporal dead zone at that moment and throws.
+    let cursor = null;
+
+    // --- Filter tabs ------------------------------------------------------
+
+    const FILTERS = ['all', ...CATEGORIES];
+    let activeFilter = 'all';
+
+    for (const name of FILTERS) {
+      const tab = document.createElement('button');
+      tab.className = 'tab';
+      tab.type = 'button';
+      tab.role = 'tab';
+      tab.dataset.nav = '';
+      tab.dataset.filter = name;
+      tab.setAttribute('aria-selected', String(name === activeFilter));
+      tab.textContent = name;
+      tab.addEventListener('click', () => {
+        activeFilter = name;
+        for (const other of tabsHost.children) {
+          other.setAttribute('aria-selected', String(other.dataset.filter === name));
+        }
+        applyFilters();
+      });
+      tabsHost.append(tab);
+    }
+
+    // --- Cards ------------------------------------------------------------
+
+    // Built once, then shown and hidden. Rebuilding on every keystroke would
+    // throw away the element the focus cursor is currently sitting on.
+    const games = Manifest.getAll();
+
+    function inputIcons(game) {
+      const wrap = document.createElement('span');
+      wrap.className = 'inputs';
+
+      // 'keyboard' games are keyboard-only; everything else takes all three.
+      const glyphs = game.inputRequirement === 'keyboard'
+        ? ['i-keyboard']
+        : ['i-gamepad', 'i-keyboard', 'i-touch'];
+
+      for (const id of glyphs) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', `#${id}`);
+        svg.append(use);
+        wrap.append(svg);
+      }
+
+      // Stated in words as well as drawn, because an icon on its own is not
+      // something a player on a phone can act on.
+      if (game.inputRequirement === 'keyboard') {
+        const note = document.createElement('span');
+        note.className = 'inputs__note';
+        note.textContent = 'Keyboard needed';
+        wrap.append(note);
+      }
+
+      wrap.setAttribute('aria-label', game.inputRequirement === 'keyboard'
+        ? 'Needs a physical keyboard'
+        : 'Plays with a gamepad, keyboard or touch');
+      return wrap;
+    }
+
+    function buildCard(game, index) {
+      const live = game.status === 'live';
+
+      // A live game is a link. A coming-soon game is not — but it stays
+      // focusable, so a d-pad can still travel across the whole grid and
+      // read it. aria-disabled says it is not actionable without removing
+      // it from the page or the cursor's path.
+      const card = document.createElement(live ? 'a' : 'div');
+      card.className = `card${live ? '' : ' card--soon'}`;
+      card.dataset.nav = '';
+      card.dataset.category = game.category;
+      card.dataset.id = game.id;
+      card.setAttribute('role', 'listitem');
+      if (live) {
+        card.href = game.path;
+      } else {
+        card.tabIndex = 0;
+        card.setAttribute('aria-disabled', 'true');
+      }
+
+      if (!reduceMotion) {
+        card.dataset.reveal = 'up';
+        card.style.setProperty('--i', String(index % 8));
+      }
+
+      const media = document.createElement('div');
+      media.className = 'card__media';
+      media.dataset.category = game.category;
+
+      const monogram = document.createElement('span');
+      monogram.className = 'card__monogram';
+      monogram.setAttribute('aria-hidden', 'true');
+      monogram.textContent = game.title.charAt(0);
+      media.append(monogram);
+
+      const img = document.createElement('img');
+      img.className = 'card__img';
+      img.src = game.thumbnail;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      // No art yet: drop the broken image and let the monogram stand.
+      img.addEventListener('error', () => img.remove(), { once: true });
+      media.append(img);
+
+      const body = document.createElement('div');
+      body.className = 'card__body';
+
+      const title = document.createElement('h2');
+      title.className = 'card__title';
+      title.textContent = game.title;
+
+      const tagline = document.createElement('p');
+      tagline.className = 'card__tagline';
+      tagline.textContent = game.tagline;
+
+      const foot = document.createElement('div');
+      foot.className = 'card__foot';
+      foot.append(inputIcons(game));
+
+      if (live) {
+        // Only shown once there is something to show. Session is empty on a
+        // fresh visit, so most cards carry nothing here.
+        const best = Session.getBest(game.id);
+        if (best !== null) {
+          const score = document.createElement('p');
+          score.className = 'card__best';
+          score.innerHTML = 'Best this visit';
+          const value = document.createElement('b');
+          value.textContent = String(best);
+          score.append(value);
+          foot.append(score);
+        }
+      } else {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'Coming soon';
+        foot.append(badge);
+      }
+
+      body.append(title, tagline, foot);
+      card.append(media, body);
+      return card;
+    }
+
+    const cards = games.map(buildCard);
+    grid.append(...cards);
+
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'empty';
+    emptyMessage.hidden = true;
+    emptyMessage.textContent = 'Nothing matches that. Try another word.';
+    grid.append(emptyMessage);
+
+    // --- Filtering --------------------------------------------------------
+
+    function applyFilters() {
+      const query = search.value.trim();
+      // Search runs through the manifest so title-and-tags matching lives in
+      // one place rather than being reimplemented per page.
+      const matches = new Set(Manifest.search(query).map((game) => game.id));
+
+      let shown = 0;
+      cards.forEach((card, index) => {
+        const game = games[index];
+        const visible = matches.has(game.id)
+          && (activeFilter === 'all' || game.category === activeFilter);
+        card.hidden = !visible;
+        if (visible) shown++;
+      });
+
+      emptyMessage.hidden = shown > 0;
+      updateCount(shown);
+
+      // The cursor may have been sitting on a card that just disappeared.
+      if (cursor && cursor.hidden) moveCursorTo(navItems()[0] ?? null);
+    }
+
+    function updateCount(shown) {
+      const soon = games.filter((game) => game.status === 'coming-soon').length;
+      const total = games.length;
+      const label = document.getElementById('count');
+      // Deliberately plain about the fact that none of them are playable
+      // yet. Everything being "coming soon" is the honest state of the page
+      // today, and saying so reads better than a grid that looks broken.
+      label.textContent = shown === total
+        ? `${total} games. ${soon} still in development.`
+        : `${shown} of ${total} games.`;
+    }
+
+    search.addEventListener('input', applyFilters);
+
+    // Leaving the search field. input.js ignores every key while a text
+    // field has focus — correctly, or typing would drive the grid — so this
+    // one listener exists to hand control back. It is a form-control
+    // affordance, not a second navigation system.
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        search.blur();
+        moveCursorTo(navItems().find((el) => el.classList.contains('card')) ?? null);
+      }
+    });
+
+    applyFilters();
+
+    // --- Focus cursor -----------------------------------------------------
+    //
+    // The cursor IS DOM focus. Driving the real focus rather than a parallel
+    // "selected" index means gamepad, keyboard, mouse, touch and a screen
+    // reader all agree on where you are, and Enter/click already work.
+
+    const navItems = () => [...document.querySelectorAll('[data-nav]')].filter((el) => !el.hidden);
+
+    function moveCursorTo(el) {
+      if (cursor) cursor.classList.remove('is-cursor');
+      cursor = el;
+      if (!el) return;
+      el.classList.add('is-cursor');
+      el.focus({ preventScroll: true });
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduceMotion ? 'auto' : 'smooth' });
+    }
+
+    // Keep the highlight and real focus in step when a pointer or Tab moves
+    // focus instead of the d-pad.
+    document.addEventListener('focusin', (event) => {
+      const item = event.target.closest?.('[data-nav]');
+      if (item && item !== cursor) {
+        if (cursor) cursor.classList.remove('is-cursor');
+        cursor = item;
+        item.classList.add('is-cursor');
+      }
+    });
+
+    /**
+     * Spatial navigation: from the current item, pick the nearest one in the
+     * direction pressed, scored by distance along that axis plus a penalty
+     * for drifting off it.
+     *
+     * Measured from live rectangles rather than a fixed column count,
+     * because the grid is auto-fill — the number of columns changes with the
+     * viewport, and any hard-coded assumption about it would be wrong at
+     * some width.
+     */
+    function step(dx, dy) {
+      const items = navItems();
+      if (items.length === 0) return;
+
+      const from = cursor && !cursor.hidden ? cursor : items[0];
+      if (from !== cursor) { moveCursorTo(from); return; }
+
+      const a = from.getBoundingClientRect();
+      const ax = a.left + a.width / 2;
+      const ay = a.top + a.height / 2;
+
+      let best = null;
+      let bestScore = Infinity;
+
+      for (const el of items) {
+        if (el === from) continue;
+        const r = el.getBoundingClientRect();
+        const bx = r.left + r.width / 2;
+        const by = r.top + r.height / 2;
+        const ddx = bx - ax;
+        const ddy = by - ay;
+
+        if (dx && Math.sign(ddx) !== Math.sign(dx)) continue;
+        if (dy && Math.sign(ddy) !== Math.sign(dy)) continue;
+
+        const along = Math.abs(dx ? ddx : ddy);
+        const across = Math.abs(dx ? ddy : ddx);
+        if (along < 2) continue;
+
+        const score = along + across * 2.5;
+        if (score < bestScore) { bestScore = score; best = el; }
+      }
+
+      if (best) moveCursorTo(best);
+    }
+
+    function activate() {
+      if (!cursor) return;
+      // Works for links, buttons and the search field alike; a coming-soon
+      // card is a plain div with no handler, so this is a no-op on it.
+      cursor.click();
+      if (cursor === search) search.focus();
+    }
+
+    // --- Input loop -------------------------------------------------------
+    //
+    // engine/input.js owns gamepad and keyboard. This page has no game loop,
+    // so it runs the smallest possible one: poll, read edges, act.
+
+    let navLatchX = 0;
+    let navLatchY = 0;
+    const NAV_THRESHOLD = 0.5;
+
+    function frame() {
+      requestAnimationFrame(frame);
+      Input.update();
+
+      const state = Input.get(0);
+
+      // Edge-triggered: the stick must return to centre before it moves the
+      // cursor again, or one flick would skate across the whole grid.
+      const dx = Math.abs(state.x) > NAV_THRESHOLD ? Math.sign(state.x) : 0;
+      const dy = Math.abs(state.y) > NAV_THRESHOLD ? Math.sign(state.y) : 0;
+
+      if (dx !== 0 && navLatchX === 0) step(dx, 0);
+      if (dy !== 0 && navLatchY === 0) step(0, dy);
+      navLatchX = dx;
+      navLatchY = dy;
+
+      if (Input.pressed('a')) activate();
+      // B on a pad, Escape on a keyboard — input.js maps Escape to `back`.
+      if (Input.pressed('b') || Input.pressed('back')) window.location.href = '/index.html';
+    }
+
+    requestAnimationFrame(frame);
+
+    // --- Reveal -----------------------------------------------------------
+
+    const targets = [...document.querySelectorAll('[data-reveal]')];
+    if (reduceMotion) {
+      targets.forEach((el) => el.classList.add('is-visible'));
+    } else {
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      }, { rootMargin: '0px 0px -8% 0px', threshold: 0.1 });
+
+      // Anything already on screen reveals on its own rather than waiting for
+      // a scroll that may never come on a short grid.
+      const onScreen = new Set(targets.filter((el) => {
+        const box = el.getBoundingClientRect();
+        return box.top < window.innerHeight && box.bottom > 0;
+      }));
+      requestAnimationFrame(() => onScreen.forEach((el) => el.classList.add('is-visible')));
+      targets.forEach((el) => { if (!onScreen.has(el)) observer.observe(el); });
+    }
+  </script>
 </body>
 </html>

@@ -3,23 +3,41 @@
 // Score and run-stat tracking for the current visit. Nothing here outlives
 // the tab.
 //
-// Studio 22 collects zero data. No localStorage, no sessionStorage, no
-// cookies, no IndexedDB, no server. Every number this module holds lives in
-// a few Maps in memory, and when the tab closes they go with the page.
-// That is not a limitation waiting to be fixed -- it is the product
-// decision, and it is what lets a player hand the machine to a friend
-// without leaving anything of themselves behind.
+// Studio 22 collects zero data. No localStorage, no cookies, no IndexedDB,
+// no server, no accounts. What this module does use is sessionStorage, which
+// is scoped to a single tab and destroyed by the browser when that tab
+// closes. "Nothing survives the tab" is still literally true: close it and
+// everything here is gone, with nothing left on disk to find later.
+//
+// WHY STORAGE AT ALL, WHEN MAPS IN MEMORY WERE ENOUGH
+// ---------------------------------------------------
+// Every game is its own page under games/, and the arcade is another page
+// again. Moving between them is a full navigation, which tears down every
+// module in the document — so a score written in a game was already gone by
+// the time the arcade tried to read it. Purely in-memory state cannot span
+// pages in a multi-page site, and the arcade's "best this visit" could never
+// have shown anything.
+//
+// sessionStorage is the smallest thing that fixes it while keeping the
+// promise unchanged. It is per-tab, so a second tab starts clean, and it is
+// discarded with the tab rather than persisted to disk.
+//
+// HOW IT IS STRUCTURED
+// --------------------
+// The Maps below are still the working copy: reads never touch storage or
+// parse JSON. Storage is a mirror, loaded once when the module first runs
+// and rewritten after each change. If storage is unavailable for any reason
+// — a locked-down browser, a full quota, a sandboxed frame — every method
+// still works exactly as before and simply stops surviving navigation. It
+// never throws.
 //
 // THE SWAP POINT
 // --------------
-// If persistent saves are ever wanted, this file is the entire change.
-//
-// Games never read or write storage themselves. They only ever call the
-// handful of methods below, and they have no idea where a score goes after
-// they hand it over. So a persistent build means rewriting the internals of
-// this one module -- swapping the Maps for localStorage reads and writes --
-// and touching nothing else in the codebase. No game imports a storage API,
-// no game knows a storage key, and no game file would need editing.
+// If real persistence across visits is ever wanted, this file is still the
+// entire change: swap sessionStorage for localStorage here and nothing else
+// in the codebase moves. Games never read or write storage themselves; they
+// only ever call the methods below. That would break the privacy promise on
+// the landing page, so it is a product decision rather than a technical one.
 //
 // Anything replacing this file has to keep three promises the games rely on:
 //
@@ -28,12 +46,7 @@
 //      never undefined, and never a throw.
 //   3. submitScore() stays synchronous and returns its verdict immediately.
 //      Games use the returned { isBest } to fire a "NEW BEST!" celebration
-//      on the same frame the run ends, so an async storage layer would need
-//      its own in-memory cache in front of it to preserve that timing.
-//
-// Persistence is currently forbidden by the project rules. This note exists
-// so that if that decision is ever revisited, the blast radius is known in
-// advance, and it is exactly one file.
+//      on the same frame the run ends.
 
 // --- Score direction ----------------------------------------------------
 //
@@ -42,31 +55,113 @@
 // Direction is registered per game rather than passed on every submitScore()
 // call, because "lower is better" is a fact about the GAME, not about any
 // individual score. Stated once, it cannot drift. The per-call alternative
-// invites exactly one bug: a game that passes 'low' at its main game-over
-// call site and forgets it on some second path (a retry, a timeout, a
-// quit-early branch), after which scores are silently compared the wrong
-// way round. That failure is invisible in testing, because the wrong
-// direction still produces a perfectly plausible-looking number.
+// invites exactly one bug: a game passes 'low' at its main game-over call
+// site and forgets it on some second path, after which scores rank backwards
+// -- a failure invisible in testing, because the wrong direction still
+// yields a perfectly plausible number.
 
 const VALID_DIRECTIONS = ['high', 'low'];
 const DEFAULT_DIRECTION = 'high';
+
+// Versioned, so a future change to the stored shape can be recognised and
+// discarded rather than misread.
+const STORAGE_KEY = 'studio22.session.v1';
 
 // --- Session state ------------------------------------------------------
 //
 // Maps rather than plain objects: gameIds come from games.json, and a plain
 // object would let an id like 'constructor' or '__proto__' collide with
-// something already on Object.prototype. A Map has no inherited keys to
-// trip over, so any string is a safe id.
+// something already on Object.prototype. A Map has no inherited keys to trip
+// over, so any string is a safe id.
 
 const bestScores = new Map(); // gameId -> best score this visit
 const latestStats = new Map(); // gameId -> stats object from the most recent run
 const directions = new Map(); // gameId -> 'high' | 'low'
 
-// A Set (insertion-ordered) so getPlayedGames() reports games in the order
-// they were first played this visit. Tracked separately rather than derived
-// from the two Maps above, because a game counts as played once it reports
-// *anything* -- a run that ended without a score still happened.
+// Insertion-ordered, so getPlayedGames() reports games in the order they
+// were first played. Tracked separately rather than derived from the Maps
+// above, because a game counts as played once it reports anything -- a run
+// that ended without a score still happened.
 const playedGames = new Set();
+
+// --- Storage ------------------------------------------------------------
+
+// Resolved once. The write probe matters: some browsers expose
+// sessionStorage but throw the moment anything is written to it (private
+// browsing modes have historically done exactly this), so merely checking
+// that the object exists is not enough to know it works.
+const storage = (() => {
+  try {
+    const probe = `${STORAGE_KEY}.probe`;
+    window.sessionStorage.setItem(probe, '1');
+    window.sessionStorage.removeItem(probe);
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+})();
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+// Everything read back is treated as untrusted. It is only ever this tab's
+// own data, but a half-written or hand-edited blob should degrade to "no
+// saved session" rather than poison a comparison later -- a stored NaN in
+// bestScores would become a best score nothing could ever beat.
+function load() {
+  if (!storage) return;
+
+  let raw;
+  try {
+    raw = storage.getItem(STORAGE_KEY);
+  } catch {
+    return;
+  }
+  if (!raw) return;
+
+  try {
+    const data = JSON.parse(raw);
+    if (!isPlainObject(data)) throw new Error('not an object');
+
+    for (const [id, score] of Object.entries(data.bests ?? {})) {
+      if (Number.isFinite(score)) bestScores.set(id, score);
+    }
+    for (const [id, stats] of Object.entries(data.stats ?? {})) {
+      if (isPlainObject(stats)) latestStats.set(id, stats);
+    }
+    for (const [id, direction] of Object.entries(data.directions ?? {})) {
+      if (VALID_DIRECTIONS.includes(direction)) directions.set(id, direction);
+    }
+    for (const id of Array.isArray(data.played) ? data.played : []) {
+      if (typeof id === 'string') playedGames.add(id);
+    }
+  } catch (error) {
+    console.warn(`[session] Ignoring unreadable saved session: ${error.message}`);
+    try { storage.removeItem(STORAGE_KEY); } catch { /* nothing more to do */ }
+  }
+}
+
+// Called after every change. The whole blob is rewritten rather than patched
+// because it is a few hundred bytes at most, and one key is atomic where
+// four separate keys could be left inconsistent by a failed write.
+function save() {
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify({
+      bests: Object.fromEntries(bestScores),
+      stats: Object.fromEntries(latestStats),
+      directions: Object.fromEntries(directions),
+      played: [...playedGames],
+    }));
+  } catch {
+    // Quota exceeded, or storage revoked mid-session. The in-memory copy is
+    // still correct, so the visit carries on and simply stops surviving the
+    // next navigation.
+  }
+}
+
+load();
 
 function isBetter(candidate, current, direction) {
   return direction === 'low' ? candidate < current : candidate > current;
@@ -90,6 +185,7 @@ export const Session = {
       );
     }
     directions.set(gameId, direction);
+    save();
   },
 
   /**
@@ -106,7 +202,10 @@ export const Session = {
     // beaten for the rest of the visit. Drop it and report no improvement
     // rather than poisoning the game's best. (Infinity is rejected for the
     // same reason -- nothing can beat it.)
-    if (!Number.isFinite(score)) return { isBest: false, previousBest };
+    if (!Number.isFinite(score)) {
+      save();
+      return { isBest: false, previousBest };
+    }
 
     const direction = directions.get(gameId) ?? DEFAULT_DIRECTION;
 
@@ -116,6 +215,7 @@ export const Session = {
     const isBest = previousBest === null || isBetter(score, previousBest, direction);
     if (isBest) bestScores.set(gameId, score);
 
+    save();
     return { isBest, previousBest };
   },
 
@@ -136,6 +236,7 @@ export const Session = {
     // can't rewrite what we already recorded. Nested objects are still
     // shared by reference -- keep run stats flat.
     latestStats.set(gameId, { ...stats });
+    save();
   },
 
   // Stats from the most recent run, or null if this game hasn't reported
@@ -151,17 +252,27 @@ export const Session = {
     return [...playedGames];
   },
 
-  // Wipes the visit back to a blank slate.
+  // Wipes the visit back to a blank slate, storage included.
   //
-  // This clears registered directions too. That's safe here because every
-  // game is its own page under games/, so a game re-registers its direction
-  // on load -- there is no long-lived game object left holding a stale
-  // registration after a clear.
+  // This clears registered directions too. That's safe because every game is
+  // its own page under games/, so a game re-registers its direction on load
+  // -- there is no long-lived game object left holding a stale registration
+  // after a clear.
   clear() {
     bestScores.clear();
     latestStats.clear();
     directions.clear();
     playedGames.clear();
+    if (storage) {
+      try { storage.removeItem(STORAGE_KEY); } catch { /* already gone */ }
+    }
+  },
+
+  // Whether this visit is actually surviving navigation. False means storage
+  // was unavailable and the session is memory-only for this tab -- useful
+  // for a debug readout, not something games should branch on.
+  get isPersisted() {
+    return storage !== null;
   },
 };
 
@@ -172,15 +283,15 @@ export const Session = {
 // import { Session } from '../../engine/session.js';
 //
 // // Once, as the game boots. Lap times: lower is better.
-// Session.setScoreDirection('time-trial', 'low');
+// Session.setScoreDirection('circuit-racer', 'low');
 //
 // // When a run ends:
-// const { isBest, previousBest } = Session.submitScore('time-trial', 42.19);
+// const { isBest, previousBest } = Session.submitScore('circuit-racer', 42.19);
 // if (isBest) showNewBestBanner(previousBest);
 //
-// Session.setRunStats('time-trial', { laps: 3, topSpeed: 118, clean: true });
+// Session.setRunStats('circuit-racer', { laps: 3, topSpeed: 118, clean: true });
 //
-// // ...and over in the arcade hub, building its cards:
+// // ...and over in the arcade, which is a separate page load entirely:
 // for (const gameId of Session.getPlayedGames()) {
-//   renderCard(gameId, Session.getBest(gameId), Session.getRunStats(gameId));
+//   renderCard(gameId, Session.getBest(gameId));
 // }

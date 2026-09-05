@@ -9,8 +9,15 @@ Deployed as a static site to Cloudflare Pages.
 - Vanilla JavaScript with ES modules only. NO React, NO TypeScript, NO CSS
   frameworks, NO game engines, NO physics libraries.
 - NO backend, NO server, NO API calls. This is a fully static site.
-- NO localStorage, NO sessionStorage, NO cookies, NO persistence of any kind.
-  Scores live in memory for the current visit only, via engine/session.js.
+- NO localStorage, NO cookies, NO IndexedDB, NO persistence that outlives the
+  tab. sessionStorage IS permitted, and only through engine/session.js.
+  The promise is "nothing survives the tab": sessionStorage is scoped to a
+  single tab and destroyed with it, so it honours that exactly, while
+  localStorage and cookies would leave data on disk and do not.
+  Games never touch storage directly — they call engine/session.js, which is
+  the one place any of this lives. It needs storage rather than plain memory
+  because every game is its own page, and a full navigation to the arcade
+  tears down memory that a score was just written into.
 - NO data collection of any kind. No names stored, no analytics, no tracking.
 - NO online multiplayer. Local hot-seat and pass-and-play only.
 

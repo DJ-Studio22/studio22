@@ -1,0 +1,370 @@
+/*
+  styles/arcade.css — the game browser.
+
+  Loaded after tokens.css and site.css, and leans on both: the palette, the
+  type ramp, the texture layers, the eyebrow rule, the badge, the reveal
+  system and the reduced-motion block all come from there. Only what is
+  specific to this page lives here.
+
+  The page is a console dashboard rather than a list of links, and the thing
+  that makes it one is the focus cursor: a single obvious highlight that a
+  d-pad moves around, readable from a sofa. Everything else is arrangement.
+*/
+
+/* --- Top bar ------------------------------------------------------------- */
+
+.topbar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--gutter);
+  border-bottom: 1px solid var(--color-bg-4);
+}
+
+.wordmark-link {
+  font-family: var(--font-display);
+  font-weight: var(--wordmark-weight);
+  letter-spacing: var(--wordmark-tracking);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+  text-decoration: none;
+  line-height: 1;
+}
+
+.wordmark-link span { color: var(--color-accent); }
+
+.topbar__link {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-bg-4);
+  border-radius: var(--radius-full);
+}
+
+/* --- Page head ----------------------------------------------------------- */
+
+.arcade-head {
+  padding: clamp(var(--space-xl), 6vh, var(--space-2xl)) var(--gutter) var(--space-xl);
+  max-width: var(--maxw);
+  margin-inline: auto;
+}
+
+.arcade-head__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 4.5vw, 3rem);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.arcade-head__count {
+  margin-top: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-lead);
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+.controls {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--gutter);
+  max-width: var(--maxw);
+  margin-inline: auto;
+  /* Opaque, because cards scroll underneath it. */
+  background: var(--color-bg-0);
+  border-bottom: 1px solid var(--color-bg-4);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.tab {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-bg-4);
+  border-radius: var(--radius-full);
+  padding: var(--space-sm) var(--space-lg);
+  cursor: pointer;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--color-bg-0);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.search {
+  flex: 1 1 12rem;
+  max-width: 20rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--color-text-primary);
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-bg-4);
+  border-radius: var(--radius-full);
+  padding: var(--space-sm) var(--space-lg);
+}
+
+.search::placeholder { color: var(--color-text-disabled); }
+
+/* --- Grid ---------------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: clamp(var(--space-md), 2.5vw, var(--space-xl));
+  padding: var(--space-xl) var(--gutter) var(--space-2xl);
+  max-width: var(--maxw);
+  margin-inline: auto;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-bg-4);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  /* Colour and transform only, so a hover or a focus never reflows the grid. */
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+
+.card__media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--color-bg-2), var(--color-bg-1));
+  border-bottom: 1px solid var(--color-bg-4);
+}
+
+/* Category tint, so the grid reads as sorted even before you read a word.
+   Same treatment the landing page uses. */
+.card__media[data-category="arcade"] {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--color-accent) 18%, var(--color-bg-1)), var(--color-bg-1));
+}
+.card__media[data-category="learning"] {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--color-accent-2) 18%, var(--color-bg-1)), var(--color-bg-1));
+}
+.card__media[data-category="racing"] {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--color-bg-4) 90%, var(--color-accent)), var(--color-bg-1));
+}
+
+/* Stands in for art that does not exist yet, and stays behind it once it
+   does. A missing file then degrades to something deliberate rather than a
+   broken-image icon. */
+.card__monogram {
+  font-family: var(--font-display);
+  font-weight: var(--wordmark-weight);
+  font-size: clamp(3rem, 7vw, 4.5rem);
+  line-height: 1;
+  color: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  user-select: none;
+}
+
+.card__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  flex: 1;
+}
+
+.card__title {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.card__tagline {
+  color: var(--color-accent);
+  font-size: 0.9rem;
+}
+
+.card__foot {
+  margin-top: auto;
+  padding-top: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+/* --- Input marks ---------------------------------------------------------
+   Small and factual. A game that needs hardware the player may not have
+   says so in words next to the icon, because an icon alone is not a
+   statement anyone can act on. */
+
+.inputs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-disabled);
+}
+
+.inputs svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.inputs__note {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent-2);
+}
+
+/* --- Best score ---------------------------------------------------------- */
+
+.card__best {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-disabled);
+  text-align: right;
+}
+
+.card__best b {
+  display: block;
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Coming soon ---------------------------------------------------------
+   Dimmed but not hidden and not emptied out: the card keeps its art, title
+   and tagline so the grid still reads as a line-up rather than a set of
+   placeholders. Every game is in this state today, so this IS the design of
+   the page rather than an edge case in it. */
+
+.card--soon { cursor: default; }
+
+/* Held back rather than switched off. The badge is what states the fact;
+   the dimming only exists to separate these from live cards once there ARE
+   live cards. Pushed too far it makes a grid where everything is pending —
+   which is the whole grid today — read as broken rather than as a line-up
+   that has not opened yet. */
+.card--soon .card__media { opacity: 0.8; }
+.card--soon .card__tagline { color: var(--color-text-disabled); }
+
+/* --- The focus cursor ----------------------------------------------------
+   The one thing on this page that has to be legible from a sofa. A thick
+   accent ring plus a lift, on every navigable thing, playable or not — being
+   unable to see where you are is worse than landing on a card you cannot
+   launch. */
+
+.card.is-cursor,
+.tab.is-cursor,
+.search.is-cursor,
+.topbar__link.is-cursor,
+.wordmark-link.is-cursor {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 3px;
+  border-color: var(--color-accent);
+}
+
+.card.is-cursor {
+  background: color-mix(in srgb, var(--color-accent) 9%, var(--color-bg-1));
+  transform: translate3d(0, -3px, 0);
+}
+
+.card.is-cursor .card__title { color: var(--color-text-primary); }
+
+/* Pointer users get a quieter version of the same idea. */
+@media (hover: hover) {
+  .card:hover { border-color: color-mix(in srgb, var(--color-accent) 45%, var(--color-bg-4)); }
+}
+
+/* --- Empty state --------------------------------------------------------- */
+
+.empty {
+  grid-column: 1 / -1;
+  padding: var(--space-2xl) 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* --- Control hint bar ----------------------------------------------------
+   Tells a player on a pad which button does what, the way a console does. */
+
+.navhint {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  justify-content: center;
+  padding: var(--space-md) var(--gutter);
+  background: var(--color-bg-1);
+  border-top: 1px solid var(--color-bg-4);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--color-text-disabled);
+}
+
+.navhint b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding-inline: 0.3rem;
+  margin-right: var(--space-sm);
+  border: 1px solid var(--color-bg-4);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-weight: 400;
+}
+
+/* --- Wider screens -------------------------------------------------------- */
+
+@media (min-width: 46em) {
+  .grid { grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+}
