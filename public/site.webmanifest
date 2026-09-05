@@ -1,0 +1,17 @@
+{
+  "name": "Studio 22",
+  "short_name": "Studio 22",
+  "description": "A small arcade of original browser games. Nothing to install, nothing collected.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0908",
+  "theme_color": "#0a0908",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

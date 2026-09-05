@@ -100,6 +100,34 @@ greyscale. Everywhere else already had a second channel — tournament
 standings pair arrows with a number, players have a number and a name,
 Sinkhole's spiked ledges are drawn with actual spikes.
 
+
+## SEO and metadata (Phase 8)
+
+All nine built pages carry a unique title and description, a canonical link,
+Open Graph and Twitter tags, a favicon link and a manifest link. Seven of
+nine also carry JSON-LD. Verified against the BUILD rather than the source:
+0 problems, 9/9 unique titles, 9/9 unique descriptions, every sitemap URL
+resolves to a file that exists, and every JSON-LD block parses.
+
+Added: public/robots.txt, public/sitemap.xml, public/favicon.svg (an SVG, so
+no binary asset and no separate PNG set), public/site.webmanifest.
+
+Two small generators, both driven by games.json so they cannot drift from
+the games that actually exist:
+  tools/build-sitemap.mjs   writes public/sitemap.xml, live games only
+  tools/inject-meta.mjs     writes the metadata block into every page,
+                            idempotent between its marker comments
+Neither is wired into the build: they change only when a game ships, which
+is a moment worth reading the diff for.
+
+Deleted games/example-game/, the build-glob scaffold. Six real games exist,
+it was unreferenced, and it was being built and would have been indexed. The
+file itself said to delete it once a real game replaced it.
+
+OPEN: no og:image / twitter:image. There are no image assets, and pointing a
+card at a missing image renders as a broken box, so the Twitter card is
+"summary" rather than "summary_large_image". Needs one 1200x630 PNG.
+
 ## Notes and known items
 - Session.clear() KEEPS score directions. It used to wipe them, which left a running page with no direction and made Circuit Racer rank lap times upward — the slowest lap winning. Directions are a fact about the game, not data about the visit
 - Circuit Racer counts laps by accumulated travelled distance, not by crossing a line or by a position threshold. projectToTrack() returns the nearest point on the WHOLE centre line, so a car cutting a corner can be nearest to track it has not reached, which read as a lap and banked a 3.9s lap on a circuit whose fastest possible lap is 4.5s

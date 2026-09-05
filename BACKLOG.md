@@ -117,7 +117,7 @@ A top-down time-trial racer.
 
 ---
 
-## 6. Phase 8 — SEO and metadata — [ ]
+## 6. Phase 8 — SEO and metadata — [x] DONE
 
 **Do**
 - Per-page `<title>` and `<meta name="description">` — check what is missing.
@@ -131,6 +131,16 @@ A top-down time-trial racer.
 - Every page has a unique title and description.
 - The built `dist/` contains the new files.
 - Tags validate by inspection against the OG spec.
+
+---
+
+## 6b. OPEN — social card images
+
+og:image and twitter:image are deliberately absent: there are no image assets,
+and a card that points at a missing image renders as a broken box. The
+Twitter card is "summary" rather than "summary_large_image" for the same
+reason. Needs one 1200x630 PNG per shareable page, or one for the site.
+Adding them is a change to tools/inject-meta.mjs plus the files.
 
 ---
 
