@@ -189,6 +189,23 @@ export const Session = {
   },
 
   /**
+   * Which way this game's scores run, 'high' or 'low'.
+   *
+   * Games registered nothing get 'high', matching how they are already
+   * ranked. Exposed because engine/tournament.js has to rank several players
+   * against each other and cannot guess: in a time-trial game the lowest
+   * number is the winner, and a tournament that got that backwards would
+   * award the trophy to whoever played worst.
+   *
+   * The answer survives navigation, so the tournament page can ask about a
+   * game running in a different document — by the time anyone is ranked,
+   * that game has booted at least once and registered.
+   */
+  getScoreDirection(gameId) {
+    return directions.get(gameId) ?? DEFAULT_DIRECTION;
+  },
+
+  /**
    * Records a score for the run that just ended.
    * @returns {{ isBest: boolean, previousBest: number|null }} previousBest is
    *          null when this is the game's first score this visit.

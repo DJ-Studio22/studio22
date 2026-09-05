@@ -38,12 +38,14 @@
 // a live one, for the same battery reason.
 
 import { Input, JOYSTICK_MAX_RADIUS_PX } from './input.js';
+import { Tournament } from './tournament.js';
 import { Session } from './session.js';
 import { UI } from './ui.js';
 
 // --- Tunables -----------------------------------------------------------
 
 const ARCADE_URL = '/arcade.html';
+const PARTY_URL = '/party.html';
 
 // Which screen owns the display. `null` means the game does.
 const SCREEN = {
@@ -548,7 +550,10 @@ export class GameShell {
         { label: 'Restart', run: () => this.#restart() },
         { label: `Sound: ${this.#soundOn ? 'On' : 'Off'}`, run: () => this.setSound(!this.#soundOn) },
         { label: 'How to Play', run: () => this.showHowToPlay() },
-        { label: 'Back to Arcade', run: () => this.#backToArcade() },
+        {
+          label: this.#tournamentMode ? 'Back to Tournament' : 'Back to Arcade',
+          run: () => this.#leaveGame(),
+        },
       ];
     }
 
@@ -557,7 +562,10 @@ export class GameShell {
         this.#tournamentMode
           ? { label: 'Pass to next player', run: () => this.#passToNextPlayer() }
           : { label: 'Play Again', run: () => this.#restart() },
-        { label: 'Back to Arcade', run: () => this.#backToArcade() },
+        {
+          label: this.#tournamentMode ? 'Back to Tournament' : 'Back to Arcade',
+          run: () => this.#leaveGame(),
+        },
       ];
     }
 
@@ -577,20 +585,47 @@ export class GameShell {
     window.location.href = ARCADE_URL;
   }
 
-  // PHASE 7 HOOK -- the tournament handoff is not built yet.
-  //
-  // When it is, a game passes onPassToNextPlayer and this calls it: that
-  // callback is where the next player's name gets shown, the running order
-  // advances, and the game resets for them. Until then it falls back to a
-  // plain restart so the button isn't dead, and says so once in the console.
+  /**
+   * Hands the turn back to the tournament.
+   *
+   * A game needs to do nothing at all to be tournament-ready. The score is
+   * already here, so the shell records it against the current turn and
+   * returns to party.html itself, which is why Updraft and Comet work in a
+   * tournament without a line of their own. A game CAN still pass
+   * onPassToNextPlayer and take the handoff over, but none has to.
+   *
+   * With no tournament to hand back to -- someone typed ?tournament=1 by
+   * hand, or it was cleared in another tab -- this restarts rather than
+   * leaving the player on a button that does nothing.
+   */
   #passToNextPlayer() {
     if (this.#onPassToNextPlayer) {
       this.#closeScreen();
       this.#onPassToNextPlayer();
       return;
     }
-    console.warn('[shell] Tournament handoff not wired yet (Phase 7); restarting instead.');
+
+    if (Tournament.isActive()) {
+      Tournament.recordTurn(this.#gameId, this.#finalScore);
+      window.location.href = PARTY_URL;
+      return;
+    }
+
+    console.warn('[shell] ?tournament is set but no tournament is running; restarting instead.');
     this.#restart();
+  }
+
+  // Leaving a game mid-tournament goes back to the TOURNAMENT, not out to
+  // the arcade. The player still has a turn open, and the standings screen
+  // is where they can skip it or drop out properly; sending them to the
+  // arcade instead looks like the tournament has been thrown away, and
+  // leaves it sitting in storage with nothing pointing at it.
+  #leaveGame() {
+    if (this.#tournamentMode && Tournament.isActive()) {
+      window.location.href = PARTY_URL;
+      return;
+    }
+    this.#backToArcade();
   }
 
   // --- Pointer input ------------------------------------------------------

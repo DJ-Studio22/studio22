@@ -1,0 +1,766 @@
+/* styles/tournament.css
+   ---------------------------------------------------------------------------
+   Chrome for hot-seat tournaments. Every colour, space and font here comes
+   from styles/tokens.css, per CLAUDE.md — this is site chrome, not game art.
+
+   SIZED FOR A SOFA, NOT A DESK
+   This is the screen most likely to end up on a television with people
+   several feet away from it, so the baseline is much larger than the rest of
+   the site rather than the rest of the site plus a "TV mode". Type scales
+   with the viewport and bottoms out at a size that still reads across a
+   room. Borders are thick because a hairline disappears at distance and on
+   an overscanning TV.
+
+   PLAYER COLOUR
+   --player-color is set per element by engine/tournament-ui.js, always to a
+   var(--color-player-N) from tokens.css. Nothing in this file names a
+   player's colour, so adding a ninth is a change in two places, not nine.
+   Colour never carries meaning alone: every player also has a number and a
+   name next to it.
+   --------------------------------------------------------------------------- */
+
+.tn-root {
+  --tn-border: 4px;
+  --tn-focus: 6px;
+
+  min-height: 100svh;
+  /* A podium with eight players, or a phone held in landscape, is taller
+     than the viewport. Scrolling is the right answer; the alternative is
+     flex squashing rows into each other. */
+  overflow-y: auto;
+  padding: clamp(var(--space-md), 3vw, var(--space-2xl));
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+}
+
+/*
+  Every block keeps its own height. Without this the column's default
+  flex-shrink lets a tall child — the podium especially — compress under the
+  row below it, and the two draw on top of each other.
+*/
+.tn-screen > * { flex: 0 0 auto; }
+
+.tn-screen {
+  width: 100%;
+  max-width: 74rem;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--space-lg), 3vh, var(--space-2xl));
+  flex: 1;
+}
+
+/* --- Header -------------------------------------------------------------- */
+
+.tn-header__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--wordmark-weight);
+  letter-spacing: var(--wordmark-tracking);
+  font-size: clamp(2.5rem, 6vw, 5rem);
+  line-height: 1;
+}
+
+.tn-header__sub {
+  margin: var(--space-sm) 0 0;
+  font-size: clamp(1.1rem, 2vw, 1.75rem);
+  color: var(--color-text-secondary);
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+/*
+   One button style for the whole feature. Big hit areas because a thumb on a
+   phone and a cursor thrown across a TV both need slack, and because these
+   are pressed by people who are not looking closely.
+*/
+.tn-btn {
+  appearance: none;
+  border: var(--tn-border) solid var(--color-bg-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-2);
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.2vw, 1.9rem);
+  font-weight: 700;
+  padding: clamp(var(--space-sm), 1.6vh, var(--space-lg)) clamp(var(--space-md), 3vw, var(--space-xl));
+  cursor: pointer;
+  transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease;
+}
+
+.tn-btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-bg-0);
+}
+
+.tn-btn--quiet {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.tn-btn--confirmed {
+  border-color: var(--color-accent-2);
+  color: var(--color-accent-2);
+}
+
+.tn-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.tn-back {
+  margin-top: auto;
+  padding-top: var(--space-lg);
+}
+
+.tn-hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: clamp(1rem, 1.6vw, 1.4rem);
+}
+
+.tn-empty {
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+  color: var(--color-text-secondary);
+}
+
+/*
+   THE CURSOR.
+   This has to be obvious from across a room, so it is deliberately louder
+   than a focus ring would be on the rest of the site: a thick outline in the
+   accent, plus a scale-up so it reads even to someone who cannot pick the
+   colour out. Applied to :focus-visible as well, so a keyboard user tabbing
+   through gets exactly the same treatment rather than a second, quieter one.
+*/
+[data-nav].is-cursor,
+[data-nav]:focus-visible {
+  outline: var(--tn-focus) solid var(--color-accent);
+  outline-offset: 3px;
+  transform: scale(1.04);
+}
+
+[data-nav]:focus { outline-color: var(--color-accent); }
+
+/* --- Players ------------------------------------------------------------- */
+
+.tn-players {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.tn-player {
+  display: flex;
+  align-items: center;
+  gap: clamp(var(--space-sm), 2vw, var(--space-lg));
+  background: var(--color-bg-1);
+  /* The player's colour as the left edge of their row: a wide, solid band
+     that survives being looked at from the back of a room. */
+  border-left: clamp(10px, 1.4vw, 18px) solid var(--player-color);
+  border-radius: var(--radius-md);
+  padding: clamp(var(--space-sm), 1.4vh, var(--space-md)) var(--space-md);
+}
+
+.tn-player__number {
+  font-family: var(--font-mono);
+  font-size: clamp(1.2rem, 2.4vw, 2rem);
+  color: var(--color-text-secondary);
+  min-width: 1.5em;
+}
+
+.tn-player__swatch {
+  width: clamp(2.5rem, 5vw, 4rem);
+  height: clamp(2.5rem, 5vw, 4rem);
+  border-radius: var(--radius-full);
+  border: var(--tn-border) solid var(--color-bg-0);
+  background: var(--player-color);
+  cursor: pointer;
+  flex: none;
+}
+
+.tn-player__name {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 3px dashed var(--color-bg-4);
+  color: var(--color-text-primary);
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3.4vw, 2.8rem);
+  font-weight: 700;
+  text-align: left;
+  flex: 1;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tn-player__name.is-placeholder { color: var(--color-text-disabled); }
+
+.tn-player__remove {
+  appearance: none;
+  background: none;
+  border: var(--tn-border) solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  line-height: 1;
+  padding: var(--space-xs) var(--space-sm);
+  cursor: pointer;
+  flex: none;
+}
+
+/* --- On-screen keyboard -------------------------------------------------- */
+
+.tn-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-bg-0) 92%, transparent);
+  display: grid;
+  place-items: center;
+  padding: var(--space-md);
+  z-index: 10;
+}
+
+.tn-keyboard {
+  width: min(64rem, 100%);
+  background: var(--color-bg-1);
+  border: var(--tn-border) solid var(--player-color);
+  border-radius: var(--radius-lg);
+  padding: clamp(var(--space-md), 3vw, var(--space-xl));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.tn-keyboard__label {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.tn-keyboard__field {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 1.4em;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 6vw, 4rem);
+  font-weight: 800;
+  color: var(--player-color);
+  border-bottom: var(--tn-border) solid var(--color-bg-4);
+  padding-bottom: var(--space-sm);
+  white-space: pre;
+}
+
+.tn-keyboard__caret {
+  width: 3px;
+  height: 1em;
+  background: var(--player-color);
+  animation: tn-blink 1s steps(2, start) infinite;
+}
+
+@keyframes tn-blink { to { opacity: 0; } }
+
+.tn-keyboard__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tn-keyboard__row {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: center;
+}
+
+.tn-key {
+  appearance: none;
+  flex: 1 1 0;
+  min-width: 0;
+  aspect-ratio: 1;
+  max-height: 4.5rem;
+  background: var(--color-bg-2);
+  border: 3px solid var(--color-bg-4);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 2.6vw, 1.8rem);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tn-key--wide {
+  aspect-ratio: auto;
+  padding: var(--space-md) var(--space-sm);
+  font-family: var(--font-display);
+  font-size: clamp(0.9rem, 2vw, 1.4rem);
+}
+
+.tn-key--done {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-bg-0);
+}
+
+.tn-keyboard__hint {
+  margin: 0;
+  color: var(--color-text-disabled);
+  font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+  text-align: center;
+}
+
+/* --- Modes --------------------------------------------------------------- */
+
+.tn-modes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr));
+  gap: var(--space-md);
+}
+
+.tn-mode__button {
+  appearance: none;
+  width: 100%;
+  height: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  background: var(--color-bg-1);
+  border: var(--tn-border) solid var(--color-bg-4);
+  border-radius: var(--radius-lg);
+  padding: clamp(var(--space-md), 2.5vw, var(--space-xl));
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.tn-mode__button.is-current { border-color: var(--color-accent); }
+
+.tn-mode__label {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 2.4rem);
+  font-weight: 800;
+}
+
+.tn-mode__blurb {
+  font-size: clamp(1rem, 1.8vw, 1.4rem);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+
+/* --- Games --------------------------------------------------------------- */
+
+.tn-games {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+  gap: var(--space-md);
+}
+
+.tn-game {
+  position: relative;
+  appearance: none;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  background: var(--color-bg-1);
+  border: var(--tn-border) solid var(--color-bg-4);
+  border-radius: var(--radius-lg);
+  padding: clamp(var(--space-md), 2vw, var(--space-lg));
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.tn-game.is-chosen {
+  border-color: var(--color-accent);
+  background: var(--color-bg-2);
+}
+
+.tn-game__title {
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 2.6vw, 2rem);
+  font-weight: 800;
+}
+
+.tn-game__tagline {
+  font-size: clamp(0.95rem, 1.6vw, 1.2rem);
+  color: var(--color-text-secondary);
+}
+
+/* The round number in a gauntlet. Big, because "which game is first" is the
+   question people ask out loud while setting this up. */
+.tn-game__order {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  min-width: 2.2em;
+  height: 2.2em;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-bg-0);
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  font-weight: 700;
+}
+
+.tn-game__badge {
+  align-self: flex-start;
+  margin-top: var(--space-xs);
+  background: var(--color-bg-3);
+  color: var(--color-accent);
+  border-radius: var(--radius-full);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: clamp(0.8rem, 1.3vw, 1rem);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* --- The keyboard-only notice -------------------------------------------- */
+
+.tn-notice {
+  border: var(--tn-border) solid var(--color-accent);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-1);
+  padding: clamp(var(--space-md), 2.5vw, var(--space-xl));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.tn-notice__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 2.6vw, 2rem);
+  color: var(--color-accent);
+}
+
+.tn-notice__body {
+  margin: 0;
+  font-size: clamp(1rem, 1.8vw, 1.35rem);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  max-width: 60ch;
+}
+
+/* --- Get ready ----------------------------------------------------------- */
+
+.tn-screen--ready {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-md);
+}
+
+.tn-ready__turn {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.tn-ready__player {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  color: var(--player-color);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+/* The single biggest thing on any screen in the suite. Whose turn it is has
+   to be answerable from the far side of the room without getting up. */
+.tn-ready__name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--wordmark-weight);
+  letter-spacing: var(--wordmark-tracking);
+  font-size: clamp(2.5rem, min(13vw, 20vh), 11rem);
+  line-height: 0.9;
+  color: var(--player-color);
+  text-shadow: 0 0 clamp(1rem, 4vw, 3.5rem)
+    color-mix(in srgb, var(--player-color) 40%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.tn-ready__game {
+  margin: 0;
+  font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+  color: var(--color-text-secondary);
+}
+
+.tn-ready__count {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(4rem, 16vw, 12rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-text-primary);
+}
+
+.tn-ready__count.is-beat { animation: tn-beat 400ms var(--ease-out, ease-out); }
+
+@keyframes tn-beat {
+  from { transform: scale(1.5); opacity: 0.2; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* --- Standings ----------------------------------------------------------- */
+
+.tn-standings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tn-standing {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: clamp(var(--space-sm), 2vw, var(--space-lg));
+  background: var(--color-bg-1);
+  border-left: clamp(10px, 1.4vw, 18px) solid var(--player-color);
+  border-radius: var(--radius-md);
+  padding: clamp(var(--space-sm), 1.6vh, var(--space-md)) var(--space-md);
+  /* The only property the FLIP animation touches. */
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tn-standing.is-withdrawn { opacity: 0.55; }
+
+.tn-standing__position {
+  font-family: var(--font-mono);
+  font-size: clamp(1.6rem, 4vw, 3rem);
+  font-weight: 700;
+  color: var(--player-color);
+  min-width: 1.6em;
+  text-align: center;
+}
+
+.tn-standing__who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tn-standing__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 3vw, 2.4rem);
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tn-standing__meta {
+  font-size: clamp(0.85rem, 1.4vw, 1.1rem);
+  color: var(--color-text-secondary);
+}
+
+.tn-standing__move {
+  font-family: var(--font-mono);
+  font-size: clamp(0.9rem, 1.8vw, 1.3rem);
+  min-width: 3.5em;
+  text-align: right;
+}
+
+.tn-standing__move.is-up { color: var(--color-accent-2); }
+.tn-standing__move.is-down { color: var(--color-text-disabled); }
+
+.tn-standing__score {
+  font-family: var(--font-mono);
+  font-size: clamp(1.4rem, 3.2vw, 2.6rem);
+  font-weight: 700;
+  min-width: 3.5em;
+  text-align: right;
+}
+
+/* --- Podium -------------------------------------------------------------- */
+
+.tn-screen--podium {
+  align-items: center;
+  text-align: center;
+}
+
+.tn-podium__crown {
+  margin: 0;
+  font-family: var(--font-mono);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  color: var(--player-color);
+}
+
+.tn-podium__winner {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--wordmark-weight);
+  letter-spacing: var(--wordmark-tracking);
+  /* Height as well as width: a wide, short window would otherwise give a
+     headline with no room left underneath it for the podium it announces. */
+  font-size: clamp(2.5rem, min(12vw, 15vh), 10rem);
+  line-height: 0.9;
+  color: var(--player-color);
+  text-shadow: 0 0 clamp(1rem, 5vw, 4rem)
+    color-mix(in srgb, var(--player-color) 45%, transparent);
+  overflow-wrap: anywhere;
+}
+
+.tn-podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-md);
+  width: 100%;
+  flex-wrap: wrap;
+  /* The floor the blocks stand on. Without it they are three open-bottomed
+     boxes that read as clipped rather than as a podium. */
+  border-bottom: var(--tn-border) solid var(--color-bg-4);
+  padding-bottom: 0;
+}
+
+.tn-podium__block {
+  flex: 1 1 8rem;
+  max-width: 16rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  background: var(--color-bg-1);
+  border: var(--tn-border) solid var(--player-color);
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: var(--space-md) var(--space-sm);
+}
+
+/* Heights make the ranking readable without reading anything. */
+.tn-podium__block--1 { min-height: clamp(9rem, 24vh, 16rem); }
+.tn-podium__block--2 { min-height: clamp(7rem, 18vh, 12rem); }
+.tn-podium__block--3 { min-height: clamp(5.5rem, 14vh, 9rem); }
+
+.tn-podium__place {
+  font-family: var(--font-mono);
+  font-size: clamp(1.2rem, 2.6vw, 2rem);
+  font-weight: 700;
+  color: var(--player-color);
+}
+
+.tn-podium__name {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.4vw, 1.8rem);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.tn-podium__score {
+  font-family: var(--font-mono);
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  color: var(--color-text-secondary);
+}
+
+.tn-podium__rest {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: min(40rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.tn-podium__restRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-md);
+  align-items: center;
+  text-align: left;
+  border-left: 8px solid var(--player-color);
+  padding: var(--space-xs) var(--space-sm);
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+}
+
+.tn-podium__restPlace,
+.tn-podium__restScore {
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+}
+
+/* --- Celebration --------------------------------------------------------- */
+/*
+   Transform and opacity only, on a fixed layer that catches no pointer
+   events. Removed entirely under reduced motion — the module does not
+   render it at all rather than this file animating it to nothing.
+*/
+.tn-confetti {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.tn-confetti__piece {
+  position: absolute;
+  top: -5vh;
+  left: var(--x);
+  width: clamp(8px, 1vw, 14px);
+  height: clamp(14px, 1.8vw, 24px);
+  background: var(--player-color, var(--color-accent));
+  border-radius: 2px;
+  opacity: 0;
+  animation: tn-fall 2.4s var(--delay) ease-in 3;
+}
+
+@keyframes tn-fall {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  100% { transform: translate3d(0, 110vh, 0) rotate(var(--spin)); opacity: 0; }
+}
+
+/* --- Reduced motion ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .tn-standing,
+  .tn-btn,
+  [data-nav].is-cursor,
+  [data-nav]:focus-visible {
+    transition: none;
+    transform: none;
+  }
+
+  .tn-keyboard__caret,
+  .tn-ready__count.is-beat {
+    animation: none;
+  }
+
+  /* The cursor still has to be unmistakable without the scale, so it gets a
+     heavier outline instead of a smaller one. */
+  [data-nav].is-cursor,
+  [data-nav]:focus-visible {
+    outline-width: calc(var(--tn-focus) + 2px);
+  }
+}

@@ -37,6 +37,32 @@
   --color-accent-2: #6ec98c;
   --color-accent-quiet: #7a5320;  /* rules and marks. decorative only */
 
+  /* --- Player colours ---------------------------------------------------
+     Eight identities for hot-seat tournaments, where whose turn it is has to
+     be readable from a sofa. These are tokens rather than values picked in
+     the tournament CSS because the tournament is site chrome, not game art.
+
+     Chosen to stay apart from each other at ten feet and on a television
+     that is oversaturating everything. Deliberately spread around the wheel
+     rather than clustered in the warm end the rest of the site lives in: two
+     warm oranges are the same colour from across a room. No red/green pair
+     carries meaning on its own, and every one of them is also numbered and
+     named on screen, so colour is never the only thing telling players
+     apart.
+
+     All eight are light, so anything sitting ON one of them takes
+     --color-bg-0. Measured against --color-bg-0 they run 6.3:1 to 15.9:1, and
+     because the ratio is symmetrical that is also the contrast of bg-0 text
+     sitting on the colour — both directions pass AA. */
+  --color-player-1: #ffa22b;  /* amber   */
+  --color-player-2: #5b8cff;  /* azure   */
+  --color-player-3: #5aff9d;  /* mint    */
+  --color-player-4: #ff6b8a;  /* rose    */
+  --color-player-5: #b98cff;  /* violet  */
+  --color-player-6: #ffe66d;  /* lemon   */
+  --color-player-7: #45d9ff;  /* cyan    */
+  --color-player-8: #ff5ce1;  /* magenta */
+
   /* --- Text ------------------------------------------------------------
      Warm greys to match the backgrounds, four steps so hierarchy comes from
      contrast rather than size alone. Measured against --color-bg-0:

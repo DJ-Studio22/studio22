@@ -2,36 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Studio 22 — Party</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Party — Studio 22</title>
+  <meta name="description" content="Hot-seat tournaments for two to eight players. One screen, one controller, nothing saved." />
+  <!-- Mirrors --color-bg-0. A meta tag cannot read a custom property. -->
+  <meta name="theme-color" content="#0a0908" />
+
   <link rel="stylesheet" href="/styles/tokens.css" />
+  <link rel="stylesheet" href="/styles/tournament.css" />
   <style>
-    body {
+    html, body {
       margin: 0;
-      background: var(--color-bg-1);
+      min-height: 100%;
+      background: var(--color-bg-0);
       color: var(--color-text-primary);
       font-family: var(--font-body);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      gap: var(--space-md);
+      /* The cursor is driven by a gamepad as often as by a finger, and a
+         stray drag scrolling the page underneath it is disorienting on a
+         screen that already fits. */
+      overscroll-behavior: none;
+      -webkit-text-size-adjust: 100%;
     }
-    h1 { font-family: var(--font-display); color: var(--color-accent); }
-    nav a {
-      color: var(--color-accent-2);
-      margin: 0 var(--space-sm);
+
+    /* Shown only if the module never runs. Everything below it is built by
+       script, so with no JavaScript this page would otherwise be blank. */
+    .tn-noscript {
+      max-width: 40rem;
+      margin: 4rem auto;
+      padding: 0 1rem;
+      text-align: center;
+      line-height: 1.6;
     }
+    .tn-noscript a { color: var(--color-accent); }
   </style>
 </head>
 <body>
-  <h1>Party</h1>
-  <p>Party mode placeholder — pass-and-play hub goes here.</p>
-  <nav>
-    <a href="/index.html">Home</a>
-    <a href="/arcade.html">Arcade</a>
-    <a href="/games/example-game/index.html">Example Game</a>
-  </nav>
+  <main id="tournament" class="tn-root">
+    <noscript>
+      <div class="tn-noscript">
+        <h1>Party mode needs JavaScript</h1>
+        <p>
+          Tournaments run entirely in this tab — there is no server to fall
+          back to. <a href="/arcade.html">Back to the arcade</a>.
+        </p>
+      </div>
+    </noscript>
+  </main>
+
+  <script type="module">
+    import { TournamentUI } from '/engine/tournament-ui.js';
+
+    // The whole page is one mounted component. It picks up a tournament
+    // already in progress on its own, which is how a turn returning from a
+    // game lands on the standings rather than back at setup.
+    TournamentUI.mount(document.getElementById('tournament'));
+  </script>
 </body>
 </html>
