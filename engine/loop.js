@@ -38,6 +38,26 @@ import { Input } from './input.js';
 const STEPS_PER_SECOND = 60;
 const STEP_MS = 1000 / STEPS_PER_SECOND;
 
+/**
+ * The simulation rate, exported because ports need it.
+ *
+ * UNITS: every engine API is in SECONDS. Velocities are px/second,
+ * accelerations px/second squared, lifetimes in seconds. Game code advances
+ * state with `x += vx * dt`, and dt is always exactly 1/60.
+ *
+ * Seconds rather than per-tick, deliberately. Per-tick constants are only
+ * correct for as long as the tick rate never changes, and would break
+ * silently and everywhere if it ever did. Forgetting to multiply by dt, the
+ * failure mode of this convention, makes everything exactly 60x too fast —
+ * obvious in the first second of play rather than a subtle drift.
+ *
+ * Porting a game tuned per-frame on a 60Hz rAF? Multiply velocities by
+ * TICKS_PER_SECOND and accelerations by TICKS_PER_SECOND squared. Do the
+ * multiplication in code rather than pasting rounded results, and the
+ * conversion is exact.
+ */
+export const TICKS_PER_SECOND = STEPS_PER_SECOND;
+
 // What update(dt) receives. Always this exact value -- that constancy IS
 // the guarantee this module makes. Seconds rather than milliseconds so game
 // code can express speeds in readable units (300 px/sec, not 0.3 px/ms).
@@ -90,6 +110,15 @@ export class GameLoop {
    * @param {(alpha: number) => void} options.render  Draw the world. `alpha` is
    *        0..1, the fraction of a step between the previous and current
    *        simulation state -- interpolate visuals across it for smooth motion.
+   *
+   *        Interpolating is OPTIONAL. A game may ignore alpha entirely and
+   *        draw its settled state, which gives exactly the 60 distinct
+   *        positions a second a fixed-rate game would have had. Some games
+   *        must ignore it: anything whose camera reframes by translating the
+   *        world (a climber, a scroller) moves every object at once on a
+   *        single tick, and interpolating across that tick tears the whole
+   *        scene apart for one frame. Ignoring alpha is a normal choice, not
+   *        a shortcut.
    * @param {() => void} [options.onPause]   Fired when the loop auto-pauses (tab
    *        hidden, window blurred) or pause() is called. Show your pause screen here.
    * @param {() => void} [options.onResume]  Fired on resume().

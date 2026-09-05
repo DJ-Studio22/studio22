@@ -486,6 +486,21 @@ export class ParticleSystem {
     ctx.restore();
   }
 
+  /**
+   * Moves every live particle by (dx, dy).
+   *
+   * For games whose camera reframes by translating the world rather than by
+   * transforming the context: when everything else shifts down, particles
+   * have to shift with it or they visibly detach and slide off on their own.
+   * Without this a scrolling game cannot use this class at all.
+   */
+  shift(dx, dy) {
+    for (let i = 0; i < this.#activeCount; i++) {
+      this.#pool[i].x += dx;
+      this.#pool[i].y += dy;
+    }
+  }
+
   // Drops every live particle without deallocating anything.
   clear() {
     this.#activeCount = 0;

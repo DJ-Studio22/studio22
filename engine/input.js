@@ -395,6 +395,19 @@ export class Input {
     return Input.#touchControlsEnabled;
   }
 
+  /**
+   * Removes every on-screen action button, for a game that has none.
+   *
+   * The virtual joystick is NOT affected — a game with nothing to press
+   * usually still needs steering. This exists because the alternative,
+   * setTouchLayout([]), reads like an oversight rather than a decision, and
+   * a game that skips it silently ships two dead buttons sitting on the
+   * screen doing nothing.
+   */
+  static clearTouchLayout() {
+    Input.setTouchLayout([]);
+  }
+
   // Radial deadzone applied to both sticks on every gamepad, 0-1.
   static setDeadzone(value) {
     Input.#deadzone = Math.min(Math.max(value, 0), 0.9);

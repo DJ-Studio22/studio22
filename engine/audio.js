@@ -52,6 +52,7 @@ export class AudioManager {
   #musicGain = null;
 
   #buffers = new Map(); // id -> AudioBuffer
+  #fallbacks = new Map(); // id -> beep options, used until a file is loaded
   #voices = [];         // reusable gain nodes, one per simultaneous sound
   #warned = new Set();  // ids already complained about, so we only do it once
 
@@ -126,7 +127,36 @@ export class AudioManager {
   }
 
   /**
-   * Plays a loaded effect.
+   * Declares a game's whole sound set in one place, each entry with a
+   * synthesised fallback and optionally a file.
+   *
+   *   audio.define({
+   *     bounce: { beep: { freq: 520, duration: 0.055, type: 'square' } },
+   *     spring: { beep: { freq: 780, duration: 0.14 }, file: '/assets/sfx/spring.wav' },
+   *   });
+   *
+   * play('bounce') then works immediately, synthesised. Adding a `file` to an
+   * entry is the ONLY change needed to upgrade that sound to a real
+   * recording: files load in the background, play() uses the sample the
+   * moment it is ready and the beep until then, and no call site moves.
+   *
+   * Loading is deliberately fire-and-forget. A game should never be gated on
+   * audio downloading, and a file that fails simply leaves the beep in place.
+   */
+  define(definitions) {
+    for (const [id, def] of Object.entries(definitions ?? {})) {
+      if (def && def.beep) this.#fallbacks.set(id, def.beep);
+      if (def && def.file) {
+        // Not awaited: the beep covers the gap, and a failure is already
+        // handled inside load().
+        this.load(id, def.file);
+      }
+    }
+  }
+
+  /**
+   * Plays a loaded effect, or its declared fallback beep if no file has
+   * arrived for it.
    *
    * @param {string} id
    * @param {object} [opts]
@@ -143,12 +173,19 @@ export class AudioManager {
 
     const buffer = this.#buffers.get(id);
     if (!buffer) {
+      // A declared fallback is the normal case before any audio files exist,
+      // so it is not a problem and must not warn.
+      const fallback = this.#fallbacks.get(id);
+      if (fallback) {
+        this.beep(fallback);
+        return;
+      }
       // Warn once per id: a missing sound effect is usually triggered from
       // inside a loop, and sixty identical console lines a second buries
       // whatever else the developer was trying to read.
       if (!this.#warned.has(id)) {
         this.#warned.add(id);
-        console.warn(`[audio] No sound loaded for "${id}" -- ignoring play().`);
+        console.warn(`[audio] No sound or fallback defined for "${id}" -- ignoring play().`);
       }
       return;
     }

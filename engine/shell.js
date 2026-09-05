@@ -47,6 +47,7 @@ const ARCADE_URL = '/arcade.html';
 
 // Which screen owns the display. `null` means the game does.
 const SCREEN = {
+  TITLE: 'title',
   LOADING: 'loading',
   PAUSE: 'pause',
   GAMEOVER: 'gameover',
@@ -132,9 +133,13 @@ export class GameShell {
   #tournamentMode = false;
   #touchCapable = false;
 
-  // Where HOWTO returns to when backed out of: 'pause', or null meaning it
-  // was shown before the game started and closing it begins play.
+  // Which screen HOWTO returns to when backed out of. null means nothing was
+  // behind it and closing begins play.
   #howToReturn = null;
+
+  // Title screen copy, set by showTitle().
+  #titleName = '';
+  #titleTagline = '';
 
   // Game over payload.
   #finalScore = 0;
@@ -162,7 +167,11 @@ export class GameShell {
    * @param {() => void} [options.onPassToNextPlayer] Tournament handoff (Phase 7).
    * @param {object} [options.audio]  Anything with setMuted(bool). Optional
    *        until engine/audio.js exists.
-   * @param {boolean} [options.showHowToPlayOnStart=false]
+   *
+   * There is no "show how to play on start" option. A game that wants a
+   * front door calls showTitle() — the how-to-play screen was never a title
+   * screen, and using it as one gave the player a panel headed "How to Play"
+   * with a button marked "Back" instead of the game's name and a Start.
    */
   constructor(options) {
     this.#gameId = options.gameId;
@@ -186,11 +195,6 @@ export class GameShell {
     this.#touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
     this.#canvas.canvas.addEventListener('pointerdown', this.#onPointerDown);
-
-    if (options.showHowToPlayOnStart) {
-      this.#howToReturn = null;
-      this.#openScreen(SCREEN.HOWTO);
-    }
   }
 
   // --- Public surface -----------------------------------------------------
@@ -249,7 +253,7 @@ export class GameShell {
    * omitted simply isn't drawn, so no game is forced into a shape that
    * doesn't fit it.
    *
-   * @param {object} hud { score, lives, timer, level } -- all optional.
+   * @param {object} hud { score, best, lives, timer, level } -- all optional.
    */
   drawHud(hud = {}) {
     const ctx = this.#canvas.ctx;
@@ -267,10 +271,22 @@ export class GameShell {
       });
     }
 
+    // Score and best stack under one another, because a high-score game
+    // almost always wants both and every one of them was otherwise going to
+    // hand-draw this line. `best` is skipped when null, which is what
+    // Session.getBest() returns for a game not yet played this visit — so a
+    // game can pass it straight through without a guard.
+    let stackY = top + 20 + 30 * scale;
+
+    if (hud.best !== undefined && hud.best !== null) {
+      UI.text(ctx, `BEST ${hud.best}`, 20, stackY, {
+        size: 13, color: t.textDisabled, font: 'display', align: 'left', baseline: 'top', scale,
+      });
+      stackY += 20 * scale;
+    }
+
     if (hud.level !== undefined) {
-      // Tucked under the score, the one place guaranteed not to collide with
-      // the timer or the lives.
-      UI.text(ctx, `LEVEL ${hud.level}`, 20, top + 20 + 30 * scale, {
+      UI.text(ctx, `LEVEL ${hud.level}`, 20, stackY, {
         size: 13, color: t.textSecondary, font: 'display', align: 'left', baseline: 'top', scale,
       });
     }
@@ -336,10 +352,31 @@ export class GameShell {
     }
   }
 
-  // Opens the how-to-play overlay. Backing out of it returns to the pause
-  // menu when that's where it came from.
+  /**
+   * Shows the game's own title screen: its name, a line beneath it, and a
+   * Start button. Call it at boot, before or after loop.start().
+   *
+   * This is the front door of a game and it belongs to the game, not to the
+   * suite — which is why the name and tagline are passed in rather than
+   * reused from the arcade manifest. Nothing starts until Start is pressed.
+   *
+   * @param {object} options
+   * @param {string} options.name     The game's title, shown large.
+   * @param {string} [options.tagline] One line under it.
+   */
+  showTitle({ name, tagline = '' } = {}) {
+    this.#titleName = name ?? this.#title;
+    this.#titleTagline = tagline;
+    this.#openScreen(SCREEN.TITLE);
+  }
+
+  // Opens the how-to-play overlay. Backing out returns to whichever screen
+  // it was opened from -- the title screen or the pause menu -- rather than
+  // dropping the player into a game they have not started.
   showHowToPlay() {
-    this.#howToReturn = this.#screen === SCREEN.PAUSE ? SCREEN.PAUSE : null;
+    this.#howToReturn = (this.#screen === SCREEN.PAUSE || this.#screen === SCREEN.TITLE)
+      ? this.#screen
+      : null;
     this.#openScreen(SCREEN.HOWTO);
   }
 
@@ -474,8 +511,8 @@ export class GameShell {
   }
 
   #leaveHowTo() {
-    if (this.#howToReturn === SCREEN.PAUSE) {
-      this.#openScreenFromOverlay(SCREEN.PAUSE);
+    if (this.#howToReturn) {
+      this.#openScreenFromOverlay(this.#howToReturn);
     } else {
       this.#closeScreen();
     }
@@ -493,6 +530,14 @@ export class GameShell {
   // Item lists are rebuilt per frame rather than stored, so labels that
   // depend on state (the sound toggle) can never go stale.
   #currentItems() {
+    if (this.#screen === SCREEN.TITLE) {
+      return [
+        { label: 'Start', run: () => this.#closeScreen() },
+        { label: 'How to Play', run: () => this.showHowToPlay() },
+        { label: 'Back to Arcade', run: () => this.#backToArcade() },
+      ];
+    }
+
     if (this.#screen === SCREEN.PAUSE) {
       return [
         { label: 'Resume', run: () => this.resume() },
@@ -650,6 +695,9 @@ export class GameShell {
     if (this.#screen === SCREEN.HOWTO) {
       return 96 + this.#visibleControlRows().length * 32;
     }
+    if (this.#screen === SCREEN.TITLE) {
+      return this.#titleTagline ? 150 : 118;
+    }
     if (this.#screen === SCREEN.LOADING) return 108;
     return 100; // pause
   }
@@ -685,6 +733,7 @@ export class GameShell {
     UI.scrim(ctx, w, h);
 
     switch (this.#screen) {
+      case SCREEN.TITLE: this.#drawTitle(); break;
       case SCREEN.PAUSE: this.#drawPause(); break;
       case SCREEN.GAMEOVER: this.#drawGameOver(); break;
       case SCREEN.HOWTO: this.#drawHowTo(); break;
@@ -704,6 +753,35 @@ export class GameShell {
     });
 
     return layout;
+  }
+
+  #drawTitle() {
+    const ctx = this.#canvas.ctx;
+    const scale = this.#canvas.uiScale;
+    const t = UI.tokens();
+    const items = this.#currentItems();
+    const layout = this.#drawPanelAndItems(items);
+    const centerX = layout.panelX + layout.panelW / 2;
+
+    // The game's name, sized to the panel rather than to a fixed number, so
+    // a long title on a narrow portrait canvas still fits on one line.
+    const available = layout.panelW - PANEL_PAD * 2;
+    let nameSize = 46;
+    const measured = UI.measure(ctx, this.#titleName, {
+      size: nameSize, font: 'display', weight: '700', scale,
+    });
+    if (measured > available) nameSize *= available / measured;
+
+    UI.text(ctx, this.#titleName, centerX, layout.panelY + 56, {
+      size: nameSize, color: t.textPrimary, font: 'display', weight: '700',
+      align: 'center', baseline: 'middle', scale,
+    });
+
+    if (this.#titleTagline) {
+      UI.text(ctx, this.#titleTagline, centerX, layout.panelY + 100, {
+        size: 15, color: t.accent, align: 'center', baseline: 'middle', scale,
+      });
+    }
   }
 
   #drawPause() {
@@ -799,14 +877,39 @@ export class GameShell {
       return;
     }
 
+    // Two columns on one line only fit if they actually fit. On a narrow
+    // canvas -- a portrait game is barely 420 units wide -- a long binding on
+    // the left and a long action on the right will run straight through each
+    // other, because canvas text neither wraps nor pushes anything aside.
+    //
+    // So measure the worst row first and shrink the type until the widest
+    // pair clears, applying that one size to every row so the block stays
+    // even. There is a floor: past it the columns stack instead, which is
+    // taller but always legible.
+    const available = layout.panelW - PANEL_PAD * 2;
+    const GAP = 12;
+    let size = 15;
+    let widest = 0;
+
+    for (const row of rows) {
+      const pair = UI.measure(ctx, row[device], { size, font: 'mono', scale })
+        + UI.measure(ctx, row.action, { size, scale });
+      if (pair > widest) widest = pair;
+    }
+
+    if (widest + GAP > available) {
+      size = Math.max(9, size * ((available - GAP) / widest));
+    }
+    const stacked = size <= 9.5 && widest + GAP > available;
+
     for (const row of rows) {
       UI.text(ctx, row[device], leftX, y, {
-        size: 15, color: t.accent, font: 'mono', align: 'left', baseline: 'middle', scale,
+        size, color: t.accent, font: 'mono', align: 'left', baseline: 'middle', scale,
       });
-      UI.text(ctx, row.action, rightX, y, {
-        size: 15, color: t.textPrimary, align: 'right', baseline: 'middle', scale,
+      UI.text(ctx, row.action, stacked ? leftX : rightX, stacked ? y + 15 * scale : y, {
+        size, color: t.textPrimary, align: stacked ? 'left' : 'right', baseline: 'middle', scale,
       });
-      y += 32;
+      y += stacked ? 34 : 32;
     }
   }
 

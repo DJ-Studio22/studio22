@@ -10,11 +10,18 @@
     "difficulty": "easy",
     "ageRange": "all",
     "inputRequirement": "universal",
-    "tags": ["platformer", "endless", "jumping", "arcade", "one-button", "high-score"],
+    "tags": [
+      "platformer",
+      "endless",
+      "jumping",
+      "arcade",
+      "one-button",
+      "high-score"
+    ],
     "featured": true,
     "tournamentReady": true,
     "estimatedRunTime": 90,
-    "status": "coming-soon"
+    "status": "live"
   },
   {
     "id": "comet",
@@ -27,7 +34,14 @@
     "difficulty": "medium",
     "ageRange": "all",
     "inputRequirement": "universal",
-    "tags": ["survival", "arena", "fire", "arcade", "reflex", "high-score"],
+    "tags": [
+      "survival",
+      "arena",
+      "fire",
+      "arcade",
+      "reflex",
+      "high-score"
+    ],
     "featured": true,
     "tournamentReady": true,
     "estimatedRunTime": 120,
@@ -44,7 +58,14 @@
     "difficulty": "easy",
     "ageRange": "6-12",
     "inputRequirement": "universal",
-    "tags": ["math", "arithmetic", "education", "shooter", "adaptive", "learning"],
+    "tags": [
+      "math",
+      "arithmetic",
+      "education",
+      "shooter",
+      "adaptive",
+      "learning"
+    ],
     "featured": true,
     "tournamentReady": true,
     "estimatedRunTime": 120,
@@ -61,7 +82,14 @@
     "difficulty": "medium",
     "ageRange": "8+",
     "inputRequirement": "keyboard",
-    "tags": ["typing", "keyboard", "education", "speed", "accuracy", "learning"],
+    "tags": [
+      "typing",
+      "keyboard",
+      "education",
+      "speed",
+      "accuracy",
+      "learning"
+    ],
     "featured": false,
     "tournamentReady": true,
     "estimatedRunTime": 90,
@@ -78,7 +106,14 @@
     "difficulty": "medium",
     "ageRange": "all",
     "inputRequirement": "universal",
-    "tags": ["platformer", "descending", "endless", "arcade", "reflex", "high-score"],
+    "tags": [
+      "platformer",
+      "descending",
+      "endless",
+      "arcade",
+      "reflex",
+      "high-score"
+    ],
     "featured": false,
     "tournamentReady": true,
     "estimatedRunTime": 90,
@@ -95,7 +130,14 @@
     "difficulty": "hard",
     "ageRange": "all",
     "inputRequirement": "universal",
-    "tags": ["racing", "split-screen", "multiplayer", "ai", "laps", "time-trial"],
+    "tags": [
+      "racing",
+      "split-screen",
+      "multiplayer",
+      "ai",
+      "laps",
+      "time-trial"
+    ],
     "featured": true,
     "tournamentReady": true,
     "estimatedRunTime": 180,

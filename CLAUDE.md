@@ -30,8 +30,41 @@ Deployed as a static site to Cloudflare Pages.
   entry point.
 - games.json is the single source of truth for the hub. Adding a game means
   editing that file and creating a folder — nothing else.
-- All colors, spacing, and fonts come from CSS custom properties in
-  styles/tokens.css. No hardcoded hex values in component CSS.
+- All colors, spacing, and fonts in SITE CHROME come from CSS custom
+  properties in styles/tokens.css. No hardcoded hex values in component CSS.
+  Site chrome means the landing page, the arcade hub, the party page, and the
+  shell's own UI — pause menu, game over, title screen, HUD. Game artwork is
+  explicitly exempt; see "Game palettes" below.
+
+## Game palettes
+Each game defines its own palette. Games are artwork, not chrome, and pushing
+twelve games through one set of tokens would make them all look like the same
+picture. A game's colours are local to that game.
+
+The convention, which every game follows the same way:
+
+- Declare a single `const ART = { ... }` near the top of that game's game.js,
+  below the tuning constants and above the engine wiring.
+- Flat object, one level deep. Keys name what the colour IS in the artwork,
+  not what it looks like: `skyTop`, `birdBeak`, `crackLine` — never `blue2`
+  or `lightYellow`. Changing a hue should never force a rename.
+- Values are plain CSS colour strings. `rgba()` where something is
+  deliberately translucent.
+- Nothing else in the file hardcodes a colour. Every fillStyle, strokeStyle,
+  and gradient stop reads from ART.
+- A short comment above the constant says this is the game's own palette and
+  is deliberately not from tokens.css, so nobody "fixes" it later.
+
+Gradients, sprite shading, and particle colours all live here. If a game grows
+enough colours that one flat object turns unwieldy, group by subject
+(`ART.bird`, `ART.sky`) rather than splitting into several constants.
+
+### What stays consistent
+The shell draws on top of every game, and it keeps site tokens regardless of
+what the game underneath looks like. Pause menu, game over, title screen, and
+HUD must be instantly recognisable in all twelve games — a player who pauses
+should know they are in Studio 22, not in whatever world the game just built
+around them. Games never restyle the shell.
 
 ## Code style
 - Clear, readable, heavily commented. I am maintaining this long term.
