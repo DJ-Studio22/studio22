@@ -63,9 +63,23 @@
 const VALID_DIRECTIONS = ['high', 'low'];
 const DEFAULT_DIRECTION = 'high';
 
-// Versioned, so a future change to the stored shape can be recognised and
+// Versioned, so stored data written by an older build can be recognised and
 // discarded rather than misread.
-const STORAGE_KEY = 'studio22.session.v1';
+//
+// v2, because v1 could contain LIES. Circuit Racer's lap counter had a bug
+// that credited laps a car never drove, and the impossible times it recorded
+// went straight into v1 as legitimate bests. sessionStorage survives a
+// reload — it only dies with the tab — so a player who had the game open
+// during the broken build kept seeing a phantom BEST LAP they never set, on
+// every refresh, with no way to know why or to clear it.
+//
+// Bumping the key is the fix that needs nothing from the player. Anyone
+// still holding v1 data starts clean the moment they load the new build.
+const STORAGE_KEY = 'studio22.session.v2';
+
+// Keys written by earlier builds. Removed on load so they do not sit in
+// storage forever holding data nothing will ever read again.
+const LEGACY_KEYS = ['studio22.session.v1'];
 
 // --- Session state ------------------------------------------------------
 //
@@ -111,6 +125,12 @@ function isPlainObject(value) {
 // bestScores would become a best score nothing could ever beat.
 function load() {
   if (!storage) return;
+
+  // Sweep up after older builds first. Cheap, runs once, and means a tab
+  // upgraded mid-visit is not carrying a dead key around.
+  for (const key of LEGACY_KEYS) {
+    try { storage.removeItem(key); } catch { /* nothing to clean up */ }
+  }
 
   let raw;
   try {

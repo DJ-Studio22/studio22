@@ -73,10 +73,23 @@ const ART = {
 // is on the lap, whether it is on the tarmac at all — is derived from it, so
 // the track is one list of points rather than four descriptions that could
 // disagree with each other.
+// Ordered so that s = 0 — the start/finish line, and where a lap ticks
+// over — falls at [430, 104], the MIDPOINT OF A STRAIGHT.
+//
+// It used to be [190, 150], which is a corner. The road is stroked with
+// round joins, so at a corner the tarmac is not a clean perpendicular
+// cross-section: a straight band of one road-width cannot span it, and the
+// tangent is ambiguous between the two segments meeting there. The line
+// looked pasted on at an angle with gaps at the kerbs, because it was.
+//
+// [430, 104] is exactly collinear with its neighbours [340, 108] and
+// [520, 100] — the direction either side is (90, -4) — so inserting it
+// splits a straight without changing the shape of the circuit by a pixel.
 const CENTER = [
-  [190, 150], [340, 108], [520, 100], [680, 130], [800, 210],
-  [852, 320], [820, 430], [700, 494], [540, 512], [400, 496],
-  [300, 440], [268, 350], [300, 268], [232, 214],
+  [430, 104],
+  [520, 100], [680, 130], [800, 210], [852, 320], [820, 430],
+  [700, 494], [540, 512], [400, 496], [300, 440], [268, 350],
+  [300, 268], [232, 214], [190, 150], [340, 108],
 ];
 
 const ROAD_HALF = 52;
@@ -132,15 +145,28 @@ function pointAt(s) {
   return CENTER[0];
 }
 
-// Perpendicular to the track at a distance around the lap, so a car can be
-// offset sideways from the centre line without leaving it.
-function normalAt(s) {
-  const [ax, ay] = pointAt(s);
-  const [bx, by] = pointAt(s + 12);
+/**
+ * Unit direction of travel at a distance around the lap.
+ *
+ * A CENTRAL difference, sampling either side of the point rather than
+ * forward from it. A forward difference is wrong wherever the sample
+ * straddles a corner: it reports the direction of the segment ahead
+ * instead of the direction at the point itself.
+ */
+function tangentAt(s) {
+  const [ax, ay] = pointAt(s - 8);
+  const [bx, by] = pointAt(s + 8);
   const dx = bx - ax;
   const dy = by - ay;
   const length = Math.hypot(dx, dy) || 1;
-  return [-dy / length, dx / length];
+  return [dx / length, dy / length];
+}
+
+// Perpendicular to the track, so a car can be offset sideways from the
+// centre line without leaving it.
+function normalAt(s) {
+  const [tx, ty] = tangentAt(s);
+  return [-ty, tx];
 }
 
 // --- Engine wiring -------------------------------------------------------
@@ -221,11 +247,10 @@ function placeOnGrid(car, offsetAcross, ahead) {
   const s = ahead;
   const [px, py] = pointAt(s);
   const [nx, ny] = normalAt(s);
-  const [ax, ay] = pointAt(s);
-  const [bx, by] = pointAt(s + 12);
+  const [tx, ty] = tangentAt(s);
   car.x = px + nx * offsetAcross;
   car.y = py + ny * offsetAcross;
-  car.angle = Math.atan2(by - ay, bx - ax);
+  car.angle = Math.atan2(ty, tx);
   car.speed = 0;
   car.s = projectToTrack(car.x, car.y).s;
   car.travelled = car.s;
@@ -371,14 +396,29 @@ function advanceLap(car, s) {
   }
 }
 
-function onPlayerLap() {
-  lapTimes.push(lapTime);
+// No lap can be quicker than the track length at top speed. This is a
+// tripwire, not a gameplay rule: if it ever fires, the lap counter has
+// broken again. It exists because last time it broke, the impossible times
+// went into the player's session as legitimate bests and then showed up as
+// a phantom BEST LAP on every reload afterwards. A number a player never
+// set should never reach storage in the first place.
+const FASTEST_POSSIBLE_LAP = TRACK_LENGTH / MAX_SPEED;
 
-  if (lapTime < bestLap) {
-    bestLap = lapTime;
-    audio.play('best');
+function onPlayerLap() {
+  if (lapTime < FASTEST_POSSIBLE_LAP) {
+    console.warn(
+      '[circuit-racer] Ignoring an impossible ' + lapTime.toFixed(2) + 's lap. '
+      + 'The fastest this track allows is ' + FASTEST_POSSIBLE_LAP.toFixed(2)
+      + 's, so the lap counter is miscounting.',
+    );
   } else {
-    audio.play('lap');
+    lapTimes.push(lapTime);
+    if (lapTime < bestLap) {
+      bestLap = lapTime;
+      audio.play('best');
+    } else {
+      audio.play('lap');
+    }
   }
 
   lapTime = 0;
@@ -393,10 +433,15 @@ function finishRace() {
 
   // Hundredths of a second as an integer: Session stores numbers, and a
   // hundredth is the resolution a lap time is actually quoted at.
-  const score = Math.round(bestLap * 100);
+  //
+  // With no valid lap — only reachable if the tripwire above fired — the
+  // total race time stands in. That is a real number the player actually
+  // set, which a fabricated lap time would not be.
+  const hasLap = Number.isFinite(bestLap);
+  const score = Math.round((hasLap ? bestLap : raceTime) * 100);
 
   shell.showGameOver(score, {
-    bestLap: formatTime(bestLap),
+    bestLap: hasLap ? formatTime(bestLap) : 'no valid lap',
     totalTime: formatTime(raceTime),
     everyLap: lapTimes.map(formatTime).join('  '),
     result: player.laps >= rival.laps && raceTime > 0
@@ -579,20 +624,29 @@ function drawTrack() {
   drawStartLine();
 }
 
+/**
+ * The chequered band, spanning the tarmac from one edge to the other.
+ *
+ * Rotated by the TANGENT, so the local axes are along-track and
+ * across-track. The band then runs the full road width by construction
+ * (-ROAD_HALF to +ROAD_HALF across) rather than by a guess that only held
+ * where the road happened to be straight.
+ */
 function drawStartLine() {
   const [px, py] = pointAt(0);
-  const [nx, ny] = normalAt(0);
+  const [tx, ty] = tangentAt(0);
 
   ctx.save();
   ctx.translate(px, py);
-  ctx.rotate(Math.atan2(ny, nx));
+  ctx.rotate(Math.atan2(ty, tx));   // +x along the track, +y across it
 
-  const squares = 8;
-  const size = (ROAD_HALF * 2) / squares;
-  for (let i = 0; i < squares; i++) {
+  const across = 8;
+  const cell = (ROAD_HALF * 2) / across;
+  for (let i = 0; i < across; i++) {
     for (let row = 0; row < 2; row++) {
       ctx.fillStyle = (i + row) % 2 === 0 ? ART.startBand : ART.startDark;
-      ctx.fillRect(-ROAD_HALF + i * size, -size + row * size, size, size);
+      // Two rows deep along the track, centred on the line itself.
+      ctx.fillRect(-cell + row * cell, -ROAD_HALF + i * cell, cell, cell);
     }
   }
   ctx.restore();
