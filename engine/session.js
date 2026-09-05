@@ -278,8 +278,14 @@ export const Session = {
   clear() {
     bestScores.clear();
     latestStats.clear();
-    directions.clear();
     playedGames.clear();
+
+    // Directions are deliberately KEPT. Which way a game's scores run is a
+    // fact about the game, not data about this visit — and games register it
+    // once when they boot, so a clear() mid-visit would leave the running
+    // page with no direction at all. Circuit Racer would silently start
+    // ranking its lap times upward and award the best time to the slowest
+    // lap, which is the exact failure setScoreDirection exists to prevent.
     if (storage) {
       try { storage.removeItem(STORAGE_KEY); } catch { /* already gone */ }
     }

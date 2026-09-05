@@ -61,7 +61,7 @@ A falling-block survival game. The floor gives way beneath you.
 
 ---
 
-## 3. Circuit Racer — [ ]
+## 3. Circuit Racer — [x] DONE
 
 A top-down time-trial racer.
 

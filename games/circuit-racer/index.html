@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Circuit Racer — Studio 22</title>
+  <meta name="description" content="Three laps of a top-down circuit against a rival that holds its line. Fastest lap wins." />
+  <!-- Mirrors --color-bg-0. A meta tag cannot read a custom property. -->
+  <meta name="theme-color" content="#0a0908" />
+
+  <!-- tokens.css is required, not decorative: engine/ui.js resolves the
+       palette from the document to draw the shell's screens. -->
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      /* Behind the letterbox bars. engine/shell.js paints the bars from the
+         theme; this is what shows before the first frame. */
+      background: var(--color-bg-0);
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- GameCanvas builds its own letterboxed container inside <body>. -->
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

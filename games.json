@@ -123,7 +123,7 @@
     "id": "circuit-racer",
     "title": "Circuit Racer",
     "tagline": "Three laps. Hold your line.",
-    "description": "Top-down racing against AI that defends its line. Split-screen for two on one machine. Clean laps beat reckless ones.",
+    "description": "Top-down racing against a rival that defends its line. Three laps, and your fastest one is the score. Clean laps beat reckless ones.",
     "category": "racing",
     "thumbnail": "/assets/img/circuit-racer.png",
     "path": "/games/circuit-racer/index.html",
@@ -132,8 +132,6 @@
     "inputRequirement": "universal",
     "tags": [
       "racing",
-      "split-screen",
-      "multiplayer",
       "ai",
       "laps",
       "time-trial"
@@ -141,6 +139,6 @@
     "featured": true,
     "tournamentReady": true,
     "estimatedRunTime": 180,
-    "status": "coming-soon"
+    "status": "live"
   }
 ]
