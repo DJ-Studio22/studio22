@@ -905,8 +905,8 @@ export class GameShell {
 // });
 //
 // shell = new GameShell({
-//   gameId: 'sky-hopper',
-//   title: 'Sky Hopper',
+//   gameId: 'updraft',
+//   title: 'Updraft',
 //   canvas: screen,
 //   loop,
 //   onRestart: () => world.reset(),

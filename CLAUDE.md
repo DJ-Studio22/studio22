@@ -35,6 +35,19 @@ Deployed as a static site to Cloudflare Pages.
 Every game must work with: Xbox/PlayStation gamepad, keyboard, and touch.
 This is non-negotiable and is why engine/input.js exists.
 
+### The one sanctioned exception
+Keystroke requires a physical keyboard. Typing speed cannot be taught on a
+gamepad, and falling back to the on-screen keyboard on a phone is a different
+activity rather than the same game. It declares this in games.json with
+`"inputRequirement": "keyboard"`.
+
+Every entry in games.json carries `inputRequirement`, and it is required
+rather than defaulted, so claiming an exception is always a deliberate act.
+Any future exception needs the same explicit declaration. A game that quietly
+does not work on some device is not an exception — it is a bug. The manifest
+field is what makes the limitation visible to the hub, and therefore to the
+player, before they tap into something they cannot play.
+
 ## Performance targets
 60fps on a mid-range phone. Object-pool anything spawned in a loop.
 Never animate CSS layout properties — transform and opacity only.
