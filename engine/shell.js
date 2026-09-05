@@ -37,7 +37,7 @@
 // game behind the menu is a snapshot of the last rendered frame rather than
 // a live one, for the same battery reason.
 
-import { Input } from './input.js';
+import { Input, JOYSTICK_MAX_RADIUS_PX } from './input.js';
 import { Session } from './session.js';
 import { UI } from './ui.js';
 
@@ -81,6 +81,7 @@ const TOUCH_PAUSE_MARGIN = 16;
 // must therefore be sized in screen pixels and converted back into game
 // units, never fixed in game units.
 const MIN_TOUCH_PX = 44;
+
 
 // Run stats are a debug-ish courtesy, not a scoreboard -- cap them so a game
 // that reports twenty fields can't overflow the panel.
@@ -245,7 +246,10 @@ export class GameShell {
    */
   render() {
     if (this.#screen !== null) return;
-    if (this.#touchCapable) this.#drawTouchPauseButton();
+    if (this.#touchCapable) {
+      this.#drawTouchControls();
+      this.#drawTouchPauseButton();
+    }
   }
 
   /**
@@ -927,6 +931,91 @@ export class GameShell {
     UI.text(ctx, `LOADING${dots}`, centerX, layout.panelY + layout.panelH / 2, {
       size: 24, color: t.accent, font: 'display', weight: '700', align: 'center', baseline: 'middle', scale,
     });
+  }
+
+  /**
+   * Draws the virtual sticks and action pads that engine/input.js is
+   * listening for.
+   *
+   * Input owns where those regions ARE; this only renders them. Without it
+   * they are invisible: the pads work perfectly and no player ever finds
+   * them, which on a phone is indistinguishable from a broken game. Drawn
+   * here rather than in each game so all twelve look and behave the same.
+   */
+  #drawTouchControls() {
+    if (!Input.touchControlsEnabled) return;
+
+    const ctx = this.#canvas.ctx;
+    const t = UI.tokens();
+    const toGame = (cx, cy) => this.#canvas.screenToGame(cx, cy);
+    // One CSS pixel in game units -- radii arrive from Input in CSS pixels
+    // because that is the only unit a thumb is actually measured in.
+    const scale = this.#canvas.scale;
+    const unitsPerPx = !scale || scale <= 0 ? 1 : 1 / scale;
+
+    ctx.save();
+
+    // Action pads. Faint until pressed: they have to be findable without
+    // becoming the most prominent thing on top of the game.
+    for (const button of Input.getTouchLayout()) {
+      const center = toGame(
+        button.xRatio * window.innerWidth,
+        button.yRatio * window.innerHeight,
+      );
+      const radius = button.radius * unitsPerPx;
+      const held = Input.get()[button.name];
+
+      ctx.globalAlpha = held ? 0.55 : 0.22;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = held ? t.accent : t.bg1;
+      ctx.fill();
+      ctx.lineWidth = 2 * unitsPerPx;
+      ctx.strokeStyle = held ? t.accent : t.textSecondary;
+      ctx.stroke();
+
+      ctx.globalAlpha = held ? 1 : 0.7;
+      UI.text(ctx, (button.label ?? button.name).toUpperCase(), center.x, center.y, {
+        size: 14,
+        color: held ? t.bg0 : t.textPrimary,
+        font: 'display',
+        weight: '700',
+        align: 'center',
+        baseline: 'middle',
+        scale: this.#canvas.uiScale,
+      });
+    }
+
+    // Sticks, drawn only while a thumb is down, because each one appears
+    // wherever the player put it rather than at a fixed spot on the screen.
+    const sticks = Input.getTouchSticks();
+    for (const stick of [sticks.move, sticks.aim]) {
+      if (!stick.active) continue;
+
+      const base = toGame(stick.originX, stick.originY);
+      const knob = toGame(
+        stick.originX + stick.x * JOYSTICK_MAX_RADIUS_PX,
+        stick.originY + stick.y * JOYSTICK_MAX_RADIUS_PX,
+      );
+      const baseRadius = JOYSTICK_MAX_RADIUS_PX * unitsPerPx;
+
+      ctx.globalAlpha = 0.2;
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, baseRadius, 0, Math.PI * 2);
+      ctx.fillStyle = t.bg1;
+      ctx.fill();
+      ctx.lineWidth = 2 * unitsPerPx;
+      ctx.strokeStyle = t.textSecondary;
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(knob.x, knob.y, baseRadius * 0.42, 0, Math.PI * 2);
+      ctx.fillStyle = t.accent;
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 
   #drawTouchPauseButton() {

@@ -41,9 +41,14 @@ const DEFAULT_DEADZONE = 0.15;
 // need a point on the 0-1 trigger travel that counts as "pressed."
 const TRIGGER_THRESHOLD = 0.3;
 
-// How far (in CSS pixels) a thumb has to drag from the virtual joystick's
-// origin before it's reporting full deflection (1.0).
-const JOYSTICK_MAX_RADIUS_PX = 55;
+// How far (in CSS pixels) a thumb has to drag from a virtual stick's origin
+// before it's reporting full deflection (1.0).
+//
+// Exported because engine/shell.js draws these sticks, and a drawn ring that
+// disagrees with the distance the stick actually saturates at feels broken
+// in a way players can see but not name -- the knob either stops short of
+// the ring or runs past it.
+export const JOYSTICK_MAX_RADIUS_PX = 55;
 
 // The full set of digital buttons in the normalized state object. Kept as a
 // list (rather than re-typing it everywhere) so merge/copy helpers below
@@ -161,11 +166,14 @@ function applyRadialDeadzone(rawX, rawY, deadzone) {
 // keyboard press, and a player actively using the keyboard doesn't get
 // overridden by a controller resting in their lap. Missing sources (device
 // not present for this player) are simply skipped.
-function pickStrongestVector(vectors) {
+// `select` pulls the vector out of each source frame, which is what lets the
+// same rule serve both sticks: movement reads x/y, aim reads aimX/aimY.
+function pickStrongestVector(frames, select = (frame) => ({ x: frame.x, y: frame.y })) {
   let best = { x: 0, y: 0 };
   let bestMagnitude = 0;
-  for (const vector of vectors) {
-    if (!vector) continue;
+  for (const frame of frames) {
+    if (!frame) continue;
+    const vector = select(frame);
     const magnitude = Math.hypot(vector.x, vector.y);
     if (magnitude > bestMagnitude) {
       bestMagnitude = magnitude;
@@ -228,6 +236,11 @@ export class Input {
   // stick and pads from firing underneath it.
   static #touchControlsEnabled = true;
   static #joystick = { active: false, touchId: null, originX: 0, originY: 0, x: 0, y: 0 };
+  // The second, optional stick. Off by default: most games steer and press,
+  // and a game that doesn't aim should not have half its screen quietly
+  // swallowing taps. Games that do aim turn it on with setAimStickEnabled().
+  static #aimStick = { active: false, touchId: null, originX: 0, originY: 0, x: 0, y: 0 };
+  static #aimStickEnabled = false;
   static #touchButtonState = Object.fromEntries(BUTTON_NAMES.map((name) => [name, false]));
   static #touchButtonTouches = new Map(); // touch identifier -> button name
 
@@ -251,9 +264,15 @@ export class Input {
       const touchFrame = i === 0 ? Input.#readTouch() : null;
 
       const move = pickStrongestVector([gamepadFrame, keyboardFrame, touchFrame]);
-      // Only gamepads currently have a second stick; keyboard/touch have no
-      // aim input of their own, so aim simply falls back to zero for them.
-      const aim = gamepadFrame ? { x: gamepadFrame.aimX, y: gamepadFrame.aimY } : { x: 0, y: 0 };
+      // Aim merges the same way movement does, across every device that can
+      // produce it: a gamepad's right stick, or the touch aim stick when a
+      // game has switched it on. Keyboards have no aim axis and contribute
+      // nothing, which is why a keyboard-only player gets a zero vector here
+      // rather than a wrong one.
+      const aim = pickStrongestVector(
+        [gamepadFrame, touchFrame],
+        (frame) => ({ x: frame.aimX, y: frame.aimY }),
+      );
       const buttons = mergeButtonsWithOr([gamepadFrame, keyboardFrame, touchFrame]);
 
       Input.#players[i] = { x: move.x, y: move.y, aimX: aim.x, aimY: aim.y, ...buttons };
@@ -365,10 +384,14 @@ export class Input {
   }
 
   // Replaces the touch action-button cluster. `config` is an array of
-  // { name, xRatio, yRatio, radius } describing each button as a fraction
-  // of the viewport (so layouts hold up across screen sizes) plus a touch
-  // radius in CSS pixels. `name` must be one of the button fields returned
-  // by get() (e.g. 'a', 'b', 'btnX', 'rb'...).
+  // { name, xRatio, yRatio, radius, label } describing each button as a
+  // fraction of the viewport (so layouts hold up across screen sizes) plus a
+  // touch radius in CSS pixels. `name` must be one of the button fields
+  // returned by get() (e.g. 'a', 'b', 'btnX', 'rb'...).
+  //
+  // `label` is optional and is what engine/shell.js prints on the pad: give
+  // it the verb ('BURN', 'JUMP') rather than leaving the player to work out
+  // what the letter A does in this particular game. Falls back to `name`.
   static setTouchLayout(config) {
     Input.#touchLayout = config;
     // Clear any buttons that were mid-press under the old layout so a
@@ -406,6 +429,55 @@ export class Input {
    */
   static clearTouchLayout() {
     Input.setTouchLayout([]);
+  }
+
+  /**
+   * Turns on a second virtual stick on the right half of the screen, feeding
+   * aimX/aimY exactly as a gamepad's right stick does.
+   *
+   * Without this, aimX/aimY are always 0 on a phone, so a game built around
+   * the right stick is unplayable on touch while looking fine on a pad —
+   * which is the worst kind of gap, because it only shows up on a device the
+   * developer isn't holding.
+   *
+   * Action buttons win the hit test, so a burn pad in the bottom-right
+   * corner still presses rather than spawning a stick under the thumb. Like
+   * the left stick, this one appears wherever the thumb lands rather than at
+   * a fixed spot, so it never demands the player look down to find it.
+   */
+  static setAimStickEnabled(enabled) {
+    Input.#aimStickEnabled = Boolean(enabled);
+    if (!Input.#aimStickEnabled) {
+      Input.#aimStick.active = false;
+      Input.#aimStick.touchId = null;
+      Input.#aimStick.x = 0;
+      Input.#aimStick.y = 0;
+    }
+  }
+
+  static get aimStickEnabled() {
+    return Input.#aimStickEnabled;
+  }
+
+  // The action-pad layout currently in force. Read-only copy, for drawing:
+  // touch buttons are invisible regions otherwise, and a button nobody can
+  // see is a button nobody presses. engine/shell.js renders these.
+  static getTouchLayout() {
+    return Input.#touchLayout.map((button) => ({ ...button }));
+  }
+
+  /**
+   * Snapshot of both virtual sticks in CSS pixels, for drawing them.
+   *
+   * originX/originY are where the thumb first landed (the stick's base) and
+   * x/y are the current deflection, -1..1. Returns inactive sticks too, so a
+   * caller can just check .active.
+   */
+  static getTouchSticks() {
+    return {
+      move: { ...Input.#joystick },
+      aim: { ...Input.#aimStick },
+    };
   }
 
   // Radial deadzone applied to both sticks on every gamepad, 0-1.
@@ -526,6 +598,10 @@ export class Input {
       frame.x = Input.#joystick.x;
       frame.y = Input.#joystick.y;
     }
+    if (Input.#aimStick.active) {
+      frame.aimX = Input.#aimStick.x;
+      frame.aimY = Input.#aimStick.y;
+    }
     for (const name of BUTTON_NAMES) frame[name] = Boolean(Input.#touchButtonState[name]);
     return frame;
   }
@@ -536,12 +612,51 @@ export class Input {
   // setTouchControlsEnabled(false), so a stick or pad can never be left
   // stuck down after the touches that owned it stop being delivered.
   static #releaseAllTouches() {
-    Input.#joystick.active = false;
-    Input.#joystick.touchId = null;
-    Input.#joystick.x = 0;
-    Input.#joystick.y = 0;
+    for (const stick of [Input.#joystick, Input.#aimStick]) {
+      stick.active = false;
+      stick.touchId = null;
+      stick.x = 0;
+      stick.y = 0;
+    }
     for (const name of BUTTON_NAMES) Input.#touchButtonState[name] = false;
     Input.#touchButtonTouches.clear();
+  }
+
+  // Which stick, if any, is tracking this touch identifier. Returns the
+  // stick object itself so callers can mutate it without caring which it is.
+  static #stickOwning(touchId) {
+    if (Input.#joystick.touchId === touchId) return Input.#joystick;
+    if (Input.#aimStick.touchId === touchId) return Input.#aimStick;
+    return null;
+  }
+
+  // Plants a stick's base where the thumb landed and zeroes its deflection.
+  static #beginStick(stick, touchId, x, y) {
+    stick.active = true;
+    stick.touchId = touchId;
+    stick.originX = x;
+    stick.originY = y;
+    stick.x = 0;
+    stick.y = 0;
+  }
+
+  // Converts a thumb position into a stick deflection, shared by both sticks
+  // so they can never drift apart in feel.
+  static #dragStick(stick, clientX, clientY) {
+    const dx = clientX - stick.originX;
+    const dy = clientY - stick.originY;
+    const distance = Math.hypot(dx, dy);
+    if (distance === 0) {
+      stick.x = 0;
+      stick.y = 0;
+      return;
+    }
+    const clampedDistance = Math.min(distance, JOYSTICK_MAX_RADIUS_PX);
+    // Normalize direction, then scale by how far the thumb dragged
+    // (capped at the max radius) so the stick saturates at 1.0 instead
+    // of reporting values greater than a real analog stick ever would.
+    stick.x = (dx / distance) * (clampedDistance / JOYSTICK_MAX_RADIUS_PX);
+    stick.y = (dy / distance) * (clampedDistance / JOYSTICK_MAX_RADIUS_PX);
   }
 
   static #hitTestTouchButton(x, y) {
@@ -585,12 +700,16 @@ export class Input {
       } else if (!Input.#joystick.active && x < window.innerWidth / 2) {
         // Left half of the screen, and no stick running yet: this touch
         // spawns the virtual joystick right where the thumb landed.
-        Input.#joystick.active = true;
-        Input.#joystick.touchId = touch.identifier;
-        Input.#joystick.originX = x;
-        Input.#joystick.originY = y;
-        Input.#joystick.x = 0;
-        Input.#joystick.y = 0;
+        Input.#beginStick(Input.#joystick, touch.identifier, x, y);
+        claimed = true;
+      } else if (
+        Input.#aimStickEnabled
+        && !Input.#aimStick.active
+        && x >= window.innerWidth / 2
+      ) {
+        // Right half, same deal, for the aim stick. Reached only after the
+        // action pads have had their say, so a button always wins the touch.
+        Input.#beginStick(Input.#aimStick, touch.identifier, x, y);
         claimed = true;
       }
     }
@@ -606,22 +725,10 @@ export class Input {
 
     for (const touch of event.changedTouches) {
       if (Input.#touchButtonTouches.has(touch.identifier)) tracking = true;
-      if (touch.identifier !== Input.#joystick.touchId) continue;
+      const stick = Input.#stickOwning(touch.identifier);
+      if (!stick) continue;
       tracking = true;
-      const dx = touch.clientX - Input.#joystick.originX;
-      const dy = touch.clientY - Input.#joystick.originY;
-      const distance = Math.hypot(dx, dy);
-      if (distance === 0) {
-        Input.#joystick.x = 0;
-        Input.#joystick.y = 0;
-        continue;
-      }
-      const clampedDistance = Math.min(distance, JOYSTICK_MAX_RADIUS_PX);
-      // Normalize direction, then scale by how far the thumb dragged
-      // (capped at the max radius) so the stick saturates at 1.0 instead
-      // of reporting values greater than a real analog stick ever would.
-      Input.#joystick.x = (dx / distance) * (clampedDistance / JOYSTICK_MAX_RADIUS_PX);
-      Input.#joystick.y = (dy / distance) * (clampedDistance / JOYSTICK_MAX_RADIUS_PX);
+      Input.#dragStick(stick, touch.clientX, touch.clientY);
     }
 
     if (tracking) event.preventDefault();
@@ -633,11 +740,12 @@ export class Input {
     let tracking = false;
 
     for (const touch of event.changedTouches) {
-      if (touch.identifier === Input.#joystick.touchId) {
-        Input.#joystick.active = false;
-        Input.#joystick.touchId = null;
-        Input.#joystick.x = 0;
-        Input.#joystick.y = 0;
+      const stick = Input.#stickOwning(touch.identifier);
+      if (stick) {
+        stick.active = false;
+        stick.touchId = null;
+        stick.x = 0;
+        stick.y = 0;
         tracking = true;
       }
       const buttonName = Input.#touchButtonTouches.get(touch.identifier);
