@@ -37,7 +37,7 @@ page, the manifest flip, and verification.
 
 ---
 
-## 2. Sinkhole — [ ]
+## 2. Sinkhole — [x] DONE
 
 A falling-block survival game. The floor gives way beneath you.
 
