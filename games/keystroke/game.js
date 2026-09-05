@@ -856,13 +856,26 @@ function renderResults() {
 // Colour for an accuracy, green through amber to red. Keys never touched
 // stay blank rather than being coloured as if they were perfect — an untried
 // key is not a strength.
-function heatColor(entry) {
+/**
+ * The band a key falls into: null (never pressed), 'good', 'mid' or 'bad'.
+ *
+ * Returned as a NAME rather than a colour so the drawing can give each band a
+ * second, non-colour signal. Green, amber and red are three shades of the
+ * same thing to a red-green colour-blind player, and "which keys let you
+ * down" is the entire point of this screen.
+ */
+function heatBand(entry) {
   if (!entry || entry.hit + entry.miss === 0) return null;
   const rate = entry.hit / (entry.hit + entry.miss);
-  if (rate >= 0.95) return ART.good;
-  if (rate >= 0.8) return ART.mid;
-  return ART.bad;
+  if (rate >= 0.95) return 'good';
+  if (rate >= 0.8) return 'mid';
+  return 'bad';
 }
+
+const BAND_COLOR = { good: ART.good, mid: ART.mid, bad: ART.bad };
+// The non-colour signal: how heavy the key's outline is. A weak key is
+// visibly ringed whether or not its fill reads as red.
+const BAND_BORDER = { good: 2, mid: 4, bad: 6 };
 
 function drawHeatMap() {
   const keyW = 56;
@@ -880,13 +893,14 @@ function drawHeatMap() {
     row.forEach((ch, i) => {
       const x = x0 + i * (keyW + gap);
       const entry = keyStats.get(ch);
-      const color = heatColor(entry);
+      const band = heatBand(entry);
+      const color = band ? BAND_COLOR[band] : null;
 
       UI.roundRect(ctx, x, y, keyW, keyH, 7);
       ctx.fillStyle = color ?? ART.keyUntouched;
       ctx.fill();
-      ctx.strokeStyle = ART.keyEdge;
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = band === 'good' ? ART.keyEdge : ART.ink;
+      ctx.lineWidth = band ? BAND_BORDER[band] : 2;
       ctx.stroke();
 
       UI.text(ctx, ch.toUpperCase(), x + keyW / 2, y + keyH / 2 - 4, {
@@ -908,14 +922,15 @@ function drawHeatMap() {
   // The space bar, which is the most-pressed key in any typing run and would
   // be a strange thing to leave off a heat map of one.
   const spaceEntry = keyStats.get(' ');
-  const spaceColor = heatColor(spaceEntry);
+  const spaceBand = heatBand(spaceEntry);
+  const spaceColor = spaceBand ? BAND_COLOR[spaceBand] : null;
   const spaceW = 320;
   const spaceY = top + 3 * (keyH + gap);
   UI.roundRect(ctx, (W - spaceW) / 2, spaceY, spaceW, keyH * 0.7, 7);
   ctx.fillStyle = spaceColor ?? ART.keyUntouched;
   ctx.fill();
-  ctx.strokeStyle = ART.keyEdge;
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = spaceBand === 'good' || !spaceBand ? ART.keyEdge : ART.ink;
+  ctx.lineWidth = spaceBand ? BAND_BORDER[spaceBand] : 2;
   ctx.stroke();
   UI.text(ctx, spaceEntry ? `space  ${spaceEntry.hit + spaceEntry.miss}` : 'space',
     W / 2, spaceY + keyH * 0.35, {

@@ -368,3 +368,24 @@
 @media (min-width: 46em) {
   .grid { grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
 }
+
+/* --- Reduced motion ------------------------------------------------------
+   The reveals and the smooth scroll are already handled in arcade.html's
+   script, which branches on the same query. What is left is the card's own
+   hover and focus transition: it moves the card, and a card that lifts under
+   the cursor is exactly the kind of motion this setting is asking us not to
+   make. Colour still changes, so hover and focus are still visible — the
+   movement is what goes, not the feedback. */
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: border-color var(--dur-fast) var(--ease-out),
+                background-color var(--dur-fast) var(--ease-out);
+  }
+
+  .card:hover,
+  .card:focus-visible,
+  .card.is-cursor {
+    transform: none;
+  }
+}

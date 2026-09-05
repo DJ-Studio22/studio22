@@ -100,7 +100,7 @@ A top-down time-trial racer.
 
 ---
 
-## 5. Phase 8 — accessibility pass — [ ]
+## 5. Phase 8 — accessibility pass — [x] DONE
 
 **Do**
 - Measure contrast on every text/background pair actually used across the

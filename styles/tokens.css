@@ -91,15 +91,28 @@
 
   /* --- Text ------------------------------------------------------------
      Warm greys to match the backgrounds, four steps so hierarchy comes from
-     contrast rather than size alone. Measured against --color-bg-0:
-       primary   17.7:1     secondary  7.5:1     disabled  5.2:1
+     contrast rather than size alone.
+
+     Measured against the two surfaces they are actually placed on:
+
+                      on --color-bg-0     on --color-bg-2 (a raised card)
+       primary            17.7:1                 15.2:1
+       secondary           7.5:1                  6.5:1
+       disabled            5.9:1                  5.1:1
+
      No pure white — #f5f1e8 carries a headline without buzzing against a
-     near black. text-disabled is deliberately lighter than it looks like it
-     needs to be: at #6b6357 it measured 3.4:1 and failed WCAG AA, and it is
-     used for card meta and footer fine print that people actually read. */
+     near black.
+
+     text-disabled is lighter than it looks like it needs to be, twice over.
+     At #6b6357 it measured 3.4:1 on the page and failed AA outright. At
+     #8a8175 it passed on the page at 5.2:1 but was 4.47:1 on a CARD, which
+     is where .card__best and .card__tagline actually live — under the 4.5
+     floor by a margin too small to see and too real to keep. Checking it
+     only against the page background was the mistake; it is now checked
+     against every surface it is used on. */
   --color-text-primary: #f5f1e8;
   --color-text-secondary: #a79e90;
-  --color-text-disabled: #8a8175;
+  --color-text-disabled: #948b7f;
 
   /* The "off" state of the scroll reveal. Exempt from the contrast floor:
      it is a transient animation state that always resolves to full

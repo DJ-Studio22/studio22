@@ -63,6 +63,43 @@ breaks is worse than the third of a microsecond it costs.
 Particles are already pooled everywhere (engine/util.js), which is the
 allocation that would actually have mattered on a phone.
 
+
+## Accessibility pass (Phase 8)
+
+Measured, not asserted. 50 text/background pairs — every one the site
+actually places, across the dark chrome, both shell themes and all eight
+player colours — parsed straight out of tokens.css so the check cannot drift
+from what ships. **All 50 now meet WCAG AA**; tightest is the light shell's
+selected button at 4.7:1.
+
+One real failure found and fixed: --color-text-disabled was 5.2:1 on the
+page but **4.47:1 on a raised card**, which is where .card__best and
+.card__tagline actually live. It had only ever been checked against the page
+background. Now #948b7f: 5.9:1 on the page, 5.1:1 on a card.
+
+Deliberate exemptions, checked so they cannot be forgotten:
+--color-text-unlit (2.1:1) is a transient scroll-reveal state that always
+resolves to full brightness, and --color-accent-quiet (2.9:1) is decorative
+rules that never carry text.
+
+Keyboard: every focusable control on all three DOM pages was walked in tab
+order. Landing 13 controls, arcade 14, party 7 (46 with the on-screen
+keyboard open). Every one has a visible focus indicator and an accessible
+name; no heading levels are skipped; every page sets lang and has one h1.
+
+Reduced motion: the arcade's cards transitioned transform on hover and focus
+with no guard — the only gap left, since the reveals and smooth scrolling
+were already branched in script. Colour still changes under the setting, so
+hover and focus remain visible; only the movement goes.
+
+Colour as the only signal: the Keystroke heat map encoded accuracy purely in
+green/amber/red, which is three shades of one thing to a red-green
+colour-blind player, on the screen whose entire purpose is "which keys let
+you down". Each band now also carries a border weight, so the map works in
+greyscale. Everywhere else already had a second channel — tournament
+standings pair arrows with a number, players have a number and a name,
+Sinkhole's spiked ledges are drawn with actual spikes.
+
 ## Notes and known items
 - Session.clear() KEEPS score directions. It used to wipe them, which left a running page with no direction and made Circuit Racer rank lap times upward — the slowest lap winning. Directions are a fact about the game, not data about the visit
 - Circuit Racer counts laps by accumulated travelled distance, not by crossing a line or by a position threshold. projectToTrack() returns the nearest point on the WHOLE centre line, so a car cutting a corner can be nearest to track it has not reached, which read as a lap and banked a 3.9s lap on a circuit whose fastest possible lap is 4.5s
