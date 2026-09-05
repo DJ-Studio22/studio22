@@ -1,0 +1,979 @@
+/*
+  styles/site.css — the Studio 22 landing page.
+
+  Written mobile-first: the base rules describe the phone layout, and the
+  min-width queries add the room a bigger screen has. That order matters
+  because the phone is the constrained case, and designing it as an
+  afterthought is how you end up with a shrunken desktop page.
+
+  Colour, spacing and font family all come from tokens.css. Nothing here
+  defines a palette. Where a translucent version of a token is needed,
+  color-mix() derives it rather than a second hex being written down.
+
+  The values defined below are composition, not new design decisions: a
+  fluid type ramp, motion timings, and layout widths. They belong to this
+  page rather than to the design system, which is why they live here.
+*/
+
+:root {
+  /* Fluid type. clamp() means there is no breakpoint where the headline
+     suddenly jumps size — it tracks the viewport continuously, which is what
+     keeps the page feeling composed rather than snapped together. */
+  --fs-hero: clamp(3.2rem, 17vw, 12rem);
+  --fs-display: clamp(2rem, 5.5vw, 4.2rem);
+  --fs-statement: clamp(1.6rem, 4.6vw, 3.4rem);
+  --fs-lead: clamp(1.05rem, 1.9vw, 1.35rem);
+  --fs-eyebrow: 0.78rem;
+
+  /* Vertical rhythm. Sections breathe more on tall screens. */
+  --section-pad: clamp(var(--space-2xl), 11vh, 8rem);
+  --gutter: clamp(var(--space-lg), 5vw, var(--space-2xl));
+
+  --maxw: 74rem;
+  --maxw-text: 34rem;
+
+  /* Motion. One slow ease used everywhere, so every reveal on the page
+     shares a character instead of each section inventing its own. */
+  --dur: 900ms;
+  --dur-fast: 380ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --stagger: 90ms;
+}
+
+/* --- Base ---------------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  /* clip rather than hidden: it stops sideways overflow without turning the
+     root into a scroll container, which is what makes overflow-x:hidden
+     unreliable here. */
+  overflow-x: clip;
+  scroll-behavior: smooth;
+  /* The scroll cue and the footer's back-to-top land below the top edge
+     rather than flush against it. */
+  scroll-padding-top: var(--space-xl);
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-0);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+
+  /* NO overflow-x here. Sideways overflow is handled by `overflow-x: clip`
+     on html above, and setting it on body as well is not just redundant --
+     it is actively harmful. Per spec, an element with overflow hidden on one
+     axis computes the other axis to `auto`, which makes body a scroll
+     container. Every descendant's nearest scrollport then becomes body
+     rather than the document, and body never scrolls, so scroll-driven
+     animations attached to anything inside it freeze at a constant value
+     and never advance. */
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+p { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+img { display: block; max-width: 100%; }
+
+a { color: var(--color-accent); text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+
+/* --- Texture -------------------------------------------------------------
+   Two fixed, inert layers on either side of the content.
+
+   The vignette sits BEHIND everything, because it darkens toward the edges
+   and putting it on top would dim the text nearest the viewport edges — the
+   footer links and the card meta most of all. The grain sits on top, where
+   film grain belongs, at a low enough opacity to register as surface rather
+   than as noise. Neither can take a pointer event. */
+
+.vignette,
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vignette {
+  z-index: 0;
+  background: var(--texture-vignette);
+}
+
+.grain {
+  z-index: 2;
+  background-image: var(--texture-grain);
+  opacity: var(--texture-grain-opacity);
+}
+
+/* Content sits between the two layers. */
+main,
+.footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Accessibility ------------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  left: var(--space-md);
+  top: var(--space-md);
+  z-index: 100;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent);
+  color: var(--color-bg-0);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+  /* Off-screen until focused, rather than display:none, so it stays in the
+     tab order and is the first thing a keyboard user reaches. */
+  transform: translateY(-150%);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.skip-link:focus-visible { transform: none; }
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* --- Reveal system ------------------------------------------------------- */
+
+/*
+  Every animated element moves on transform and fades on opacity, and nothing
+  else. Those two are the only properties a browser can animate without
+  recalculating layout or repainting, which is what keeps this smooth on a
+  phone. A script adds .is-visible when the element enters the viewport.
+*/
+[data-reveal] {
+  opacity: 0;
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * var(--stagger));
+  will-change: transform, opacity;
+}
+
+/* Everything rises on a phone. A sideways slide only makes sense once cards
+   actually sit side by side, and on a single column it pushes them out past
+   the gutter, which is a horizontal scrollbar waiting to happen. The
+   left/right offsets are added back at the breakpoint where they mean
+   something. */
+[data-reveal="up"],
+[data-reveal="left"],
+[data-reveal="right"] { transform: translate3d(0, 2.2rem, 0); }
+
+/* A container that only exists to trigger its children's stagger. It does
+   not move itself. */
+[data-reveal="none"] { opacity: 1; transform: none; }
+
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+  /* Dropped once the transition is done: a permanent will-change keeps a
+     compositor layer alive for an element that will never move again. */
+  will-change: auto;
+}
+
+/* --- Scroll-linked text reveal -------------------------------------------
+   Headings and the statement light word by word as they cross the middle of
+   the viewport, and dim again on the way back up. Colour only — nothing here
+   can move a layout box.
+
+   Two mutually exclusive paths, switched by a class rather than by @supports
+   alone, so either can be forced for testing:
+
+   1. Scroll-driven CSS where the browser has it. The compositor runs it and
+      the main thread does nothing.
+   2. Otherwise a script writes ONE custom property per block per frame and
+      every word derives its own brightness from it here. One DOM write per
+      block, not per word.
+
+   Baseline is fully lit, so a browser with neither path — no JavaScript and
+   no scroll timelines — simply renders the text normally. */
+
+.lit { --p: 1; }
+.lit .word {
+  display: inline-block;
+  color: var(--color-text-primary);
+}
+
+/* Path 2. */
+html.lit-fallback .lit .word {
+  /* Each word starts fractionally later than the one before, so the line
+     lights left to right instead of all at once. */
+  --lit: clamp(0, calc((var(--p) - (var(--i) * 0.05)) * 3), 1);
+  color: color-mix(in oklab, var(--color-text-unlit), var(--color-text-primary) calc(var(--lit) * 100%));
+}
+
+/* Path 1. */
+@supports (animation-timeline: view()) {
+  html:not(.lit-fallback) .lit .word {
+    /* Longhands, never the `animation` shorthand: the shorthand resets
+       animation-timeline and animation-range, and sets duration to 0s — and
+       a scroll-driven animation with a zero duration parks at a fixed point
+       instead of tracking scroll. `auto` is what maps it onto the range. */
+    animation-name: word-light;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-duration: auto;
+    animation-timeline: view();
+    /* Offsetting each word's range by its index is what staggers them.
+       calc() may wrap the OFFSET but never the range NAME — putting the name
+       inside it invalidates the declaration and the animation silently sits
+       on its first frame.
+       The sweep runs across the entry phase, so a block is fully lit by the
+       time it has finished arriving. */
+    animation-range:
+      entry calc(22% + var(--i) * 2.2%)
+      entry calc(78% + var(--i) * 2.2%);
+  }
+}
+
+@keyframes word-light {
+  from { color: var(--color-text-unlit); }
+  to   { color: var(--color-text-primary); }
+}
+
+/* --- Reduced motion ------------------------------------------------------
+   Not "a shorter animation" — everything is simply already in its final
+   state. Someone who asked the OS for less motion should get a still page,
+   not a fast one. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  [data-reveal],
+  .word,
+  .device,
+  .promise__item,
+  .scoreboard__row {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Full brightness immediately, with no scroll dependency at all — the
+     animation is removed rather than shortened. */
+  .lit .word {
+    animation: none !important;
+    color: var(--color-text-primary) !important;
+  }
+
+  .hero__blob { animation: none !important; }
+}
+
+/* --- Shared pieces ------------------------------------------------------- */
+
+.section {
+  padding-block: var(--section-pad);
+  padding-inline: var(--gutter);
+  max-width: var(--maxw);
+  margin-inline: auto;
+}
+
+.section__head { margin-bottom: clamp(var(--space-xl), 6vh, var(--space-2xl)); }
+
+.section__title {
+  font-size: var(--fs-display);
+  max-width: 18ch;
+}
+
+.section__lead {
+  margin-top: var(--space-lg);
+  max-width: var(--maxw-text);
+  font-size: var(--fs-lead);
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* The recurring mark. A short amber rule above every eyebrow, and the same
+   rule under the wordmark — one element repeated, which is what makes the
+   sections read as a single system rather than stacked blocks. */
+.eyebrow {
+  font-family: var(--font-display);
+  font-size: var(--fs-eyebrow);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--color-text-disabled);
+  margin-bottom: var(--space-md);
+}
+
+.eyebrow::before {
+  content: "";
+  display: block;
+  width: 2.25rem;
+  height: 2px;
+  background: var(--color-accent);
+  margin-bottom: var(--space-md);
+}
+
+.eyebrow--warm::before { background: var(--color-accent-2); }
+
+.badge {
+  display: inline-block;
+  padding: 0.35em 0.85em;
+  border: 1px solid var(--color-bg-3);
+  border-radius: var(--radius-full);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-2);
+}
+
+.badge--warn {
+  color: var(--color-accent-2);
+  border-color: color-mix(in srgb, var(--color-accent-2) 45%, transparent);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 1em 2em;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  color: var(--color-bg-0);
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 2.2vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.button:hover,
+.button:focus-visible { transform: translate3d(0, -2px, 0); }
+.button__arrow { transition: transform var(--dur-fast) var(--ease-out); }
+.button:hover .button__arrow { transform: translate3d(4px, 0, 0); }
+
+/* --- Hero ---------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  /* svh, not vh: on a phone, vh is the viewport with the URL bar hidden, so
+     a 100vh hero is taller than the screen on first paint and pushes the
+     scroll cue out of sight. svh is the smallest state and always fits. */
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: var(--gutter);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero__glow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/*
+  Soft light from radial gradients rather than blurred boxes. A large
+  filter: blur() is one of the most expensive things a mobile GPU can be
+  asked to do every frame; a gradient costs essentially nothing and looks
+  the same at this softness.
+*/
+.hero__blob {
+  position: absolute;
+  width: 78vmax;
+  height: 78vmax;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+.hero__blob--a {
+  top: -32vmax; left: -26vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent) 26%, transparent), transparent 62%);
+  animation: drift-a 26s ease-in-out infinite alternate;
+}
+.hero__blob--b {
+  bottom: -40vmax; right: -24vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-accent-2) 22%, transparent), transparent 62%);
+  animation: drift-b 32s ease-in-out infinite alternate;
+}
+.hero__blob--c {
+  top: 18%; right: -30vmax;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-bg-3) 70%, transparent), transparent 66%);
+  animation: drift-c 38s ease-in-out infinite alternate;
+}
+
+/* Transform only, so each blob stays on its own compositor layer and the
+   main thread does no work per frame. */
+@keyframes drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(8vw, 6vh, 0) scale(1.12); }
+}
+@keyframes drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to   { transform: translate3d(-10vw, -7vh, 0) scale(1); }
+}
+@keyframes drift-c {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-6vw, 10vh, 0); }
+}
+
+.hero__inner {
+  align-self: center;
+  max-width: var(--maxw);
+  width: 100%;
+  margin-inline: auto;
+}
+
+.hero__title {
+  font-size: var(--fs-hero);
+  font-weight: var(--wordmark-weight);
+  letter-spacing: var(--wordmark-tracking);
+  line-height: 0.84;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.1em;
+  text-transform: uppercase;
+}
+
+/* The one ornament above the fold. Width tracks the wordmark rather than
+   being a fixed measure, so it reads as belonging to it. */
+.hero__rule {
+  width: min(18rem, 60%);
+  height: 3px;
+  background: var(--color-accent);
+  margin-top: clamp(var(--space-lg), 3vh, var(--space-xl));
+}
+
+.hero__word--accent {
+  color: var(--color-accent);
+  /* Just enough bloom to read as lit rather than printed. */
+  text-shadow: 0 0 clamp(1rem, 5vw, 4rem) color-mix(in srgb, var(--color-accent) 45%, transparent);
+}
+
+.hero__tagline {
+  /* Generous, because the whole point of this screen is the space around
+     the three things on it. */
+  margin-top: clamp(var(--space-lg), 3.5vh, var(--space-xl));
+  font-size: var(--fs-lead);
+  color: var(--color-text-secondary);
+  max-width: var(--maxw-text);
+  text-wrap: balance;
+}
+
+.scroll-cue {
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-block: var(--space-md);
+  color: var(--color-text-disabled);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.scroll-cue__rail {
+  position: relative;
+  width: 1px;
+  height: 3rem;
+  background: linear-gradient(to bottom, var(--color-bg-3), transparent);
+  overflow: hidden;
+}
+
+.scroll-cue__dot {
+  position: absolute;
+  inset-inline: -1px;
+  top: 0;
+  height: 40%;
+  background: var(--color-accent);
+  animation: cue 2.4s var(--ease-out) infinite;
+}
+
+@keyframes cue {
+  0%   { transform: translate3d(0, -100%, 0); opacity: 0; }
+  35%  { opacity: 1; }
+  100% { transform: translate3d(0, 250%, 0); opacity: 0; }
+}
+
+/* --- Statement ----------------------------------------------------------- */
+
+.statement {
+  padding-block: clamp(var(--space-2xl), 18vh, 12rem);
+  padding-inline: var(--gutter);
+  max-width: var(--maxw);
+  margin-inline: auto;
+}
+
+.statement__line {
+  font-family: var(--font-display);
+  font-size: var(--fs-statement);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  max-width: 20ch;
+}
+
+/* Each word is its own inline-block so it can be moved without disturbing
+   the line box around it. */
+.word {
+  display: inline-block;
+  opacity: 0;
+  transform: translate3d(0, 0.5em, 0);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 55ms);
+}
+
+.statement.is-visible .word { opacity: 1; transform: none; }
+
+/* --- Featured games ------------------------------------------------------ */
+
+.game-list {
+  display: grid;
+  gap: clamp(var(--space-xl), 8vh, 5rem);
+}
+
+.game-card {
+  display: grid;
+  gap: var(--space-lg);
+  align-items: center;
+}
+
+.game-card__media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-bg-3);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--color-bg-2), var(--color-bg-1));
+}
+
+/* A tint per category so the line-up reads as a set without needing art. */
+.game-card__media[data-category="arcade"] {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--color-accent) 16%, var(--color-bg-1)), var(--color-bg-1));
+}
+.game-card__media[data-category="learning"] {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--color-accent-2) 16%, var(--color-bg-1)), var(--color-bg-1));
+}
+.game-card__media[data-category="racing"] {
+  background: linear-gradient(140deg, color-mix(in srgb, var(--color-bg-3) 90%, var(--color-accent)), var(--color-bg-1));
+}
+
+.game-card__monogram {
+  font-family: var(--font-display);
+  font-size: clamp(5rem, 16vw, 11rem);
+  line-height: 1;
+  color: color-mix(in srgb, var(--color-text-primary) 10%, transparent);
+  user-select: none;
+}
+
+/* Sits over the monogram when real art exists; script removes it if the file
+   is missing, leaving the placeholder rather than a broken-image icon. */
+.game-card__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-card__title {
+  font-size: clamp(1.9rem, 4.4vw, 2.9rem);
+  margin-bottom: var(--space-sm);
+}
+
+.game-card__tagline {
+  font-size: var(--fs-lead);
+  color: var(--color-accent);
+  margin-bottom: var(--space-md);
+}
+
+.game-card__desc {
+  color: var(--color-text-secondary);
+  max-width: 46ch;
+}
+
+.game-card__footer {
+  margin-top: var(--space-lg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.game-card__link {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 2px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
+  padding-bottom: 2px;
+}
+
+/* Compact variant, used in the learning column. */
+.game-card--compact { gap: var(--space-md); }
+.game-card--compact .game-card__media { aspect-ratio: 16 / 9; }
+.game-card--compact .game-card__title { font-size: clamp(1.4rem, 3vw, 1.8rem); }
+.game-card--compact .game-card__desc { display: none; }
+
+/* --- Play anywhere ------------------------------------------------------- */
+
+.devices {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(var(--space-lg), 5vw, var(--space-2xl));
+  align-items: end;
+  justify-items: center;
+  /* Height of the shelf every device stands on. Must clear the tallest of
+     them, which is the tablet. */
+  --stage-h: 8.5rem;
+}
+
+/* The shelf. Fixed height with its contents pushed to the bottom, so a short
+   monitor and a tall phone rest on the same line and every caption below
+   starts at the same height — stands and legs included, since those sit on
+   the shelf too rather than lifting the label. */
+.device__visual {
+  height: var(--stage-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.device {
+  opacity: 0;
+  transform: translate3d(0, 1.8rem, 0);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 140ms);
+  text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.devices.is-visible .device { opacity: 1; transform: none; }
+
+.device:nth-child(1) { --i: 0; }
+.device:nth-child(2) { --i: 1; }
+.device:nth-child(3) { --i: 2; }
+.device:nth-child(4) { --i: 3; }
+
+.device__frame {
+  width: var(--dev-w);
+  aspect-ratio: var(--dev-ar);
+  border: 2px solid var(--color-bg-3);
+  border-radius: var(--dev-radius, var(--radius-md));
+  background: var(--color-bg-0);
+  padding: var(--dev-bezel, 4px);
+  display: grid;
+  place-items: center;
+}
+
+.device__screen {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-bg-1);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+/*
+  The whole point of this section in one rule: a fixed 16:9 play area, sized
+  to fit whatever screen contains it. On the phone it leaves deep bars above
+  and below; on the television it fills the frame exactly. That is what the
+  engine does, drawn at rest.
+*/
+.device__play {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  max-height: 100%;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--color-accent) 70%, transparent),
+    color-mix(in srgb, var(--color-accent-2) 60%, transparent));
+}
+
+.device--phone   { --dev-w: 3.4rem;  --dev-ar: 9 / 19; --dev-radius: 10px; }
+.device--tablet  { --dev-w: 6rem;    --dev-ar: 3 / 4;  --dev-radius: 8px; }
+.device--desktop { --dev-w: 9rem;    --dev-ar: 16 / 10; }
+.device--tv      { --dev-w: 11.5rem; --dev-ar: 16 / 9; }
+
+.device__stand {
+  width: 2.2rem;
+  height: 0.9rem;
+  background: var(--color-bg-3);
+  clip-path: polygon(28% 0, 72% 0, 100% 100%, 0 100%);
+}
+
+.device__legs {
+  width: 60%;
+  height: 3px;
+  background: var(--color-bg-3);
+  border-radius: var(--radius-full);
+}
+
+.device__name {
+  margin-top: var(--space-md);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.device__input {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  text-wrap: balance;
+  /* Two lines' worth reserved whether the caption needs them or not, and a
+     ceiling on the width so none of them can reach a third line. The items
+     are bottom-aligned, so an unequal caption height is what tips a device
+     up out of the row. Both halves are needed: the min-height equalises
+     short captions, the max-width stops a long one growing past them. */
+  min-height: 3.2em;
+  max-width: 11rem;
+}
+
+/* --- Learning ------------------------------------------------------------ */
+
+.learning {
+  background: var(--color-bg-1);
+  max-width: none;
+  border-block: 1px solid var(--color-bg-2);
+}
+
+.learning__grid {
+  max-width: var(--maxw);
+  margin-inline: auto;
+  display: grid;
+  gap: clamp(var(--space-xl), 7vw, 4rem);
+}
+
+.promise {
+  margin-top: var(--space-xl);
+  display: grid;
+  gap: var(--space-md);
+}
+
+.promise__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  color: var(--color-text-secondary);
+  opacity: 0;
+  transform: translate3d(0, 1rem, 0);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 120ms);
+}
+
+.promise.is-visible .promise__item { opacity: 1; transform: none; }
+.promise__item:nth-child(1) { --i: 0; }
+.promise__item:nth-child(2) { --i: 1; }
+.promise__item:nth-child(3) { --i: 2; }
+
+.promise__mark {
+  flex: none;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--color-accent-2);
+  transform: translateY(-0.1em);
+}
+
+.learning__games { display: grid; gap: var(--space-xl); align-content: start; }
+
+.learning .section__lead + .section__lead { margin-top: var(--space-md); }
+
+/* --- Privacy -------------------------------------------------------------
+   Deliberately quiet: no surface colour, no card, just space around a plain
+   statement. The claim is unusual enough that dressing it up would make it
+   read as a sales line rather than a fact. */
+
+.privacy { padding-block: clamp(var(--space-2xl), 16vh, 10rem); }
+
+.privacy__title {
+  font-size: var(--fs-statement);
+  line-height: 1.16;
+  letter-spacing: -0.02em;
+  max-width: 22ch;
+}
+
+.privacy .promise { margin-top: clamp(var(--space-xl), 7vh, var(--space-2xl)); }
+.privacy .promise__item { font-size: var(--fs-lead); }
+.privacy .promise__mark { background: var(--color-accent); }
+
+/* --- Party mode ---------------------------------------------------------- */
+
+.scoreboard {
+  display: grid;
+  gap: var(--space-sm);
+  max-width: 40rem;
+}
+
+.scoreboard__row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-bg-1);
+  border: 1px solid var(--color-bg-2);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  opacity: 0;
+  transform: translate3d(-1.2rem, 0, 0);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+  transition-delay: calc(var(--i, 0) * 110ms);
+}
+
+.scoreboard.is-visible .scoreboard__row { opacity: 1; transform: none; }
+.scoreboard__row:nth-child(1) { --i: 0; }
+.scoreboard__row:nth-child(2) { --i: 1; }
+.scoreboard__row:nth-child(3) { --i: 2; }
+.scoreboard__row:nth-child(4) { --i: 3; }
+
+.scoreboard__row--lead {
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-1));
+}
+
+.scoreboard__rank { color: var(--color-text-disabled); }
+.scoreboard__row--lead .scoreboard__rank { color: var(--color-accent); }
+.scoreboard__name { font-family: var(--font-body); }
+.scoreboard__score { font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+
+/* --- CTA ----------------------------------------------------------------- */
+
+.cta {
+  padding-block: clamp(var(--space-2xl), 16vh, 10rem);
+  padding-inline: var(--gutter);
+  text-align: center;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-lg);
+}
+
+.cta__title { font-size: var(--fs-display); }
+.cta__sub { color: var(--color-text-secondary); font-size: var(--fs-lead); }
+
+/* --- Footer -------------------------------------------------------------- */
+
+.footer {
+  border-top: 1px solid var(--color-bg-2);
+  padding: var(--section-pad) var(--gutter) var(--space-2xl);
+  background: var(--color-bg-1);
+}
+
+.footer__grid {
+  max-width: var(--maxw);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.footer__heading {
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-md);
+}
+
+.footer__text,
+.footer__list { color: var(--color-text-secondary); font-size: 0.95rem; }
+.footer__list { display: grid; gap: var(--space-sm); }
+.footer__link { color: var(--color-accent); }
+
+.footer__fine {
+  max-width: var(--maxw);
+  margin: var(--space-2xl) auto 0;
+  color: var(--color-text-disabled);
+  font-size: 0.85rem;
+}
+
+/* --- Wider screens -------------------------------------------------------
+   Everything above is the phone layout. These add the extra room, rather
+   than the phone rules being a walk-back from a desktop design. */
+
+@media (min-width: 46em) {
+  /* Now that cards are two-up, they can arrive from their own side. */
+  [data-reveal="left"]  { transform: translate3d(-2.5rem, 1rem, 0); }
+  [data-reveal="right"] { transform: translate3d(2.5rem, 1rem, 0); }
+  [data-reveal].is-visible { transform: none; }
+
+  .game-card {
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(var(--space-xl), 5vw, 4rem);
+  }
+
+  /* Alternating sides. The media is second in the DOM order only for the
+     flipped cards visually — order is a purely presentational change, and
+     the reading order in the markup stays title-then-detail either way. */
+  .game-card--flip .game-card__media { order: 2; }
+
+  .game-card--compact { grid-template-columns: 1fr; }
+
+  /* Columns sized to the devices rather than equal thirds: a television is
+     four times the width of a phone, and forcing them into equal columns
+     either shrinks the television or overflows the phone's. */
+  .devices {
+    grid-template-columns: repeat(4, auto);
+    justify-content: center;
+    --stage-h: 10.5rem;
+  }
+
+  .device--phone   { --dev-w: 4.4rem; }
+  .device--tablet  { --dev-w: 7.5rem; }
+  .device--desktop { --dev-w: 12rem; }
+  .device--tv      { --dev-w: 16rem; }
+
+  .learning__grid { grid-template-columns: 1.1fr 0.9fr; align-items: start; }
+
+  .footer__grid { grid-template-columns: 2fr 1fr 1fr; gap: var(--space-2xl); }
+}
+
+@media (min-width: 68em) {
+  .devices { --stage-h: 14rem; }
+  .device--phone   { --dev-w: 5.5rem; }
+  .device--tablet  { --dev-w: 10rem; }
+  .device--desktop { --dev-w: 17rem; }
+  .device--tv      { --dev-w: 22rem; }
+}

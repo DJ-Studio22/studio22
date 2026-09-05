@@ -2,36 +2,514 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Studio 22</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Studio 22 — Original games that run anywhere</title>
+  <meta name="description" content="Studio 22 is a small arcade of original browser games. Phone, tablet, desktop or a controller on the TV. No accounts, no ads, nothing collected." />
+  <!-- Mirrors --color-bg-0. The one place a token value is duplicated: a
+       meta tag cannot read a custom property. -->
+  <meta name="theme-color" content="#0a0908" />
+
   <link rel="stylesheet" href="/styles/tokens.css" />
-  <style>
-    body {
-      margin: 0;
-      background: var(--color-bg-0);
-      color: var(--color-text-primary);
-      font-family: var(--font-body);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      gap: var(--space-md);
-    }
-    h1 { font-family: var(--font-display); color: var(--color-accent); }
-    nav a {
-      color: var(--color-accent-2);
-      margin: 0 var(--space-sm);
-    }
-  </style>
+  <link rel="stylesheet" href="/styles/site.css" />
 </head>
 <body>
-  <h1>Studio 22</h1>
-  <p>Landing page placeholder — routing check only.</p>
-  <nav>
-    <a href="/arcade.html">Arcade</a>
-    <a href="/party.html">Party</a>
-    <a href="/games/example-game/index.html">Example Game</a>
-  </nav>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- Texture layers. Fixed, inert, and above nothing that can be clicked.
+       Between them they stop the large near-black areas reading as empty. -->
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main id="main">
+
+    <!-- ============================================================
+         HERO
+         Full viewport. The background is three drifting radial
+         gradients rather than blurred elements or a canvas: a blur
+         filter at this size is one of the most expensive things a
+         phone GPU can be asked to do, and a gradient gives the same
+         soft glow for almost nothing.
+         ============================================================ -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero__glow" aria-hidden="true">
+        <span class="hero__blob hero__blob--a"></span>
+        <span class="hero__blob hero__blob--b"></span>
+        <span class="hero__blob hero__blob--c"></span>
+      </div>
+
+      <!-- Three things and nothing else: wordmark, one line, scroll cue.
+           The accent rule is the only ornament above the fold. Everything
+           that used to live up here is now in the sections below. -->
+      <div class="hero__inner">
+        <h1 class="hero__title" id="hero-title" data-reveal="up" style="--i: 0">
+          <span class="hero__word">Studio</span><span class="hero__word hero__word--accent">22</span>
+        </h1>
+        <div class="hero__rule" data-reveal="up" style="--i: 1" aria-hidden="true"></div>
+        <p class="hero__tagline" data-reveal="up" style="--i: 2">
+          Original games. Nothing to install.
+        </p>
+      </div>
+
+      <a class="scroll-cue" href="#statement" data-reveal="up" style="--i: 3">
+        <span class="scroll-cue__label">Scroll</span>
+        <span class="scroll-cue__rail" aria-hidden="true"><span class="scroll-cue__dot"></span></span>
+      </a>
+    </section>
+
+    <!-- ============================================================
+         STATEMENT
+         Words are authored as spans rather than split by script, so
+         the sentence is real text for a crawler or a reader with
+         JavaScript off. The stagger is pure CSS off one class.
+         ============================================================ -->
+    <section class="statement" id="statement" aria-labelledby="statement-title" data-reveal="none">
+      <h2 class="visually-hidden" id="statement-title">What Studio 22 is</h2>
+      <p class="statement__line lit">
+        <span class="word" style="--i: 0">Studio</span>
+        <span class="word" style="--i: 1">22</span>
+        <span class="word" style="--i: 2">is</span>
+        <span class="word" style="--i: 3">a</span>
+        <span class="word" style="--i: 4">small</span>
+        <span class="word" style="--i: 5">arcade</span>
+        <span class="word" style="--i: 6">of</span>
+        <span class="word" style="--i: 7">original</span>
+        <span class="word" style="--i: 8">games,</span>
+        <span class="word" style="--i: 9">built</span>
+        <span class="word" style="--i: 10">by</span>
+        <span class="word" style="--i: 11">one</span>
+        <span class="word" style="--i: 12">person.</span>
+      </p>
+    </section>
+
+    <!-- ============================================================
+         FEATURED GAMES
+         Rendered from games.json through engine/manifest.js, so
+         adding a game here means editing that file and nothing else.
+         ============================================================ -->
+    <section class="section featured" aria-labelledby="featured-title">
+      <header class="section__head">
+        <p class="eyebrow" data-reveal="up">The line-up</p>
+        <h2 class="section__title" id="featured-title" data-lit-split>
+          Every one of these runs on the same engine.
+        </h2>
+      </header>
+
+      <!-- Filled by script from Manifest.getFeatured(). The noscript
+           fallback keeps the section honest without JavaScript. -->
+      <div class="game-list" id="game-list"></div>
+      <noscript>
+        <p class="section__lead">
+          The line-up needs JavaScript to load. Everything else on this page works without it.
+        </p>
+      </noscript>
+    </section>
+
+    <!-- ============================================================
+         PLAY ANYWHERE
+         The devices are drawn in CSS. Each holds the same 16:9 play
+         area, so the shapes themselves show what the engine does:
+         one fixed play field, letterboxed to fit whatever it lands on.
+         ============================================================ -->
+    <section class="section anywhere" aria-labelledby="anywhere-title">
+      <header class="section__head">
+        <p class="eyebrow" data-reveal="up">Play anywhere</p>
+        <h2 class="section__title" id="anywhere-title" data-lit-split>
+          The same game, wherever you open it.
+        </h2>
+        <p class="section__lead" data-reveal="up" style="--i: 2">
+          Every game reads a gamepad, a keyboard and a touchscreen. Same code, all three.
+          The play area is a fixed shape that scales to fit the screen. Nothing is cropped,
+          nothing is stretched. A phone gets the same game as a television.
+        </p>
+      </header>
+
+      <ul class="devices" data-reveal="none">
+        <!-- Each device's visual sits in a fixed-height stage so all four
+             stand on one shelf line, stands and legs included. -->
+        <li class="device device--phone">
+          <div class="device__visual">
+            <div class="device__frame">
+              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+            </div>
+          </div>
+          <p class="device__name">Phone</p>
+          <p class="device__input">Touch. Stick and buttons.</p>
+        </li>
+        <li class="device device--tablet">
+          <div class="device__visual">
+            <div class="device__frame">
+              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+            </div>
+          </div>
+          <p class="device__name">Tablet</p>
+          <p class="device__input">Touch. More room.</p>
+        </li>
+        <li class="device device--desktop">
+          <div class="device__visual">
+            <div class="device__frame">
+              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+            </div>
+            <span class="device__stand" aria-hidden="true"></span>
+          </div>
+          <p class="device__name">Desktop</p>
+          <p class="device__input">Keyboard. WASD or arrows.</p>
+        </li>
+        <li class="device device--tv">
+          <div class="device__visual">
+            <div class="device__frame">
+              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+            </div>
+            <span class="device__legs" aria-hidden="true"></span>
+          </div>
+          <p class="device__name">Television</p>
+          <p class="device__input">Gamepad. Xbox or PlayStation.</p>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ============================================================
+         LEARNING — warmer surface, written for the adult in the room.
+         ============================================================ -->
+    <section class="section learning" aria-labelledby="learning-title">
+      <div class="learning__grid">
+        <div class="learning__copy">
+          <p class="eyebrow eyebrow--warm" data-reveal="up">For parents</p>
+          <h2 class="section__title" id="learning-title" data-lit-split>
+            The learning games are games first.
+          </h2>
+          <p class="section__lead" data-reveal="up" style="--i: 2">
+            Practice only works if it gets played twice. So these are built to be worth
+            coming back to.
+          </p>
+          <p class="section__lead" data-reveal="up" style="--i: 3">
+            Difficulty follows the player. A streak makes it harder. A few misses ease it
+            back. Nobody is told they are behind.
+          </p>
+        </div>
+
+        <!-- Filled from Manifest.getByCategory('learning'). -->
+        <div class="learning__games" id="learning-list"></div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         PRIVACY
+         Given a section rather than a line in the footer, because it is
+         one of the few things here that is genuinely different from the
+         alternative, and it only reads as true if it is stated plainly.
+         ============================================================ -->
+    <section class="section privacy" aria-labelledby="privacy-title">
+      <p class="eyebrow" data-reveal="up">Privacy</p>
+      <h2 class="privacy__title" id="privacy-title" data-lit-split>
+        We remember nothing about you, and ask for nothing in return.
+      </h2>
+      <ul class="promise" data-reveal="none">
+        <li class="promise__item">
+          <span class="promise__mark" aria-hidden="true"></span>
+          No accounts, ever. Nothing to sign up for.
+        </li>
+        <li class="promise__item">
+          <span class="promise__mark" aria-hidden="true"></span>
+          No ads, no purchases, no nudges to come back.
+        </li>
+        <li class="promise__item">
+          <span class="promise__mark" aria-hidden="true"></span>
+          Nothing is collected or stored. Scores live until the tab closes.
+        </li>
+      </ul>
+    </section>
+
+    <!-- ============================================================
+         PARTY MODE
+         ============================================================ -->
+    <section class="section party" aria-labelledby="party-title">
+      <header class="section__head">
+        <p class="eyebrow" data-reveal="up">Party mode</p>
+        <h2 class="section__title" id="party-title" data-lit-split>
+          One controller. One screen. Everybody watching.
+        </h2>
+        <p class="section__lead" data-reveal="up" style="--i: 2">
+          Cast the tab to the television. Pass the controller around. Everyone gets a turn
+          and the scores stack up on screen. The list disappears when you close the tab,
+          which is the point of it.
+        </p>
+      </header>
+
+      <ol class="scoreboard" data-reveal="none" aria-label="Example party scoreboard">
+        <li class="scoreboard__row scoreboard__row--lead">
+          <span class="scoreboard__rank">1</span>
+          <span class="scoreboard__name">Player One</span>
+          <span class="scoreboard__score">12,480</span>
+        </li>
+        <li class="scoreboard__row">
+          <span class="scoreboard__rank">2</span>
+          <span class="scoreboard__name">Player Two</span>
+          <span class="scoreboard__score">11,905</span>
+        </li>
+        <li class="scoreboard__row">
+          <span class="scoreboard__rank">3</span>
+          <span class="scoreboard__name">Player Three</span>
+          <span class="scoreboard__score">9,340</span>
+        </li>
+        <li class="scoreboard__row">
+          <span class="scoreboard__rank">4</span>
+          <span class="scoreboard__name">Player Four</span>
+          <span class="scoreboard__score">8,115</span>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ============================================================
+         CTA
+         ============================================================ -->
+    <section class="cta" aria-labelledby="cta-title">
+      <h2 class="cta__title" id="cta-title" data-lit-split>Ready when you are.</h2>
+      <p class="cta__sub" data-reveal="up" style="--i: 1">No sign-up. No download. It just starts.</p>
+      <a class="button" href="/arcade.html" data-reveal="up" style="--i: 2">
+        Enter the Arcade
+        <span class="button__arrow" aria-hidden="true">→</span>
+      </a>
+    </section>
+  </main>
+
+  <!-- ============================================================
+       FOOTER
+       ============================================================ -->
+  <footer class="footer">
+    <div class="footer__grid">
+      <div class="footer__col">
+        <h2 class="footer__heading">Studio 22</h2>
+        <p class="footer__text">
+          A small arcade of original browser games. Built on a hand-written engine.
+          No frameworks, no trackers, no server.
+        </p>
+      </div>
+      <div class="footer__col">
+        <h2 class="footer__heading">Portfolio</h2>
+        <ul class="footer__list">
+          <li><a class="footer__link" href="/arcade.html">The arcade</a></li>
+          <li><a class="footer__link" href="/party.html">Party mode</a></li>
+          <li><a class="footer__link" href="#main">Back to top</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h2 class="footer__heading">Contact</h2>
+        <p class="footer__text">
+          Enquiries welcome.
+          <a class="footer__link" href="#contact">Add contact details</a>
+        </p>
+      </div>
+    </div>
+    <p class="footer__fine">Written by hand. No frameworks, no trackers, no server.</p>
+  </footer>
+
+  <script type="module">
+    import { Manifest } from '/engine/manifest.js';
+
+    // Honour the OS setting once, up front. Everything below branches on it
+    // rather than animating and then apologising.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // --- Cards ------------------------------------------------------------
+
+    // A coming-soon game has no folder yet, so linking it would send a
+    // visitor to a 404. Live games become links; the rest stay inert with a
+    // badge, which is also why the badge is text and not just a colour.
+    function buildCard(game, index, variant) {
+      const isLive = game.status === 'live';
+      const article = document.createElement('article');
+      article.className = `game-card game-card--${variant}${index % 2 === 1 ? ' game-card--flip' : ''}`;
+      article.dataset.reveal = index % 2 === 1 ? 'right' : 'left';
+      article.style.setProperty('--i', String(index % 2));
+
+      const media = document.createElement('div');
+      media.className = 'game-card__media';
+      media.dataset.category = game.category;
+
+      // Stands in for artwork that does not exist yet, and stays behind the
+      // real image once it does. A missing file then degrades to something
+      // deliberate instead of a broken-image icon.
+      const monogram = document.createElement('span');
+      monogram.className = 'game-card__monogram';
+      monogram.setAttribute('aria-hidden', 'true');
+      monogram.textContent = game.title.charAt(0);
+      media.append(monogram);
+
+      const img = document.createElement('img');
+      img.className = 'game-card__img';
+      img.src = game.thumbnail;
+      img.alt = `Key art for ${game.title}`;
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.addEventListener('error', () => img.remove(), { once: true });
+      media.append(img);
+
+      const body = document.createElement('div');
+      body.className = 'game-card__body';
+
+      const meta = document.createElement('p');
+      meta.className = 'eyebrow';
+      meta.textContent = `${game.category} · ${game.difficulty} · ${game.ageRange}`;
+
+      const title = document.createElement('h3');
+      title.className = 'game-card__title';
+      title.textContent = game.title;
+
+      const tagline = document.createElement('p');
+      tagline.className = 'game-card__tagline';
+      tagline.textContent = game.tagline;
+
+      const desc = document.createElement('p');
+      desc.className = 'game-card__desc';
+      desc.textContent = game.description;
+
+      const footer = document.createElement('p');
+      footer.className = 'game-card__footer';
+
+      if (isLive) {
+        const link = document.createElement('a');
+        link.className = 'game-card__link';
+        link.href = game.path;
+        link.textContent = `Play ${game.title}`;
+        footer.append(link);
+      } else {
+        const badge = document.createElement('span');
+        badge.className = 'badge';
+        badge.textContent = 'Coming soon';
+        footer.append(badge);
+      }
+
+      // Surfaced wherever a game is shown, so nobody on a phone taps into
+      // something that needs hardware they do not have.
+      if (game.inputRequirement === 'keyboard') {
+        const needs = document.createElement('span');
+        needs.className = 'badge badge--warn';
+        needs.textContent = 'Keyboard required';
+        footer.append(needs);
+      }
+
+      body.append(meta, title, tagline, desc, footer);
+      article.append(media, body);
+      return article;
+    }
+
+    function renderInto(id, games, variant) {
+      const host = document.getElementById(id);
+      if (!host) return;
+      const fragment = document.createDocumentFragment();
+      games.forEach((game, index) => fragment.append(buildCard(game, index, variant)));
+      host.append(fragment);
+    }
+
+    renderInto('game-list', Manifest.getFeatured(), 'feature');
+    renderInto('learning-list', Manifest.getByCategory('learning'), 'compact');
+
+    // --- Scroll-linked text reveal ----------------------------------------
+    //
+    // Section headings are split into words here rather than in the markup:
+    // if this never runs, the heading is still a plain heading and the CSS
+    // baseline renders it fully lit. The statement's words are authored in
+    // the HTML instead, because that is the page's largest single sentence
+    // and it should survive with no script at all.
+
+    for (const heading of document.querySelectorAll('[data-lit-split]')) {
+      const words = heading.textContent.trim().split(/\s+/);
+      heading.textContent = '';
+      words.forEach((word, index) => {
+        const span = document.createElement('span');
+        span.className = 'word';
+        span.style.setProperty('--i', String(index));
+        span.textContent = word;
+        heading.append(span, ' ');
+      });
+      heading.classList.add('lit');
+    }
+
+    // No scroll listener anywhere. Where the browser has scroll-driven
+    // animations, the CSS does all of it and this block does nothing.
+    // Otherwise an IntersectionObserver decides WHICH blocks are worth
+    // measuring, and a rAF loop runs only while at least one is on screen.
+    if (!reduceMotion && !CSS.supports('animation-timeline', 'view()')) {
+      document.documentElement.classList.add('lit-fallback');
+
+      const blocks = [...document.querySelectorAll('.lit')];
+      const active = new Set();
+      let frame = 0;
+
+      const tick = () => {
+        const vh = window.innerHeight;
+        for (const el of active) {
+          // One rect read per BLOCK, not per word. The per-word stagger is
+          // derived from this single number in CSS.
+          const top = el.getBoundingClientRect().top;
+          // Unlit when the block's top sits at 85% of the viewport, fully
+          // lit by the time it reaches 35%. Scrubbing back up re-dims it,
+          // because the value is recomputed rather than latched.
+          const p = Math.min(1, Math.max(0, (vh * 0.85 - top) / (vh * 0.5)));
+          el.style.setProperty('--p', p.toFixed(3));
+        }
+        frame = active.size ? requestAnimationFrame(tick) : 0;
+      };
+
+      const litObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) active.add(entry.target);
+          else active.delete(entry.target);
+        }
+        if (active.size && !frame) frame = requestAnimationFrame(tick);
+      }, { rootMargin: '20% 0px 20% 0px' });
+
+      for (const block of blocks) {
+        block.style.setProperty('--p', '0');
+        litObserver.observe(block);
+      }
+    }
+
+    // --- Reveals ----------------------------------------------------------
+
+    // One observer, one shot per element. Intersection Observer rather than a
+    // scroll listener: the browser does the intersection maths off the main
+    // thread, so nothing here can make scrolling stutter.
+    const targets = [...document.querySelectorAll('[data-reveal]')];
+
+    if (reduceMotion) {
+      targets.forEach((el) => el.classList.add('is-visible'));
+    } else {
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target); // reveals do not play twice
+        }
+      }, {
+        // The negative bottom margin pulls the trigger line up off the
+        // bottom edge, so an element has to be properly in view rather than
+        // barely peeking in before it starts moving.
+        rootMargin: '0px 0px -12% 0px',
+        threshold: 0.15,
+      });
+
+      // That same trigger line would strand anything sitting in the bottom
+      // sliver of the FIRST screen: it is on screen, but not far enough up
+      // to count, and there is no scroll yet to bring it further. The scroll
+      // cue lives exactly there, and a scroll cue you cannot see until after
+      // you have scrolled is worse than none. So everything already on
+      // screen at load reveals on its own, and only the rest is observed.
+      const onScreenNow = new Set(targets.filter((el) => {
+        const box = el.getBoundingClientRect();
+        return box.top < window.innerHeight && box.bottom > 0;
+      }));
+
+      // Next frame, so the browser has committed the starting styles and the
+      // class change is something it can actually transition from.
+      requestAnimationFrame(() => {
+        onScreenNow.forEach((el) => el.classList.add('is-visible'));
+      });
+
+      targets.forEach((el) => {
+        if (!onScreenNow.has(el)) observer.observe(el);
+      });
+    }
+  </script>
 </body>
 </html>
