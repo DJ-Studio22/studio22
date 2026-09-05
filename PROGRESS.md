@@ -128,6 +128,23 @@ OPEN: no og:image / twitter:image. There are no image assets, and pointing a
 card at a missing image renders as a broken box, so the Twitter card is
 "summary" rather than "summary_large_image". Needs one 1200x630 PNG.
 
+
+## Custom domain (Phase 8)
+
+The code side is done; the registrar and Cloudflare steps are written up in
+DEPLOY.md for Duval to do.
+
+Every absolute URL in the repo now comes from site.config.json — one file.
+tools/build-sitemap.mjs and tools/inject-meta.mjs both read it, and
+build-sitemap now writes robots.txt too, since robots.txt names the sitemap
+by absolute URL and was the one host-dependent file still hand-maintained.
+
+Proved rather than assumed: changing origin to a placeholder and re-running
+the two tools left ZERO references to the old host in any html, xml, txt or
+json outside the markdown notes. Then reverted.
+
+Moving domain is: edit site.config.json, run the two tools, build, push.
+
 ## Notes and known items
 - Session.clear() KEEPS score directions. It used to wipe them, which left a running page with no direction and made Circuit Racer rank lap times upward — the slowest lap winning. Directions are a fact about the game, not data about the visit
 - Circuit Racer counts laps by accumulated travelled distance, not by crossing a line or by a position threshold. projectToTrack() returns the nearest point on the WHOLE centre line, so a car cutting a corner can be nearest to track it has not reached, which read as a lap and banked a 3.9s lap on a circuit whose fastest possible lap is 4.5s

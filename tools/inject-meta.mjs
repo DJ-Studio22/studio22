@@ -15,10 +15,13 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// The one place the deployed host is written down, matching
-// tools/build-sitemap.mjs. Moving to a custom domain is these two constants.
-const ORIGIN = 'https://studio22-anw.pages.dev';
-const SITE_NAME = 'Studio 22';
+// The deployed host lives in site.config.json and nowhere else. Two tools
+// write absolute URLs, and two copies of a constant is one copy too many —
+// the day they disagree, half the canonical tags point at the old domain and
+// nothing complains.
+const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), 'utf8'));
+const ORIGIN = CONFIG.origin;
+const SITE_NAME = CONFIG.siteName;
 
 const START = '  <!-- BEGIN generated metadata — tools/inject-meta.mjs -->';
 const END = '  <!-- END generated metadata -->';

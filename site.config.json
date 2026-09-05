@@ -1,0 +1,5 @@
+{
+  "_comment": "The one place the deployed host is written down. tools/build-sitemap.mjs and tools/inject-meta.mjs both read it, so moving to a custom domain is this file plus re-running them. Nothing else in the repo should contain an absolute URL to the site.",
+  "origin": "https://studio22-anw.pages.dev",
+  "siteName": "Studio 22"
+}

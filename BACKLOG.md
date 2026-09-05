@@ -144,7 +144,7 @@ Adding them is a change to tools/inject-meta.mjs plus the files.
 
 ---
 
-## 7. Phase 8 — custom domain — [ ]
+## 7. Phase 8 — custom domain — [x] DONE (code side; registrar steps are yours)
 
 **Do**
 - Document what the user has to do at the registrar and in Cloudflare Pages,
