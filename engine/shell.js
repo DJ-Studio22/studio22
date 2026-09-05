@@ -38,7 +38,6 @@
 // a live one, for the same battery reason.
 
 import { Input, JOYSTICK_MAX_RADIUS_PX } from './input.js';
-import { Tournament } from './tournament.js';
 import { Session } from './session.js';
 import { UI } from './ui.js';
 
@@ -150,6 +149,10 @@ export class GameShell {
   #sessionBest = null;
   #runStats = null;
 
+  // Resolves to the Tournament module, or null when it could not be loaded.
+  // Never set at all outside tournament mode -- see #loadTournament().
+  #tournamentPromise = null;
+
   #overlayRafId = 0;
   #snapshot = null;
   #hasSnapshot = false;
@@ -167,6 +170,19 @@ export class GameShell {
    * @param {GameLoop}   options.loop
    * @param {() => void} [options.onRestart]  Reset the game. Defaults to a
    *        page reload, which always works but is slower than a real reset.
+   * @param {'dark'|'light'} [options.shellTheme] Which palette the shell's own
+   *        chrome draws in. Defaults to 'dark', which matches the site.
+   *
+   *        Set it to 'light' for a game with a BRIGHT background. The shell
+   *        draws its HUD straight over the game with no scrim behind it, so
+   *        near-white HUD text on a daylight sky is unreadable — and the fix
+   *        is not for the game to go dark. Number Crunch was pulled back from
+   *        a pale sky for exactly this reason before the option existed.
+   *
+   *        This also sets the default palette for engine/ui.js, so a game
+   *        drawing its own screens with those primitives matches without
+   *        passing anything: light chrome over a light game and dark chrome
+   *        on its own setup screen would read as two different games.
    * @param {() => void} [options.onPassToNextPlayer] Tournament handoff (Phase 7).
    * @param {object} [options.audio]  Anything with setMuted(bool). Optional
    *        until engine/audio.js exists.
@@ -186,11 +202,35 @@ export class GameShell {
     this.#onRestart = options.onRestart ?? (() => window.location.reload());
     this.#onPassToNextPlayer = options.onPassToNextPlayer ?? null;
 
+    // Applied before anything draws, and applied even for the default so a
+    // second shell on the same page (there is never one, but still) cannot
+    // inherit a theme it did not ask for.
+    const theme = options.shellTheme ?? 'dark';
+    UI.setTheme(theme);
+
+    // The letterbox bars are part of the chrome too. A light game framed in
+    // the site's near-black looks broken rather than framed, and the game
+    // should not have to know that the bars exist to fix it.
+    this.#canvas.setLetterboxColor(
+      theme === 'light' ? 'var(--color-shell-light-bg-0)' : 'var(--color-bg-0)',
+    );
+
     // Tournament mode is a URL param for now; Phase 7 decides whether that
     // stays. Any value except an explicit off counts as on, so both
     // ?tournament and ?tournament=1 work.
     const param = new URLSearchParams(window.location.search).get('tournament');
     this.#tournamentMode = param !== null && param !== '0' && param !== 'false';
+
+    // Tournament support is a DYNAMIC import, started here and only when this
+    // is actually a tournament turn.
+    //
+    // Statically importing it pulled the tournament and manifest modules into
+    // every game page -- about 5 KB gzipped that the overwhelming majority of
+    // runs never touch, since most people play a game on its own. Kicking the
+    // fetch off in the constructor rather than at the moment it is needed
+    // means it has the whole run to arrive, so the handoff is not waiting on
+    // a network request at the exact moment the player finishes.
+    if (this.#tournamentMode) this.#loadTournament();
 
     // Capability, not current device: the pause button has to be on screen
     // before the player has touched anything, so getActiveDevice() (which
@@ -198,6 +238,19 @@ export class GameShell {
     this.#touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
     this.#canvas.canvas.addEventListener('pointerdown', this.#onPointerDown);
+  }
+
+  #loadTournament() {
+    this.#tournamentPromise ??= import('./tournament.js')
+      .then((module) => module.Tournament)
+      .catch((error) => {
+        // Offline, or the chunk failed to fetch. The game itself is already
+        // running and playable; only the handoff is lost, and the call sites
+        // below fall back to behaving like a normal single-player run.
+        console.warn('[shell] Tournament module failed to load: ' + error.message);
+        return null;
+      });
+    return this.#tournamentPromise;
   }
 
   // --- Public surface -----------------------------------------------------
@@ -598,15 +651,21 @@ export class GameShell {
    * hand, or it was cleared in another tab -- this restarts rather than
    * leaving the player on a button that does nothing.
    */
-  #passToNextPlayer() {
+  async #passToNextPlayer() {
     if (this.#onPassToNextPlayer) {
       this.#closeScreen();
       this.#onPassToNextPlayer();
       return;
     }
 
-    if (Tournament.isActive()) {
-      Tournament.recordTurn(this.#gameId, this.#finalScore);
+    // Captured before awaiting: the score is what it was when the button was
+    // pressed, and nothing should be able to change it while the module
+    // resolves.
+    const score = this.#finalScore;
+    const Tournament = await this.#loadTournament();
+
+    if (Tournament?.isActive()) {
+      Tournament.recordTurn(this.#gameId, score);
       window.location.href = PARTY_URL;
       return;
     }
@@ -620,10 +679,13 @@ export class GameShell {
   // is where they can skip it or drop out properly; sending them to the
   // arcade instead looks like the tournament has been thrown away, and
   // leaves it sitting in storage with nothing pointing at it.
-  #leaveGame() {
-    if (this.#tournamentMode && Tournament.isActive()) {
-      window.location.href = PARTY_URL;
-      return;
+  async #leaveGame() {
+    if (this.#tournamentMode) {
+      const Tournament = await this.#loadTournament();
+      if (Tournament?.isActive()) {
+        window.location.href = PARTY_URL;
+        return;
+      }
     }
     this.#backToArcade();
   }

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Keystroke — Studio 22</title>
+  <meta name="description" content="A typing race. Type the words before they reach the edge, and see which keys let you down. Needs a physical keyboard." />
+  <!-- This game is paper rather than the arcade, so its theme colour is the
+       page it actually draws. Mirrors ART.paper in game.js; a meta tag cannot
+       read a JavaScript constant any more than it can read a CSS property. -->
+  <meta name="theme-color" content="#f4efe4" />
+
+  <!-- tokens.css is required, not decorative: engine/ui.js resolves the
+       palette from the document to draw the shell's screens. This game asks
+       for the LIGHT shell theme, whose tokens live in the same file. -->
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      /* The page behind the letterbox bars. Paper, to match the game, rather
+         than the site's near-black — black bars either side of a light game
+         look like a rendering fault. */
+      background: #e7e0d0;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    /* --- Custom text dialog -------------------------------------------------
+       A real <textarea>, because pasting is a browser affordance and no
+       amount of canvas drawing gets you a working Ctrl+V. This is DOM chrome,
+       so per CLAUDE.md every value here comes from tokens.css. */
+
+    .ks-editor {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      padding: var(--space-md);
+      background: color-mix(in srgb, var(--color-bg-0) 82%, transparent);
+    }
+
+    .ks-editor__panel {
+      width: min(44rem, 100%);
+      background: var(--color-bg-1);
+      border: 2px solid var(--color-bg-4);
+      border-radius: var(--radius-lg);
+      padding: var(--space-lg);
+      color: var(--color-text-primary);
+      font-family: var(--font-body);
+    }
+
+    .ks-editor__panel h2 {
+      margin: 0 0 var(--space-xs);
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      color: var(--color-accent);
+    }
+
+    .ks-editor__panel p {
+      margin: 0 0 var(--space-md);
+      color: var(--color-text-secondary);
+      font-size: 0.95rem;
+    }
+
+    .ks-editor__text {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--color-bg-0);
+      color: var(--color-text-primary);
+      border: 2px solid var(--color-bg-4);
+      border-radius: var(--radius-md);
+      padding: var(--space-sm);
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    .ks-editor__text:focus-visible {
+      outline: 3px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+
+    .ks-editor__actions {
+      display: flex;
+      gap: var(--space-sm);
+      margin-top: var(--space-md);
+    }
+
+    .ks-editor__actions button {
+      appearance: none;
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      padding: var(--space-sm) var(--space-lg);
+      border-radius: var(--radius-md);
+      border: 2px solid var(--color-bg-4);
+      background: var(--color-bg-2);
+      color: var(--color-text-primary);
+      cursor: pointer;
+    }
+
+    .ks-editor__use {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: var(--color-bg-0);
+    }
+
+    .ks-editor__actions button:focus-visible {
+      outline: 3px solid var(--color-accent);
+      outline-offset: 2px;
+    }
+  </style>
+</head>
+<body>
+  <!-- GameCanvas builds its own letterboxed container inside <body>. -->
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

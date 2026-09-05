@@ -37,6 +37,32 @@
   --color-accent-2: #6ec98c;
   --color-accent-quiet: #7a5320;  /* rules and marks. decorative only */
 
+  /* --- Light shell theme -------------------------------------------------
+     A second palette for engine/shell.js to draw its HUD, pause menu and
+     game over screen in, chosen per game via the shellTheme option.
+
+     The site itself is dark and stays dark. This exists because the shell
+     draws ON TOP OF a game, and a game is free to be bright: Number Crunch
+     had to be pulled back from a daylight sky purely because near-white HUD
+     text would have been unreadable on it. A game should not have to bend
+     its art direction to the site's chrome, so the chrome bends instead.
+
+     Same key names as the dark set, so engine/ui.js swaps one map for the
+     other and nothing downstream changes. Measured against the surfaces they
+     are actually used on — panel body, button fills, and HUD text sitting
+     directly over a light game — every pair runs 4.7:1 to 17.9:1, so all of
+     them pass WCAG AA at normal text size. The tightest is the selected
+     button, which is bg-0 text on the accent fill. */
+  --color-shell-light-bg-0: #f7f4ee;   /* scrim base, and text on a filled button */
+  --color-shell-light-bg-1: #ffffff;   /* panel */
+  --color-shell-light-bg-2: #ece8dd;   /* unselected button */
+  --color-shell-light-bg-3: #cfc8b8;   /* hairlines and borders */
+  --color-shell-light-accent: #a8590a;
+  --color-shell-light-accent-2: #1f7a45;
+  --color-shell-light-text-primary: #1a1712;
+  --color-shell-light-text-secondary: #554e44;
+  --color-shell-light-text-disabled: #6b6357;
+
   /* --- Player colours ---------------------------------------------------
      Eight identities for hot-seat tournaments, where whose turn it is has to
      be readable from a sofa. These are tokens rather than values picked in

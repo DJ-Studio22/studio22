@@ -91,9 +91,9 @@
       "learning"
     ],
     "featured": false,
-    "tournamentReady": true,
+    "tournamentReady": false,
     "estimatedRunTime": 90,
-    "status": "coming-soon"
+    "status": "live"
   },
   {
     "id": "sinkhole",

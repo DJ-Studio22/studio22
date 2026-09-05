@@ -83,6 +83,11 @@ export class GameCanvas {
   #resizeObserver = null;
 
   #requireOrientation; // 'landscape' | 'portrait' | null
+  // Letterbox and orientation-overlay colour. The site default; a light
+  // game changes it through setLetterboxColor(), which engine/shell.js calls
+  // from its shellTheme option.
+  #letterboxColor = 'var(--color-bg-0)';
+
   #overlay = null;
   #orientationBlocked = false;
 
@@ -197,6 +202,25 @@ export class GameCanvas {
     };
   }
 
+  /**
+   * Colour of the letterbox bars and the orientation overlay.
+   *
+   * Defaults to the site's near-black. A LIGHT game needs this changed or it
+   * plays inside two black bars, which reads as a rendering fault rather than
+   * as framing. engine/shell.js calls this from its shellTheme option, so a
+   * game declares the theme once and the frame follows.
+   *
+   * Takes a CSS value, so callers pass a var(--token) rather than a literal
+   * and the palette stays in styles/tokens.css.
+   */
+  setLetterboxColor(cssValue) {
+    this.#letterboxColor = cssValue;
+    this.#container.style.background = cssValue;
+    // The orientation overlay is built lazily, so it may not exist yet. It
+    // reads #letterboxColor when it is created.
+    if (this.#overlay) this.#overlay.style.background = cssValue;
+  }
+
   // Toggle couch mode at runtime, e.g. from a settings screen.
   setTvMode(enabled) {
     this.#tvMode = Boolean(enabled);
@@ -232,7 +256,7 @@ export class GameCanvas {
     this.#container.style.alignItems = 'center';
     this.#container.style.justifyContent = 'center';
     this.#container.style.overflow = 'hidden';
-    this.#container.style.background = 'var(--color-bg-0)';
+    this.#container.style.background = this.#letterboxColor;
     this.#container.style.setProperty('--ui-scale', String(this.uiScale));
 
     // An absolutely-positioned container needs a positioned ancestor or it
@@ -270,7 +294,7 @@ export class GameCanvas {
     this.#overlay.style.alignItems = 'center';
     this.#overlay.style.justifyContent = 'center';
     this.#overlay.style.gap = 'var(--space-md)';
-    this.#overlay.style.background = 'var(--color-bg-0)';
+    this.#overlay.style.background = this.#letterboxColor;
     this.#overlay.style.color = 'var(--color-text-primary)';
     this.#overlay.style.fontFamily = 'var(--font-display)';
     this.#overlay.style.textAlign = 'center';

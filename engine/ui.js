@@ -23,65 +23,137 @@
 // canvas fillStyle can't read a CSS custom property directly, so the values
 // have to be pulled out of the document first.
 
-// Token name for each key this module exposes. tokens.css remains the only
-// place the palette is actually defined.
-const TOKEN_NAMES = {
-  bg0: '--color-bg-0',
-  bg1: '--color-bg-1',
-  bg2: '--color-bg-2',
-  bg3: '--color-bg-3',
-  accent: '--color-accent',
-  accent2: '--color-accent-2',
-  textPrimary: '--color-text-primary',
-  textSecondary: '--color-text-secondary',
-  textDisabled: '--color-text-disabled',
+// Token name for each key this module exposes, per theme. tokens.css remains
+// the only place the palette is actually defined.
+//
+// TWO THEMES, ONE SHAPE. The site is dark and stays dark; the light set
+// exists because the shell draws ON TOP OF a game, and a game is free to be
+// bright. Both maps carry exactly the same keys, so switching themes swaps
+// one lookup table for another and no drawing code below has to know which
+// one is in force.
+//
+// Fonts are shared: a theme is a palette, not a typeface.
+const FONT_NAMES = {
   fontDisplay: '--font-display',
   fontBody: '--font-body',
   fontMono: '--font-mono',
 };
+
+const THEME_TOKENS = {
+  dark: {
+    bg0: '--color-bg-0',
+    bg1: '--color-bg-1',
+    bg2: '--color-bg-2',
+    bg3: '--color-bg-3',
+    accent: '--color-accent',
+    accent2: '--color-accent-2',
+    textPrimary: '--color-text-primary',
+    textSecondary: '--color-text-secondary',
+    textDisabled: '--color-text-disabled',
+    ...FONT_NAMES,
+  },
+  light: {
+    bg0: '--color-shell-light-bg-0',
+    bg1: '--color-shell-light-bg-1',
+    bg2: '--color-shell-light-bg-2',
+    bg3: '--color-shell-light-bg-3',
+    accent: '--color-shell-light-accent',
+    accent2: '--color-shell-light-accent-2',
+    textPrimary: '--color-shell-light-text-primary',
+    textSecondary: '--color-shell-light-text-secondary',
+    textDisabled: '--color-shell-light-text-disabled',
+    ...FONT_NAMES,
+  },
+};
+
+export const THEMES = Object.keys(THEME_TOKENS);
 
 // Only reached if tokens.css failed to load. Deliberately generic CSS
 // keywords rather than copies of the real palette: the design values live in
 // tokens.css and nowhere else, and these exist purely so a missing
 // stylesheet degrades to "plain but readable" instead of "invisible".
 const DEGRADED = {
-  bg0: 'black',
-  bg1: 'black',
-  bg2: 'dimgray',
-  bg3: 'gray',
-  accent: 'cyan',
-  accent2: 'magenta',
-  textPrimary: 'white',
-  textSecondary: 'silver',
-  textDisabled: 'gray',
-  fontDisplay: 'sans-serif',
-  fontBody: 'sans-serif',
-  fontMono: 'monospace',
+  dark: {
+    bg0: 'black',
+    bg1: 'black',
+    bg2: 'dimgray',
+    bg3: 'gray',
+    accent: 'cyan',
+    accent2: 'magenta',
+    textPrimary: 'white',
+    textSecondary: 'silver',
+    textDisabled: 'gray',
+    fontDisplay: 'sans-serif',
+    fontBody: 'sans-serif',
+    fontMono: 'monospace',
+  },
+  light: {
+    bg0: 'white',
+    bg1: 'white',
+    bg2: 'gainsboro',
+    bg3: 'silver',
+    accent: 'darkred',
+    accent2: 'darkgreen',
+    textPrimary: 'black',
+    textSecondary: 'dimgray',
+    textDisabled: 'gray',
+    fontDisplay: 'sans-serif',
+    fontBody: 'sans-serif',
+    fontMono: 'monospace',
+  },
 };
 
-let cachedTokens = null;
+// One cache per theme. A page only ever uses one, but caching by name means
+// switching costs a single lookup rather than a fresh getComputedStyle pass.
+const cachedTokens = { dark: null, light: null };
+
+// Which palette tokens() hands back when no theme is named. Set once per page
+// by engine/shell.js from its shellTheme option; there is exactly one shell
+// per document, so this is a page-level fact rather than shared mutable state
+// two callers could fight over.
+let currentTheme = 'dark';
 
 export const UI = {
   // Resolved token values, looked up on first use. Cached because
   // getComputedStyle is a layout read and this gets called every frame an
   // overlay is open.
-  tokens() {
-    if (cachedTokens) return cachedTokens;
+  tokens(theme = currentTheme) {
+    const name = THEME_TOKENS[theme] ? theme : 'dark';
+    if (cachedTokens[name]) return cachedTokens[name];
 
     const style = getComputedStyle(document.documentElement);
-    cachedTokens = {};
-    for (const [key, cssName] of Object.entries(TOKEN_NAMES)) {
+    const resolved = {};
+    for (const [key, cssName] of Object.entries(THEME_TOKENS[name])) {
       const value = style.getPropertyValue(cssName).trim();
-      cachedTokens[key] = value || DEGRADED[key];
+      resolved[key] = value || DEGRADED[name][key];
     }
-    return cachedTokens;
+    cachedTokens[name] = resolved;
+    return resolved;
+  },
+
+  /**
+   * Chooses the palette every UI.* call draws in from here on.
+   *
+   * Called by engine/shell.js from its shellTheme option, so a game declares
+   * this once in its config rather than passing a theme through every draw
+   * call. A game drawing its own screens with these primitives picks up the
+   * same choice for free, which is the point — a bright game with dark
+   * chrome on its own setup screen would look like two different games.
+   */
+  setTheme(theme) {
+    currentTheme = THEME_TOKENS[theme] ? theme : 'dark';
+  },
+
+  get theme() {
+    return currentTheme;
   },
 
   // Drops the cache so the next draw re-reads tokens.css. Only needed if the
   // stylesheet is swapped at runtime; here mainly so tests can force a
   // re-read.
   refreshTokens() {
-    cachedTokens = null;
+    cachedTokens.dark = null;
+    cachedTokens.light = null;
   },
 
   // Rounded-rectangle path. Left as a path (not filled) so callers can fill,
