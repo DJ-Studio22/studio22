@@ -364,6 +364,224 @@ function ember() {
     + '</g></svg>';
 }
 
+/**
+ * Block Buster -- the well, mid-collapse.
+ *
+ * A row lit white on the point of clearing, the charged cell that took it, and
+ * the next piece already on its way down. The card has to say "this stack is
+ * about to come apart", because that is the game.
+ */
+function blockBuster() {
+  // The chip treatment from the game's first theme: a flat plate with a lit
+  // top edge and a dark bottom one. Repeated a dozen times, so it is a helper.
+  const chip = (x, y, fill) =>
+    '<g><rect x="' + x + '" y="' + y + '" width="26" height="26" fill="' + fill + '"/>'
+    + '<rect x="' + x + '" y="' + y + '" width="26" height="3" fill="rgba(255,255,255,.28)"/>'
+    + '<rect x="' + x + '" y="' + (y + 23) + '" width="26" height="3" fill="rgba(0,0,0,.30)"/></g>';
+
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="bb-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#04161c"/><stop offset="1" stop-color="#072a30"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#bb-sky)"/>'
+    // The well.
+    + '<rect x="86" y="8" width="148" height="184" rx="7" fill="#02090c" '
+    + 'stroke="#1d5c63" stroke-width="2"/>'
+    // Ruled faintly, so it reads as a grid rather than a hole.
+    + '<g stroke="rgba(120,240,220,.07)" stroke-width="1" fill="none">'
+    + '<path d="M114 10 L114 190 M142 10 L142 190 M170 10 L170 190 M198 10 L198 190"/>'
+    + '<path d="M88 66 L232 66 M88 94 L232 94 M88 122 L232 122 M88 150 L232 150"/>'
+    + '</g>'
+    // The settled stack.
+    + chip(88, 150, '#31e0c0') + chip(116, 150, '#2bb8e0') + chip(144, 150, '#7ce06a')
+    + chip(172, 150, '#e0d24a') + chip(200, 150, '#e06a9a')
+    + chip(88, 122, '#8a7ce0') + chip(116, 122, '#48d0a0') + chip(200, 122, '#4ac6e0')
+    // The row going out, lit white, with the charged cell that took it.
+    + '<rect x="87" y="177" width="146" height="14" fill="rgba(255,255,255,.85)"/>'
+    + '<circle cx="157" cy="184" r="5" fill="#fff3b0"/>'
+    + '<circle cx="157" cy="184" r="2.2" fill="#ffffff"/>'
+    // The next piece, falling.
+    + chip(144, 30, '#e0d24a') + chip(172, 30, '#e0d24a') + chip(144, 58, '#e0d24a')
+    + '</svg>';
+}
+
+/**
+ * Neon Drift Delivery -- the road at speed.
+ *
+ * Lanes running away up the card, traffic to squeeze past, and the lit drop
+ * pad on the shoulder. The player's car is the only warm thing on it.
+ */
+function neonDrift() {
+  const car = (x, y, fill, tail) =>
+    '<g><rect x="' + x + '" y="' + y + '" width="24" height="42" rx="5" fill="' + fill + '"/>'
+    + '<rect x="' + (x + 4) + '" y="' + (y + 13) + '" width="16" height="17" rx="3" fill="rgba(0,0,0,.34)"/>'
+    + '<rect x="' + (x + 2) + '" y="' + (y + 36) + '" width="6" height="3" fill="' + tail + '"/>'
+    + '<rect x="' + (x + 16) + '" y="' + (y + 36) + '" width="6" height="3" fill="' + tail + '"/></g>';
+
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="nd-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#05030f"/><stop offset="1" stop-color="#140a26"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#nd-sky)"/>'
+    // Skyline either side, lit windows and all.
+    + '<g fill="#0d0820" stroke="#2a1a4a" stroke-width="1">'
+    + '<rect x="2" y="52" width="34" height="148"/><rect x="40" y="86" width="26" height="114"/>'
+    + '<rect x="256" y="66" width="30" height="134"/><rect x="290" y="40" width="28" height="160"/>'
+    + '</g>'
+    + '<g fill="rgba(255,190,120,.85)">'
+    + '<rect x="9" y="64" width="4" height="6"/><rect x="21" y="80" width="4" height="6"/>'
+    + '<rect x="47" y="100" width="4" height="6"/><rect x="297" y="56" width="4" height="6"/>'
+    + '<rect x="264" y="88" width="4" height="6"/></g>'
+    // Road, shoulders, and the hot edge lines.
+    + '<rect x="70" y="0" width="180" height="200" fill="#241c30"/>'
+    + '<rect x="86" y="0" width="148" height="200" fill="#15121c"/>'
+    + '<rect x="84" y="0" width="3" height="200" fill="rgba(255,120,200,.65)"/>'
+    + '<rect x="233" y="0" width="3" height="200" fill="rgba(255,120,200,.65)"/>'
+    // Lane dashes.
+    + '<g fill="rgba(230,230,255,.55)">'
+    + '<rect x="134" y="6" width="3" height="26"/><rect x="134" y="62" width="3" height="26"/>'
+    + '<rect x="134" y="118" width="3" height="26"/><rect x="134" y="174" width="3" height="26"/>'
+    + '<rect x="183" y="30" width="3" height="26"/><rect x="183" y="86" width="3" height="26"/>'
+    + '<rect x="183" y="142" width="3" height="26"/></g>'
+    // The drop pad on the shoulder: the thing the run is actually about.
+    + '<rect x="70" y="96" width="16" height="56" fill="rgba(40,224,255,.18)" '
+    + 'stroke="#28e0ff" stroke-width="2" stroke-dasharray="7 5"/>'
+    // Traffic, then the player, low on the card where the eye lands last.
+    + car(96, 22, '#3f4a6b', '#ff3a3a')
+    + car(196, 60, '#5a3f6b', '#ff3a3a')
+    + car(146, 130, '#28e0ff', '#ff3d9a')
+    + '<rect x="148" y="126" width="20" height="3" fill="#ff3d9a"/>'
+    + '<path d="M152 174 L158 194 L164 174 Z" fill="#ffd166" opacity=".9"/>'
+    + '</svg>';
+}
+
+/**
+ * Skyhook -- mid-swing, over the gap.
+ *
+ * Two towers, a rope under tension, and a ring hanging in the space between
+ * them. The figure is drawn part-way down the arc, which is the moment the
+ * whole game is about.
+ */
+function skyhook() {
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="sk-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#151033"/><stop offset=".45" stop-color="#4a2a5c"/>'
+    + '<stop offset=".78" stop-color="#c05a5a"/><stop offset="1" stop-color="#f5a15c"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#sk-sky)"/>'
+    + '<circle cx="230" cy="150" r="46" fill="rgba(255,220,150,.30)"/>'
+    + '<g fill="rgba(255,240,220,.7)">'
+    + '<rect x="40" y="24" width="2" height="2"/><rect x="96" y="14" width="2" height="2"/>'
+    + '<rect x="188" y="30" width="2" height="2"/><rect x="272" y="18" width="2" height="2"/></g>'
+    // Distant skyline, then the two towers that matter.
+    + '<g fill="#2a1f45"><rect x="0" y="128" width="46" height="72"/>'
+    + '<rect x="126" y="150" width="52" height="50"/><rect x="272" y="136" width="48" height="64"/></g>'
+    + '<g fill="#100c22" stroke="#453a75" stroke-width="1.5">'
+    + '<rect x="30" y="92" width="62" height="108"/><rect x="212" y="118" width="66" height="82"/></g>'
+    + '<g fill="rgba(255,196,120,.85)">'
+    + '<rect x="40" y="104" width="7" height="10"/><rect x="58" y="104" width="7" height="10"/>'
+    + '<rect x="40" y="126" width="7" height="10"/><rect x="76" y="126" width="7" height="10"/>'
+    + '<rect x="224" y="132" width="7" height="10"/><rect x="252" y="132" width="7" height="10"/></g>'
+    // Masts, with the lit anchor at each tip.
+    + '<path d="M61 92 L61 34 M245 118 L245 72" stroke="#5a4a8c" stroke-width="3" fill="none"/>'
+    + '<circle cx="61" cy="34" r="11" fill="rgba(255,209,102,.25)"/>'
+    + '<circle cx="61" cy="34" r="4.5" fill="#ffd166"/>'
+    + '<circle cx="245" cy="72" r="11" fill="rgba(255,209,102,.25)"/>'
+    + '<circle cx="245" cy="72" r="4.5" fill="#ffd166"/>'
+    // The ring over the gap: what swinging well is worth.
+    + '<circle cx="152" cy="70" r="22" fill="rgba(94,242,192,.16)" stroke="#5ef2c0" stroke-width="4"/>'
+    // The rope, taut, and the figure hanging off it.
+    + '<path d="M61 34 L104 118" stroke="#ffffff" stroke-width="2" opacity=".85" fill="none"/>'
+    + '<g transform="translate(104 118) rotate(28)">'
+    + '<path d="M0 -2 L-8 16 L8 16 Z" fill="#ff5f7e"/>'
+    + '<ellipse cx="0" cy="0" rx="6.5" ry="10" fill="#ffd166"/>'
+    + '<circle cx="0" cy="-10" r="4.6" fill="#ffe9c4"/>'
+    + '</g></svg>';
+}
+
+/**
+ * Tower Stack -- the tower, tapering.
+ *
+ * Every slab narrower than the one beneath it, so the card states the rule
+ * without a word of explanation, and the sheared-off slice is still falling.
+ */
+function towerStack() {
+  const slab = (cx, y, w, fill) =>
+    '<g><rect x="' + (cx - w / 2) + '" y="' + y + '" width="' + w + '" height="18" fill="' + fill + '"/>'
+    + '<rect x="' + (cx - w / 2) + '" y="' + y + '" width="' + w + '" height="3" fill="rgba(255,255,255,.30)"/>'
+    + '<rect x="' + (cx - w / 2) + '" y="' + (y + 15) + '" width="' + w + '" height="3" fill="rgba(0,0,0,.28)"/></g>';
+
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="ts-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#5aa0d8"/><stop offset="1" stop-color="#f0b48a"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#ts-sky)"/>'
+    + '<g fill="rgba(255,255,255,.30)">'
+    + '<circle cx="56" cy="42" r="17"/><circle cx="74" cy="47" r="12"/><circle cx="40" cy="48" r="11"/>'
+    + '<circle cx="258" cy="28" r="13"/><circle cx="272" cy="32" r="9"/></g>'
+    // The ground, already a long way down.
+    + '<rect x="0" y="186" width="320" height="14" fill="#2e4a34"/>'
+    // The tower, losing a slice at every level.
+    + slab(160, 168, 108, '#ff8a5c')
+    + slab(154, 150, 96, '#ffc857')
+    + slab(163, 132, 82, '#5ef2a0')
+    + slab(156, 114, 68, '#5ec8f2')
+    + slab(164, 96, 52, '#a78bfa')
+    + slab(158, 78, 40, '#ff6b9a')
+    // The slab in the air, and the guides it has to land between.
+    + '<g stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="4 5" fill="none">'
+    + '<path d="M138 40 L138 78 M178 40 L178 78"/></g>'
+    + slab(206, 24, 40, '#ff8a5c')
+    // The slice sheared off the last one, still falling.
+    + '<g transform="translate(96 106) rotate(24)">'
+    + '<rect x="-11" y="-8" width="22" height="16" fill="#5ec8f2"/></g>'
+    + '</svg>';
+}
+
+/**
+ * Gravity Flip -- the corridor, upside down.
+ *
+ * The runner is on the CEILING with its trail behind it and the spikes on the
+ * floor below, which is the one picture that explains the button.
+ */
+function gravityFlip() {
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="gf-bg" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#0b1424"/><stop offset="1" stop-color="#122036"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#gf-bg)"/>'
+    + '<g stroke="rgba(120,190,255,.06)" stroke-width="1" fill="none">'
+    + '<path d="M40 0 L40 200 M80 0 L80 200 M120 0 L120 200 M160 0 L160 200 '
+    + 'M200 0 L200 200 M240 0 L240 200 M280 0 L280 200"/>'
+    + '<path d="M0 40 L320 40 M0 80 L320 80 M0 120 L320 120 M0 160 L320 160"/></g>'
+    // Ceiling and floor: the two surfaces, both solid, both standable.
+    + '<rect x="0" y="0" width="320" height="30" fill="#1f3a5c"/>'
+    + '<rect x="0" y="0" width="320" height="4" fill="#2e5686"/>'
+    + '<rect x="0" y="170" width="320" height="30" fill="#1f3a5c"/>'
+    + '<rect x="0" y="170" width="320" height="4" fill="#2e5686"/>'
+    // A block hanging off the ceiling, the kind you have to drop away from.
+    + '<g><rect x="196" y="30" width="60" height="46" fill="#1f3a5c"/>'
+    + '<rect x="196" y="30" width="60" height="4" fill="#2e5686"/></g>'
+    // Floor spikes.
+    + '<g fill="#ff4d6d">'
+    + '<path d="M84 170 L96 170 L90 146 Z"/><path d="M98 170 L110 170 L104 146 Z"/>'
+    + '<path d="M112 170 L124 170 L118 146 Z"/>'
+    + '<path d="M262 170 L274 170 L268 146 Z"/><path d="M276 170 L288 170 L282 146 Z"/></g>'
+    // A saw, in the middle band where saws are allowed to be.
+    + '<g transform="translate(168 100)">'
+    + '<circle r="19" fill="rgba(255,77,109,.18)"/>'
+    + '<g fill="#9aa8c0"><path d="M-4 -16 L4 -16 L0 -9 Z"/><path d="M-4 16 L4 16 L0 9 Z"/>'
+    + '<path d="M-16 -4 L-16 4 L-9 0 Z"/><path d="M16 -4 L16 4 L9 0 Z"/></g>'
+    + '<circle r="11" fill="#e0e6f0"/><circle r="3.6" fill="#ff4d6d"/></g>'
+    // The runner, on the ceiling, trailing.
+    + '<g fill="rgba(158,242,255,.45)">'
+    + '<rect x="26" y="43" width="9" height="9"/><rect x="40" y="43" width="9" height="9" opacity=".7"/>'
+    + '<rect x="54" y="43" width="9" height="9" opacity=".45"/></g>'
+    + '<g><rect x="68" y="34" width="26" height="30" rx="6" fill="#9ef2ff"/>'
+    + '<circle cx="76" cy="43" r="2.8" fill="#1a1a24"/><circle cx="86" cy="43" r="2.8" fill="#1a1a24"/></g>'
+    + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -373,6 +591,11 @@ const ART = {
   keystroke,
   sinkhole,
   'circuit-racer': circuitRacer,
+  'block-buster': blockBuster,
+  'neon-drift': neonDrift,
+  skyhook,
+  'tower-stack': towerStack,
+  'gravity-flip': gravityFlip,
   ballast,
   ember,
 };

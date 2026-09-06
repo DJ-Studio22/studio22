@@ -14,33 +14,142 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 9: TWO PRODUCTION BUGS FIXED (see the section below), then five new games — Block Buster, Neon Drift Delivery, Skyhook, Tower Stack, Gravity Flip. Eleven games live
 
 ## In progress
 - Nothing in flight
 
 ## Next
-- Phase 4: Keystroke, Sinkhole, Circuit Racer
+- Ballast and Ember are still the only two `coming-soon` entries. See BACKLOG item 11.
+
+
+## Phase 9 — the two production bugs
+
+Both were live on the deployed site. Both are fixed, and both are worth
+recording because of what they say about how to test this repo.
+
+### Every game launched to a black screen
+
+`engine/canvas.js` referenced `this.#label` twice in `#buildDom()` and never
+declared the field. An undeclared private name is a PARSE error, not a runtime
+one, so the module never loaded at all — and every game imports it, which is
+why it was all six rather than some of them.
+
+The same error failed `vite build` outright. That is the important part: the
+broken commit could not produce a `dist/`, so what was being served was
+whatever the last successful build had left. The lesson is not "dev tolerated
+it" — `npm run dev` would have failed on it too, in the browser, for the same
+reason. The lesson is that a FAILED BUILD IS A SILENT DEPLOY: Pages keeps
+serving the previous version and the site looks alive while the repo is
+broken. Check that the build passes, not just that the site responds.
+
+Fixed by declaring `#label` and defaulting it to `document.title`, which every
+game's index.html already sets to "<Game> — Studio 22". No game passes it.
+
+### The arcade search filtered nothing
+
+`applyFilters()` was setting `card.hidden` correctly the whole time. The
+browser's own `[hidden] { display: none }` is a USER-AGENT rule, and `.card`
+sets `display: flex` as an author rule, which outranks it. So the property was
+set on the element and nothing moved on screen. One rule fixed it:
+`.card[hidden] { display: none }` in styles/arcade.css.
+
+Worth remembering for any future component that sets its own `display`: the
+`hidden` attribute stops working the moment you do, and it fails silently.
+
+
+## Phase 9 — five new games
+
+All five: engine integration, own `ART` palette, universal input, SVG
+thumbnail, `games.json` entry, live. All endless, all scoring "how far you
+got". Verified against a PRODUCTION build, not the dev server.
+
+**Block Buster** — `games/block-buster/`, three files. A falling-shape puzzle
+whose board comes apart properly: cleared cells fall INDIVIDUALLY rather than
+as rows, so a clear low in the stack can complete a row nobody built. That is
+the chain, and the chain is the game. Charged cells detonate their column.
+Clearing the board completely restyles it — six worlds, each with its own
+block art (`chip`, `round`, `gem`, `molten`, `leaf`, `neon`), not just its own
+hues. The shape set is nine shapes across THREE sizes and is deliberately not
+the standard seven; rotation is a fixed five-candidate shove, not a kick
+table. Both documented in `pieces.js`. Board rules live in `board.js`, free of
+the DOM, and are covered by 18 assertions.
+
+**Neon Drift Delivery** — `games/neon-drift/`, two files. A courier run
+against a clock, where the clock is the only life bar. `traffic.js` gives every
+car three rules in order — follow, overtake, yield — so the road rearranges
+itself around you: come up fast behind someone and they pull over. Boost
+cannot be bought, only earned by passing within a hand's width, so the fast
+line and the safe line are the same line taken at different distances.
+
+**Skyhook** — `games/skyhook/`, two files. A rigid-rope pendulum, solved by
+projecting onto the circle and dropping the radial velocity, which is what
+CONSERVES the swing. Reeling in preserves angular momentum, so pumping a swing
+speeds it up out of the maths rather than out of a bonus. `city.js` generates
+the skyline against distance with no ceiling.
+
+**Tower Stack** — `games/tower-stack/`, one file. One button. Overhang is
+sheared off and width is the only resource. A perfect placement gives some
+width BACK, which is what stops the game being a countdown — and the recovery
+shrinks as the tower grows, so it never outruns the difficulty. The sky is
+interpolated between six bands rather than snapped to one, so the climb is a
+continuous change of light.
+
+**Gravity Flip** — `games/gravity-flip/`, two files. One button: which way is
+down. 19 hand-authored rooms in `rooms.js`, sequenced by tier, and the file
+CHECKS ITS OWN ROOMS at load — clear doorway, no column blocked on both
+surfaces, four clear columns between opposite forced stretches. Writing that
+checker found several rooms of my own that were genuinely impassable.
+
+The invariant the game protects: **a flip always costs the same number of
+COLUMNS, at every speed.** Gravity is scaled by the SQUARE of the run speed, so
+fall time drops exactly as fast as forward speed rises and every authored room
+stays as passable at room 200 as at room 2. `checkFlipBudget()` asserts this
+against `rooms.js` at boot so the two files cannot drift.
+
+FOUND AND FIXED while verifying that invariant: movement was NOT substepped,
+and because gravity grows with the square of speed, by around room 50 a single
+1/60s tick moved the player 46px — through a 40px tile. Blocks and spikes were
+being passed straight through, and it got worse the further you got, which is
+the worst possible shape for a bug in an endless game. Movement is now sliced
+so no slice travels more than 0.4 of a tile on either axis. Measured before
+and after across seven run lengths up to room 600: tunnelling at five of
+seven before, none after, and the flip budget tightened from 3.75-4.00 columns
+to 3.78-3.83.
 
 
 ## Performance audit (Phase 8)
 
 Measured, not estimated. Every page gzipped, as built:
 
+Re-measured at eleven games (HTML plus every asset the page loads up front,
+gzipped at level 9):
+
 | Page | Total (gzipped) |
 |---|---:|
-| games/keystroke/ | 24.9 KB |
-| games/number-crunch/ | 22.7 KB |
-| games/circuit-racer/ | 20.9 KB |
-| games/comet/ | 20.8 KB |
-| games/updraft/ | 20.5 KB |
-| games/sinkhole/ | 20.2 KB |
-| party.html | 18.8 KB |
-| arcade.html | 16.6 KB |
-| index.html | 13.1 KB |
+| games/circuit-racer/ | 27.8 KB |
+| games/keystroke/ | 25.8 KB |
+| games/neon-drift/ | 25.3 KB |
+| games/block-buster/ | 24.4 KB |
+| games/number-crunch/ | 23.5 KB |
+| games/gravity-flip/ | 23.5 KB |
+| arcade.html | 23.5 KB |
+| games/skyhook/ | 22.9 KB |
+| games/tower-stack/ | 21.8 KB |
+| games/comet/ | 21.6 KB |
+| games/updraft/ | 21.3 KB |
+| games/sinkhole/ | 21.2 KB |
+| party.html | 20.5 KB |
+| index.html | 19.6 KB |
 
-The engine chunk (util + shell + ui + canvas + loop + session + audio) is
-11.3 KB gzipped and shared by all six games; input.js is 4.2 KB and shared by
-eight pages. So a second game costs 4-7 KB, not 20.
+The shared chunks are util 11.5 KB (util + shell + ui + canvas + loop +
+session + audio), input 4.3 KB and tokens 0.4 KB — 16.1 KB carried by every
+game page. So the ELEVENTH game costs 5-9 KB, not 22, and the numbers have
+barely moved since six.
+
+arcade.html grew 6.9 KB, all of it thumbnails.js: thirteen inline SVG cards
+instead of eight. That is still cheaper than one PNG and it is the only page
+that pays it.
 
 FINDING: there is no performance problem to fix. Measured in Chrome:
 
@@ -103,11 +212,12 @@ Sinkhole's spiked ledges are drawn with actual spikes.
 
 ## SEO and metadata (Phase 8)
 
-All nine built pages carry a unique title and description, a canonical link,
-Open Graph and Twitter tags, a favicon link and a manifest link. Seven of
-nine also carry JSON-LD. Verified against the BUILD rather than the source:
-0 problems, 9/9 unique titles, 9/9 unique descriptions, every sitemap URL
-resolves to a file that exists, and every JSON-LD block parses.
+All fourteen built pages carry a unique title and description, a canonical
+link, Open Graph and Twitter tags, a favicon link and a manifest link.
+Thirteen of fourteen also carry JSON-LD (party.html has no useful schema
+type). Re-counted against the BUILD at eleven games: 14/14 unique titles,
+14/14 unique descriptions, 14/14 og:image, 14 sitemap URLs, and every JSON-LD
+block parses.
 
 Added: public/robots.txt, public/sitemap.xml, public/favicon.svg (an SVG, so
 no binary asset and no separate PNG set), public/site.webmanifest.
@@ -124,9 +234,11 @@ Deleted games/example-game/, the build-glob scaffold. Six real games exist,
 it was unreferenced, and it was being built and would have been indexed. The
 file itself said to delete it once a real game replaced it.
 
-OPEN: no og:image / twitter:image. There are no image assets, and pointing a
-card at a missing image renders as a broken box, so the Twitter card is
-"summary" rather than "summary_large_image". Needs one 1200x630 PNG.
+RESOLVED: og:image and twitter:image are wired to public/social-card.png on
+all fourteen pages, and the card is "summary_large_image". The dimensions in
+the tags are MEASURED from the PNG by inject-meta rather than written in the
+config, so they cannot drift from the file. One image serves every page; see
+DEPLOY.md for why per-game cards were not built.
 
 
 ## Custom domain (Phase 8)
@@ -176,3 +288,9 @@ Moving domain is: edit site.config.json, run the two tools, build, push.
 - input.js only calls preventDefault() on touches it actually claims, and ignores touches starting on buttons/links/inputs. Calling it unconditionally kills the synthetic click and disables every DOM control on touch
 - DualSense over Bluetooth on Windows may report non-standard mapping — untested, USB should be fine
 - engine/ui.js holds the canvas drawing primitives shell.js uses; games can use it for their own title screens
+- A FAILED BUILD IS A SILENT DEPLOY. Cloudflare Pages keeps serving the last good build, so a repo that cannot compile still looks live. `npm run build` passing is a separate fact from the site responding, and only the first one is evidence
+- The `hidden` attribute stops working on anything that sets its own `display`. The UA rule `[hidden] { display: none }` loses to any author rule, silently — `card.hidden = true` was being set correctly for weeks while nothing moved. Any component that sets `display` needs its own `[hidden]` rule
+- Enter and Space are BOTH bound to the `a` button (see DEFAULT_PLAYER0_LAYOUT). The keypress that dismisses a title screen is therefore still down when the game takes over, and its keyup fires `Input.released('a')` on the first frame of play. Skyhook was cutting its own opening rope this way. Prefer `pressed()` over `released()` for anything a title screen can reach, or the game will act on an input meant for the menu
+- Gravity Flip scales gravity by the SQUARE of run speed so a flip always costs the same number of tiles of ground. That is what lets hand-authored rooms stay passable forever. Any change to BASE_SPEED, BASE_GRAVITY or the room height has to keep `checkFlipBudget()` under rooms.js's FLIP_COLUMNS — it warns at boot if not
+- Anything whose per-tick movement can exceed a tile MUST substep. Gravity Flip's speed grows without bound, so by room 50 a single tick moved further than a tile and the player passed through solid blocks. Collision only ever looks at where a step ENDED. Circuit Racer and Sinkhole are safe because their speeds are capped; nothing else in the suite may assume that
+- Block Buster's board rules are in board.js, free of the DOM, for the same reason Number Crunch's arithmetic is in problems.js: a cascade that fails to chain is not visible in a screenshot. Test that file, not the game

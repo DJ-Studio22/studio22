@@ -199,13 +199,58 @@ are not.
 
 ---
 
-## 6b. OPEN — social card images
+## 12. Five new games — [x] DONE
 
-og:image and twitter:image are deliberately absent: there are no image assets,
-and a card that points at a missing image renders as a broken box. The
-Twitter card is "summary" rather than "summary_large_image" for the same
-reason. Needs one 1200x630 PNG per shareable page, or one for the site.
-Adding them is a change to tools/inject-meta.mjs plus the files.
+Block Buster, Neon Drift Delivery, Skyhook, Tower Stack, Gravity Flip. Each
+got the full treatment: engine integration, own `ART` palette, universal
+input, SVG thumbnail, `games.json` entry, live status. All endless; the score
+is how far you got in every one.
+
+**Verified**
+- Board rules for Block Buster: 18 assertions against `board.js` covering full
+  rows, charged columns, cascade gravity, the chain it creates, and the rising
+  garbage row. All pass.
+- Room library for Gravity Flip: 19 rooms, all passing the file's own checker
+  (clear doorway, no column blocked on both surfaces, four clear columns
+  between opposite forced stretches). Sequencer checked over 4,000 picks — no
+  tier leaks, no immediate repeats.
+- Gravity Flip's flip-budget invariant measured across seven run lengths up to
+  room 600: 3.78-3.83 columns at every speed, under the budget of 4.
+- Played in a browser against a PRODUCTION build: Block Buster clears lines and
+  chains (verified with a seeded board); Neon Drift delivers, crashes, and
+  scores near misses; Skyhook swings, re-hooks and takes rings; Tower Stack
+  shears and tapers; Gravity Flip reached room 37 on a reactive bot and
+  restarted cleanly.
+- All 13 thumbnails validated by script: tag balance, quote balance, every
+  colour a real colour, every gradient reference defined, no id collisions.
+- All eleven games launched from `npm run preview`. Every one boots, paints,
+  and carries its accessible name. Console clean on all of them, with a canary
+  message proving the capture was actually working.
+
+---
+
+## 13. OPEN — judgement calls left for Duval
+
+- **Skyhook is the hardest of the eleven** and probably wants a difficulty
+  pass from a human. The physics are right and the city escalates smoothly,
+  but a first run is short. `GRAPPLE_RANGE`, `RING_METRES` and the gap curve
+  in `city.js` are the three dials.
+- **Categories.** Block Buster and Tower Stack are filed under `arcade`
+  because `CATEGORIES` in engine/manifest.js only has arcade, learning and
+  racing. A `puzzle` category would fit both plus Ballast, but it adds a
+  filter tab to the hub, so it was left alone.
+
+---
+
+## 6b. Social card images — [x] DONE
+
+One image for the whole site: public/social-card.png, wired by
+tools/inject-meta.mjs onto all fourteen pages as og:image and twitter:image,
+with the card set to "summary_large_image". The width and height in the tags
+are measured from the PNG itself rather than written in site.config.json, so
+they cannot disagree with the file. Per-game cards were considered and not
+built — eleven more images to keep in step with eleven descriptions, for a
+preview most visitors never see.
 
 ---
 
