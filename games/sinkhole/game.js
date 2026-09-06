@@ -119,6 +119,23 @@ const MAX_SCROLL = 235;
 const START_LIVES = 3;
 const INVULN_TIME = 1.6;
 
+// --- The camera ---------------------------------------------------------
+//
+// A dive reaches 1150 units/sec while the shaft rises at 235 at its very
+// fastest, so a diving player pulls away from the world downwards. With the
+// view nailed to the shaft that meant falling straight off the bottom of the
+// canvas -- and, worse, out of the region ledges are generated in, so there
+// was no floor left to land on and no way back.
+//
+// The camera follows DOWNWARD ONLY. Clamped at zero on top, so whenever the
+// player is anywhere near the ceiling the view is exactly what it always
+// was: the ceiling in frame, the spikes visible, the crush legible. It only
+// moves when the player has bought themselves room, which is the moment they
+// need to see what is underneath them instead.
+const CAM_ANCHOR = H * 0.42;   // where on screen the player sits once it moves
+const CAM_LOOKAHEAD = 130;     // extra view below at full dive speed
+const CAM_FOLLOW = 7;          // exponential follow rate, per second
+
 // --- State ---------------------------------------------------------------
 
 let depth = 0;
@@ -127,6 +144,7 @@ let invuln = 0;
 let shake = 0;
 let ledges = [];
 let dead = false;
+let camY = 0;              // how far the view has scrolled below the shaft top
 
 const P = { x: W / 2, y: 220, vx: 0, vy: 0, onGround: false, squash: 0 };
 
@@ -176,6 +194,7 @@ function reset() {
   invuln = 0;
   shake = 0;
   dead = false;
+  camY = 0;
   particles.clear();
 
   P.x = W / 2;
@@ -251,10 +270,33 @@ function update(dt) {
     hurt();
   }
 
+  updateCamera(dt);
+
   if (invuln > 0) invuln = Math.max(0, invuln - dt);
   if (shake > 0) shake = Math.max(0, shake - dt * 24);
   if (P.squash > 0) P.squash = Math.max(0, P.squash - dt * 5);
   particles.update(dt);
+}
+
+/**
+ * Where the view wants to be: far enough down to keep the player on screen,
+ * plus a lookahead that grows with fall speed.
+ *
+ * The lookahead is the point. Falling at full dive speed shifts the view a
+ * further 130 units down, so the faster you commit the more of the shaft
+ * below you can see -- which is exactly when you need to be picking the next
+ * gap. Diving blind into ledges you cannot see yet would make speed a
+ * punishment rather than the answer to hesitating.
+ */
+function cameraTarget() {
+  const dive = clamp(P.vy / MAX_DIVE_FALL, 0, 1);
+  return Math.max(0, P.y - CAM_ANCHOR + dive * CAM_LOOKAHEAD);
+}
+
+function updateCamera(dt) {
+  // Frame-rate independent easing, the same shape used everywhere else in
+  // the suite. Eased rather than snapped so landing does not jolt the view.
+  camY += (cameraTarget() - camY) * (1 - Math.exp(-dt * CAM_FOLLOW));
 }
 
 /**
@@ -329,10 +371,14 @@ function landOnLedges(bottomBefore, rise) {
 }
 
 function recycleLedges() {
-  // Off the top: gone, and a fresh one is added below so the column never
-  // runs out of floor.
+  // Off the top past the ceiling: gone, and fresh ones are added below so
+  // the column never runs out of floor.
+  //
+  // Generated to the bottom of the CAMERA'S view, not the canvas. That is
+  // the half of the camera fix that is not cosmetic: a player who dives past
+  // the last generated ledge has nothing left to land on, and falls for ever.
   ledges = ledges.filter((ledge) => ledge.y > -LEDGE_H * 2);
-  while (lowestLedgeY() < H + LEDGE_SPACING) {
+  while (lowestLedgeY() < camY + H + LEDGE_SPACING) {
     ledges.push(makeLedge(lowestLedgeY() + LEDGE_SPACING));
   }
 }
@@ -358,11 +404,16 @@ function hurt() {
   }
 
   // Dropped back to a safe height with a moment of grace, rather than
-  // respawned into the same crush.
+  // respawned into the same crush. Measured from the CEILING rather than
+  // from the canvas: the ceiling is the thing being given clearance from,
+  // and the canvas no longer says where that is.
   invuln = INVULN_TIME;
-  P.y = H * 0.42;
+  P.y = CEILING_H + H * 0.34;
   P.vy = 0;
   P.vx = 0;
+  // Snapped, not eased. A respawn is a cut, and gliding the camera across
+  // to it would spend the grace period travelling.
+  camY = cameraTarget();
 }
 
 // --- Draw ----------------------------------------------------------------
@@ -383,20 +434,36 @@ function render() {
   }
   ctx.globalAlpha = 1;
 
+  // Everything from here down is in SHAFT coordinates -- the frame the
+  // ledges, the player and the ceiling all share. The wall and its grit stay
+  // outside it: they are the backdrop, and scrolling them would turn a
+  // camera move into the whole world sliding.
+  ctx.save();
+  ctx.translate(0, -camY);
+
   // A lamp glow around the player, so the eye goes to the thing it controls.
   const lamp = ctx.createRadialGradient(P.x, P.y, 10, P.x, P.y, 210);
   lamp.addColorStop(0, ART.lamp);
   lamp.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = lamp;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, camY, W, H);
 
-  for (const ledge of ledges) drawLedge(ledge);
+  for (const ledge of ledges) {
+    // Cull what the camera has left behind. Ledges above the ceiling are
+    // deleted, but ones between the ceiling and the top of a moved view are
+    // still live -- the player can be carried back up to them.
+    if (ledge.y < camY - LEDGE_H * 2) continue;
+    if (ledge.y > camY + H) continue;
+    drawLedge(ledge);
+  }
   drawCeiling();
   particles.draw(ctx);
   drawPlayer();
 
   ctx.restore();
+  ctx.restore();
 
+  drawCeilingMarker();
   drawDepth();
 
   shell.drawHud({
@@ -497,6 +564,53 @@ function drawPlayer() {
   ctx.arc(4 + look, -3, 2.6, 0, TAU);
   ctx.fill();
 
+  ctx.restore();
+}
+
+/**
+ * The ceiling, when the camera has left it behind.
+ *
+ * Once the view drops far enough the spikes are off the top of the screen,
+ * and a threat you cannot see is a threat you cannot plan around. This draws
+ * the same spike silhouette hard against the top edge, with how far up the
+ * real one is -- so the shape says WHAT is up there and the number says how
+ * much room is left. It fades in as the ceiling leaves rather than appearing
+ * abruptly, so the two never both read as the ceiling at once.
+ */
+function drawCeilingMarker() {
+  const ceilingOnScreen = CEILING_H - camY;
+  const hidden = clamp(-ceilingOnScreen / 40, 0, 1);
+  if (hidden <= 0) return;
+
+  const clearance = Math.max(0, Math.round(P.y - PLAYER_R - CEILING_H));
+
+  ctx.save();
+  ctx.globalAlpha = hidden;
+
+  ctx.fillStyle = ART.ceiling;
+  ctx.fillRect(0, 0, W, 18);
+
+  // Half the height of the real spikes and in the shaded tone, so this
+  // never reads as the ceiling actually being at the top of the screen.
+  // It is a sign saying which way the danger is, not the danger.
+  ctx.fillStyle = ART.spikeShade;
+  const step = 24;
+  for (let x = 0; x < W; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 18);
+    ctx.lineTo(x + step / 2, 26);
+    ctx.lineTo(x + step, 18);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Centred: the shell puts the score top-left and the lives top-right, and
+  // the distance landed underneath the lives.
+  ctx.font = '700 12px system-ui, sans-serif';
+  ctx.fillStyle = ART.ceilingSpike;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(clearance) + ' to the spikes', W / 2, 9);
   ctx.restore();
 }
 
