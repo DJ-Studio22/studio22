@@ -143,6 +143,7 @@
   <script type="module">
     import { Manifest, CATEGORIES } from '/engine/manifest.js';
     import { Session } from '/engine/session.js';
+    import { thumbnailFor } from '/thumbnails.js';
     import { Input } from '/engine/input.js';
 
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -246,21 +247,21 @@
       media.className = 'card__media';
       media.dataset.category = game.category;
 
-      const monogram = document.createElement('span');
-      monogram.className = 'card__monogram';
-      monogram.setAttribute('aria-hidden', 'true');
-      monogram.textContent = game.title.charAt(0);
-      media.append(monogram);
-
-      const img = document.createElement('img');
-      img.className = 'card__img';
-      img.src = game.thumbnail;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      // No art yet: drop the broken image and let the monogram stand.
-      img.addEventListener('error', () => img.remove(), { once: true });
-      media.append(img);
+      // Inline SVG rather than an <img>. The art is markup, so it costs no
+      // network request at all -- which is the point: the old <img> pointed
+      // at a PNG that has never existed and 404ed once per card.
+      const art = thumbnailFor(game.id);
+      if (art) {
+        media.innerHTML = art;
+      } else {
+        // A game with no art yet still gets a card, and it is the same
+        // placeholder the grid has always used.
+        const monogram = document.createElement('span');
+        monogram.className = 'card__monogram';
+        monogram.setAttribute('aria-hidden', 'true');
+        monogram.textContent = game.title.charAt(0);
+        media.append(monogram);
+      }
 
       const body = document.createElement('div');
       body.className = 'card__body';

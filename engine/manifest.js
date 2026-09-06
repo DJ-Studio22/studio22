@@ -35,8 +35,13 @@ import games from '../games.json';
 
 // Every field is required on every entry. There are no optional fields on
 // purpose: a half-filled entry is a mistake, not a shortcut.
+//
+// There is deliberately no `thumbnail` here. Card artwork is inline SVG in
+// /thumbnails.js, keyed by game id, so there is no file to name -- and a
+// required field pointing at a raster that has never existed was a promise
+// the repo could not keep.
 const REQUIRED_FIELDS = [
-  'id', 'title', 'tagline', 'description', 'category', 'thumbnail', 'path',
+  'id', 'title', 'tagline', 'description', 'category', 'path',
   'difficulty', 'ageRange', 'inputRequirement', 'tags', 'featured',
   'tournamentReady', 'estimatedRunTime', 'status',
 ];
@@ -222,7 +227,7 @@ export const Manifest = {
 //
 // // Landing page: the featured strip.
 // for (const game of Manifest.getFeatured()) {
-//   renderHeroCard(game.title, game.tagline, game.thumbnail, game.path);
+//   renderHeroCard(game.title, game.tagline, game.path);
 // }
 //
 // // Arcade hub: a section per category, plus session bests from session.js.

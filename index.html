@@ -339,7 +339,10 @@
         <h2 class="footer__heading">Contact</h2>
         <p class="footer__text">
           Enquiries welcome.
-          <a class="footer__link" href="#contact">Add contact details</a>
+          <a class="footer__link"
+             href="https://www.linkedin.com/in/timothy-jackson-bb084432a/"
+             target="_blank"
+             rel="noopener">Timothy Jackson on LinkedIn</a>
         </p>
       </div>
     </div>
@@ -348,6 +351,7 @@
 
   <script type="module">
     import { Manifest } from '/engine/manifest.js';
+    import { thumbnailFor } from '/thumbnails.js';
 
     // Honour the OS setting once, up front. Everything below branches on it
     // rather than animating and then apologising.
@@ -369,23 +373,21 @@
       media.className = 'game-card__media';
       media.dataset.category = game.category;
 
-      // Stands in for artwork that does not exist yet, and stays behind the
-      // real image once it does. A missing file then degrades to something
-      // deliberate instead of a broken-image icon.
-      const monogram = document.createElement('span');
-      monogram.className = 'game-card__monogram';
-      monogram.setAttribute('aria-hidden', 'true');
-      monogram.textContent = game.title.charAt(0);
-      media.append(monogram);
-
-      const img = document.createElement('img');
-      img.className = 'game-card__img';
-      img.src = game.thumbnail;
-      img.alt = `Key art for ${game.title}`;
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.addEventListener('error', () => img.remove(), { once: true });
-      media.append(img);
+      // Inline SVG rather than an <img>. The art is markup, so the page
+      // still makes no image requests at all -- the <img> this replaces
+      // pointed at a PNG that has never existed and 404ed once per card.
+      const art = thumbnailFor(game.id);
+      if (art) {
+        media.innerHTML = art;
+      } else {
+        // Stands in for artwork that does not exist yet, so a game added to
+        // games.json still gets a card without touching any other file.
+        const monogram = document.createElement('span');
+        monogram.className = 'game-card__monogram';
+        monogram.setAttribute('aria-hidden', 'true');
+        monogram.textContent = game.title.charAt(0);
+        media.append(monogram);
+      }
 
       const body = document.createElement('div');
       body.className = 'game-card__body';
