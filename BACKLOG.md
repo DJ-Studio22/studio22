@@ -134,6 +134,71 @@ A top-down time-trial racer.
 
 ---
 
+## 8. Circuit Racer — depth pass — [x] DONE
+
+**Done**
+- Split into three files: `tracks.js` (circuits as data + geometry),
+  `driving.js` (physics, AI, lap counting, no DOM), `game.js` (everything
+  that touches a screen). The split is what made the difficulty claim
+  testable rather than asserted.
+- Casual / Standard / Pro, defaulting to Casual, tuned over 1,200 simulated
+  races. First-timer wins 75% on Casual and 0% above it.
+- Four circuits, race length 3/5/10, three rivals, slipstream, live
+  position, sector splits, start lights with a jump-start penalty, screen
+  shake, tyre marks, dust, engine pitch.
+
+**Verified**
+- 40 assertions over `tracks.js` geometry; every circuit passes validation.
+- Race simulation across all four circuits at 3 and 10 laps.
+- Driven in a browser: all four render, finish lines span the road, cars
+  stop at the flag, results classify the whole field.
+
+---
+
+## 9. Sinkhole — camera — [x] DONE
+
+**Done**
+- Camera follows the fall downward only, with lookahead that grows with
+  fall speed. Ledges generate to the bottom of the camera view, which is
+  the part that actually fixed falling for ever.
+- The ceiling is marked at the top of the screen with its clearance when
+  the camera has left it behind.
+
+---
+
+## 10. Card artwork — [x] DONE
+
+**Done**
+- Drawn SVG thumbnails for all eight games in `/thumbnails.js`, each in its
+  own game palette. Replaces the gradient-and-monogram placeholder.
+- Removes the last image requests from the site: the `<img>` on each card
+  pointed at a PNG that never existed. The dead `thumbnail` field is gone
+  from the manifest schema and from every entry.
+- Validated by script, not by eye: tag and quote balance, every colour a
+  real colour, every gradient defined, no id collisions between cards.
+
+---
+
+## 11. Ballast and Ember — NOT STARTED
+
+Both are in `games.json` as `coming-soon` with taglines, descriptions,
+tags and artwork. Neither has a `games/` folder yet, so both are listed
+and neither is reachable.
+
+**Ballast** — falling crates into a floating hold. The twist is that a
+crate is a WEIGHT: where it lands tilts the hull, a hull far enough over
+ships water, and a packed row battens down and slides out of the bottom
+rather than vanishing. Crates are odd shapes, deliberately not the seven
+standard ones, with their own rotation and their own scoring (tonnage
+stowed, not lines cleared).
+
+**Ember** — one-button balloon up a gorge at dusk. Hold the burner to
+rise, release to sink; momentum is the whole skill, so the gap has to be
+read early. The genre is shared; the character, the palette and the place
+are not.
+
+---
+
 ## 6b. OPEN — social card images
 
 og:image and twitter:image are deliberately absent: there are no image assets,
