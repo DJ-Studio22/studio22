@@ -131,7 +131,10 @@ export class GameShell {
   #selected = 0;
   #navLatch = 0; // last frame's nav direction, for edge-triggered movement
 
-  #soundOn = true;
+  // Seeded from the visit's preference rather than hardcoded on, so a player
+  // who muted the site on the landing page gets a muted game. The pause menu
+  // still flips it per game, and that writes back through setSound().
+  #soundOn = Session.isSoundOn();
   #tournamentMode = false;
   #touchCapable = false;
 
@@ -455,6 +458,7 @@ export class GameShell {
 
   setSound(on) {
     this.#soundOn = Boolean(on);
+    Session.setSoundOn(this.#soundOn);
     this.#applyAudio();
   }
 

@@ -98,6 +98,14 @@ const directions = new Map(); // gameId -> 'high' | 'low'
 // that ended without a score still happened.
 const playedGames = new Set();
 
+// Whether sound is on for this visit. A PREFERENCE rather than data about the
+// visit, which is why it survives clear() the same way score directions do.
+// It lives here rather than per game so the toggle on the landing page means
+// something: turn it off before picking a game and the game starts muted.
+// Defaults to on, because a games site that opens silent has hidden half of
+// what it made.
+let soundOn = true;
+
 // --- Storage ------------------------------------------------------------
 
 // Resolved once. The write probe matters: some browsers expose
@@ -156,6 +164,7 @@ function load() {
     for (const id of Array.isArray(data.played) ? data.played : []) {
       if (typeof id === 'string') playedGames.add(id);
     }
+    if (typeof data.soundOn === 'boolean') soundOn = data.soundOn;
   } catch (error) {
     console.warn(`[session] Ignoring unreadable saved session: ${error.message}`);
     try { storage.removeItem(STORAGE_KEY); } catch { /* nothing more to do */ }
@@ -173,6 +182,7 @@ function save() {
       stats: Object.fromEntries(latestStats),
       directions: Object.fromEntries(directions),
       played: [...playedGames],
+      soundOn,
     }));
   } catch {
     // Quota exceeded, or storage revoked mid-session. The in-memory copy is
@@ -336,6 +346,19 @@ export const Session = {
   getRunStats(gameId) {
     const stats = latestStats.get(gameId);
     return stats ? { ...stats } : null;
+  },
+
+  // Whether sound is on for this visit. Read by engine/shell.js at boot, so
+  // the site-level toggle and each game's own Sound menu item are one switch
+  // rather than two that disagree.
+  isSoundOn() {
+    return soundOn;
+  },
+
+  setSoundOn(on) {
+    soundOn = Boolean(on);
+    save();
+    return soundOn;
   },
 
   // gameIds played this visit, oldest first, for the arcade hub to decorate
