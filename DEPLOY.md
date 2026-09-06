@@ -108,12 +108,34 @@ Run them when:
 
 ## Still outstanding
 
-**Social card images.** `og:image` and `twitter:image` are absent, and the
-Twitter card is `summary` rather than `summary_large_image`, because there
-are no image assets and a card pointing at a missing image renders as a
-broken box. Needs one 1200×630 PNG — one for the site would do, one per game
-would be better. Add them to `public/`, then add the two tags to
-`metaBlock()` in `tools/inject-meta.mjs` and switch the card type.
+**Social card image.** The tooling is in place and waiting for the file.
+Drop a **1200×630 PNG** at:
+
+```
+public/social-card.png
+```
+
+then run `node tools/inject-meta.mjs`. That adds `og:image`,
+`og:image:width`, `og:image:height`, `og:image:alt`, `twitter:image` and
+`twitter:image:alt` to all nine pages and switches the Twitter card to
+`summary_large_image`. The URL is built from `origin` in
+`site.config.json`, like every other absolute URL.
+
+Until that file exists the tool prints a warning and emits no image tags at
+all — a card pointing at a missing image renders as a broken box, which is
+worse than having no card.
+
+The dimensions in the tags are read out of the PNG itself rather than taken
+from the config, so they cannot disagree with the file. If the image is not
+1200×630 the tool says so and still states the true size; the big networks
+crop to roughly 1.91:1, so anything else loses its edges.
+
+The filename and alt text are in `site.config.json` under `socialCard` if
+you would rather call it something else.
+
+One image is used for every page. Per-game cards would be better — six more
+images to keep in step with six descriptions — and are deliberately not
+built yet.
 
 **`test-engine.html` and `identity.html`** are development pages. They are
 not in the Vite build inputs, so they are not deployed — they live in the

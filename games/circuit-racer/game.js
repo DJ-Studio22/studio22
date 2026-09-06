@@ -118,6 +118,11 @@ Input.setTouchLayout([
 
 // THE POINT OF THIS GAME, as far as the rest of the suite is concerned.
 // A lap time is better when it is smaller.
+//
+// Registered once for the game, not once per circuit. Session looks the
+// direction up by game id even when a score carries a variant, so adding a
+// fifth circuit to tracks.js cannot forget to register one and start ranking
+// its lap times upward.
 Session.setScoreDirection(GAME_ID, 'low');
 
 audio.define({
@@ -681,7 +686,7 @@ function finishRace() {
   // which reads like a bug to the one player it is shown to.
   if (jumped) stats.penalty = 'Jump start, 3s';
 
-  shell.showGameOver(score, stats);
+  shell.showGameOver(score, stats, { variant: track.id });
 }
 
 // --- Formatting ----------------------------------------------------------
@@ -863,7 +868,10 @@ function drawHud() {
   ctx.fillStyle = ART.hudPanel;
   ctx.fill();
 
-  const stored = Session.getBest(GAME_ID);
+  // This circuit's record, not the game's. A 4.55 set on Sunset Loop is not
+  // a target on The Long Way -- it is a number the player never set here and
+  // on the longer circuits cannot physically beat.
+  const stored = Session.getBest(GAME_ID, { variant: track.id });
 
   UI.text(ctx, 'LAP ' + Math.min(lap, chosenLaps) + ' / ' + chosenLaps, 28, 34, {
     size: 15, color: ART.hudLabel, font: 'display', weight: '700', baseline: 'middle',

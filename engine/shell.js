@@ -386,10 +386,24 @@ export class GameShell {
    * Ends the run: records the score, records any stats, and shows the game
    * over screen with a celebration if the score is a new session best.
    */
-  showGameOver(score, stats = null) {
+  /**
+   * Ends the run: submits the score and shows the results panel.
+   *
+   * `variant` is for a game that keeps several separate records -- Circuit
+   * Racer has one per circuit. Pass it and the panel shows the record for
+   * the thing that was just played, rather than a number set somewhere the
+   * player has not been. The game-level best is still kept for the arcade
+   * card; see Session.submitScore.
+   *
+   * @param {number} score
+   * @param {object|null} [stats]   Extra lines for the panel.
+   * @param {object} [options]
+   * @param {string|null} [options.variant]
+   */
+  showGameOver(score, stats = null, { variant = null } = {}) {
     this.#finalScore = score;
 
-    const result = Session.submitScore(this.#gameId, score);
+    const result = Session.submitScore(this.#gameId, score, { variant });
     this.#isBest = result.isBest;
 
     if (stats) Session.setRunStats(this.#gameId, stats);
@@ -397,7 +411,7 @@ export class GameShell {
 
     // Read back rather than reusing the submitted score: on a run that
     // didn't beat the best, the best is the older, better number.
-    this.#sessionBest = Session.getBest(this.#gameId);
+    this.#sessionBest = Session.getBest(this.#gameId, { variant });
 
     this.#openScreen(SCREEN.GAMEOVER);
   }

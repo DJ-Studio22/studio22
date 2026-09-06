@@ -187,6 +187,31 @@ function isBetter(candidate, current, direction) {
   return direction === 'low' ? candidate < current : candidate > current;
 }
 
+// --- Variants -----------------------------------------------------------
+//
+// Some games are really several records in a trenchcoat. Circuit Racer has
+// four circuits, and a lap time set on one of them says nothing at all about
+// another -- showing a 4.55 from the short circuit while the player is on the
+// long one is a number they cannot beat and never set on that track.
+//
+// A variant is a sub-record WITHIN a game, not a game of its own. That
+// distinction is the whole design:
+//
+//   * the score DIRECTION is looked up by gameId, never by variant, so a new
+//     circuit cannot forget to register and start ranking lap times upward;
+//   * playedGames records the gameId only, so the arcade hub keeps getting
+//     ids it can find in games.json;
+//   * a variant score updates the game-level best too, so the hub still has
+//     one number per game -- your fastest lap anywhere.
+//
+// The separator cannot appear in a game id (games.json ids are kebab-case),
+// so a variant key can never collide with a real one.
+const VARIANT_SEPARATOR = "::";
+
+function keyFor(gameId, variant) {
+  return variant ? gameId + VARIANT_SEPARATOR + variant : gameId;
+}
+
 // --- Public interface ---------------------------------------------------
 
 export const Session = {
@@ -227,11 +252,24 @@ export const Session = {
 
   /**
    * Records a score for the run that just ended.
-   * @returns {{ isBest: boolean, previousBest: number|null }} previousBest is
-   *          null when this is the game's first score this visit.
+   *
+   * Pass a `variant` for a game that keeps several separate records -- a
+   * circuit, a difficulty, a mode. The variant gets its own best AND the
+   * game-level best is updated alongside it, so the hub still has one number
+   * per game while the player chases the record for the thing they are
+   * actually playing. See the note above keyFor.
+   *
+   * @returns {{ isBest: boolean, previousBest: number|null }} both describe
+   *          the VARIANT when one is given -- that is the record on screen,
+   *          and the one a "new best" flourish should be celebrating.
+   *          previousBest is null when this is its first score this visit.
    */
-  submitScore(gameId, score) {
-    const previousBest = bestScores.get(gameId) ?? null;
+  submitScore(gameId, score, { variant = null } = {}) {
+    const key = keyFor(gameId, variant);
+    const previousBest = bestScores.get(key) ?? null;
+
+    // The GAME is what was played, not the variant. Anything reading this
+    // back is looking games up in games.json, where a variant does not exist.
     playedGames.add(gameId);
 
     // NaN would be a disaster to store: every comparison against it is
@@ -244,13 +282,27 @@ export const Session = {
       return { isBest: false, previousBest };
     }
 
+    // Looked up by gameId even for a variant: which way a game scores is a
+    // fact about the game. A variant that had to register its own direction
+    // could forget to, and default to ranking lap times upward.
     const direction = directions.get(gameId) ?? DEFAULT_DIRECTION;
 
     // The first score of the visit always counts. After that it has to
     // actually beat the standing best -- matching it is not beating it, so
     // a tie leaves the best alone and reports isBest: false.
     const isBest = previousBest === null || isBetter(score, previousBest, direction);
-    if (isBest) bestScores.set(gameId, score);
+    if (isBest) bestScores.set(key, score);
+
+    // The game-level best spans every variant: your fastest lap on any
+    // circuit is still your fastest lap, and it is what the arcade card
+    // shows. Kept in step here rather than by a second call the caller
+    // could forget to make.
+    if (variant) {
+      const overall = bestScores.get(gameId) ?? null;
+      if (overall === null || isBetter(score, overall, direction)) {
+        bestScores.set(gameId, score);
+      }
+    }
 
     save();
     return { isBest, previousBest };
@@ -258,8 +310,11 @@ export const Session = {
 
   // Best score this visit, or null if this game hasn't been played. Note
   // `?? null` rather than `|| null`, so a legitimate best of 0 survives.
-  getBest(gameId) {
-    return bestScores.get(gameId) ?? null;
+  //
+  // With a variant, the best for that circuit/mode/difficulty alone. Without
+  // one, the best across all of them.
+  getBest(gameId, { variant = null } = {}) {
+    return bestScores.get(keyFor(gameId, variant)) ?? null;
   },
 
   /**

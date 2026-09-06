@@ -23,6 +23,96 @@ const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, 'site.config.json'), '
 const ORIGIN = CONFIG.origin;
 const SITE_NAME = CONFIG.siteName;
 
+// --- The social card ----------------------------------------------------
+//
+// One image for the whole site. Per-game cards would be better and are not
+// built: they would need six more images kept in step with six descriptions.
+//
+// The dimensions are measured from the FILE rather than written in the
+// config. A config that says 1200x630 over a file that is 1200x600 produces
+// tags a crawler believes and a card that renders cropped, and nothing would
+// ever tell you. Measuring means the tags cannot disagree with the file.
+const CARD_W = 1200;
+const CARD_H = 630;
+
+/**
+ * Width and height out of a PNG header.
+ *
+ * A PNG opens with an 8-byte signature and then the IHDR chunk: 4 bytes of
+ * length, the tag "IHDR", then width and height as big-endian 32-bit ints.
+ * That is the whole format needed here, so there is no dependency for it.
+ */
+function pngSize(file) {
+  const buf = fs.readFileSync(file);
+  const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (buf.length < 24 || !buf.subarray(0, 8).equals(SIGNATURE)) return null;
+  if (buf.subarray(12, 16).toString('ascii') !== 'IHDR') return null;
+  return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+}
+
+/**
+ * The card, or null if there is not one to point at.
+ *
+ * Null is a first-class answer. Naming an image that is not there is worse
+ * than naming none: a card pointing at a 404 renders as a broken box, which
+ * is exactly why og:image was left out until now.
+ */
+function socialCard() {
+  const configured = CONFIG.socialCard;
+  if (!configured || !configured.path) return null;
+
+  // Served from the site root, and Vite copies public/ to the root of dist/,
+  // so a path of "/social-card.png" is the file "public/social-card.png".
+  const relative = configured.path.startsWith('/')
+    ? configured.path.slice(1)
+    : configured.path;
+  const file = path.join(ROOT, 'public', relative);
+
+  if (!fs.existsSync(file)) {
+    console.warn([
+      '',
+      `[inject-meta] No social card at public/${relative}.`,
+      '  Skipping og:image and twitter:image, and leaving the Twitter card as',
+      '  "summary" -- a large-image card pointing at a missing file renders as',
+      '  a broken box, which is the whole reason these tags were left out.',
+      `  Put a ${CARD_W}x${CARD_H} PNG there and run this again.`,
+      '',
+    ].join('\n'));
+    return null;
+  }
+
+  const size = pngSize(file);
+  if (!size) {
+    console.warn([
+      '',
+      `[inject-meta] public/${relative} is not a readable PNG.`,
+      '  Skipping the image tags rather than pointing a crawler at something',
+      '  it cannot render.',
+      '',
+    ].join('\n'));
+    return null;
+  }
+
+  if (size.width !== CARD_W || size.height !== CARD_H) {
+    console.warn([
+      '',
+      `[inject-meta] Social card is ${size.width}x${size.height}, not ${CARD_W}x${CARD_H}.`,
+      '  The tags state its real size, so nothing lies -- but the big networks',
+      '  crop to roughly 1.91:1, so expect the edges to be cut off.',
+      '',
+    ].join('\n'));
+  }
+
+  return {
+    url: ORIGIN + configured.path,
+    width: size.width,
+    height: size.height,
+    alt: configured.alt || SITE_NAME,
+  };
+}
+
+const CARD = socialCard();
+
 const START = '  <!-- BEGIN generated metadata — tools/inject-meta.mjs -->';
 const END = '  <!-- END generated metadata -->';
 
@@ -50,16 +140,40 @@ function metaBlock({ file, url, title, description, jsonLd }) {
     `  <meta property="og:title" content="${esc(title)}" />`,
     `  <meta property="og:description" content="${esc(description)}" />`,
     `  <meta property="og:url" content="${ORIGIN}${url}" />`,
+  ];
+
+  // One card for the whole site, on every page, emitted from one place so a
+  // page cannot be added later and quietly ship without it. When there is no
+  // card the tags are omitted and the Twitter card stays "summary": claiming
+  // a large image without one renders as a broken box.
+  if (CARD) {
+    lines.push(
+      `  <meta property="og:image" content="${CARD.url}" />`,
+      `  <meta property="og:image:width" content="${CARD.width}" />`,
+      `  <meta property="og:image:height" content="${CARD.height}" />`,
+      `  <meta property="og:image:alt" content="${esc(CARD.alt)}" />`,
+    );
+  }
+
+  lines.push(
     '',
-    // summary rather than summary_large_image: there is no og:image yet, and
-    // claiming a large image card without one renders as a broken box.
-    `  <meta name="twitter:card" content="summary" />`,
+    `  <meta name="twitter:card" content="${CARD ? 'summary_large_image' : 'summary'}" />`,
     `  <meta name="twitter:title" content="${esc(title)}" />`,
     `  <meta name="twitter:description" content="${esc(description)}" />`,
+  );
+
+  if (CARD) {
+    lines.push(
+      `  <meta name="twitter:image" content="${CARD.url}" />`,
+      `  <meta name="twitter:image:alt" content="${esc(CARD.alt)}" />`,
+    );
+  }
+
+  lines.push(
     '',
     `  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />`,
     `  <link rel="manifest" href="/site.webmanifest" />`,
-  ];
+  );
   if (jsonLd) lines.push('', ldJson(jsonLd));
   lines.push(END);
   return lines.join('\n');
