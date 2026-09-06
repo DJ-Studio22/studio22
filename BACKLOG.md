@@ -231,14 +231,21 @@ is how far you got in every one.
 
 ## 13. OPEN — judgement calls left for Duval
 
-- **Skyhook is the hardest of the eleven** and probably wants a difficulty
-  pass from a human. The physics are right and the city escalates smoothly,
-  but a first run is short. `GRAPPLE_RANGE`, `RING_METRES` and the gap curve
-  in `city.js` are the three dials.
-- **Categories.** Block Buster and Tower Stack are filed under `arcade`
-  because `CATEGORIES` in engine/manifest.js only has arcade, learning and
-  racing. A `puzzle` category would fit both plus Ballast, but it adds a
-  filter tab to the hub, so it was left alone.
+- **Skyhook difficulty — [x] DONE.** Two real faults found by measurement
+  rather than tuning: the hook refused 86% of the anchors it could reach
+  (anything below the player), and only 21% of swings were on a rope short
+  enough to clear the roof they hung from. Competent first runs went from
+  21 m / 1.8 s to 67 m / 5.5 s, runs under 25 m from 256/300 to 33/300, while
+  the good/competent gap widened from 1.67x to 8.99x. Full numbers in
+  PROGRESS.md.
+- **Categories — [x] DONE.** `puzzle` added; Block Buster, Tower Stack and
+  Ballast moved into it.
+- **OPEN: the bot harness is not in the repo.** Skyhook's difficulty numbers
+  come from a script that drives swing.js at two skill levels over seeded
+  runs. It lives in a scratch directory, like Circuit Racer's race simulation
+  and Number Crunch's arithmetic checks before it — this repo has never kept
+  its test scripts. Worth deciding whether that stays true now that three
+  games have testable rule modules.
 
 ---
 

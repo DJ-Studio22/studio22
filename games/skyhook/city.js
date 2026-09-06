@@ -24,22 +24,75 @@
 // city keeps getting harder for as long as anyone can keep up with it.
 //
 // This file has no canvas and no input in it. It is a generator: give it the
-// distance travelled and it hands back geometry.
+// distance travelled and it hands back geometry. Every number it uses is in
+// CITY_TUNING so a bot harness can clone it, change one figure and run both
+// versions over the same seeds — see swing.js for the same arrangement and
+// the same reason.
 
 import { clamp, randInt, randRange } from '../../engine/util.js';
 
-// The distance over which the city goes from its easiest to roughly its
-// hardest. Past this the curves keep moving, just more slowly.
-const RAMP = 26000;
+export const CITY_TUNING = {
+  // How quickly the city gets hard. `curve` shapes the approach: 1 is a plain
+  // hyperbolic ramp, which rises FASTEST at the very start; 2 makes the first
+  // stretch nearly flat and moves the work later. Either way the value eases
+  // toward 1 and never reaches it, so nothing ever stops getting harder.
+  ramp: 26000,
+  curve: 2,
 
-// A ring is worth taking, so it must be reachable — but only just. It hangs
-// over the middle of a gap at a height that climbs with the distance, which is
-// what turns "swing high" from advice into the thing the score is made of.
-const RING_CHANCE = 0.72;
+  // Buildings narrow as the run goes on.
+  widthMin: 150,
+  widthMinDrop: 80,
+  widthMax: 205,
+  widthMaxDrop: 120,
 
+  // The gap between them widens. The main dial.
+  gapMin: 85,
+  gapMinGrow: 170,
+  gapMax: 145,
+  gapMaxGrow: 290,
+
+  // How far a roof may step from the one before it.
+  roofSpread: 70,
+  roofSpreadGrow: 200,
+  roofHighest: 120,
+  roofLowest: 560,
+
+  // The mast is the anchor, and its height is not decoration: see the
+  // geometry contract on ropeMax in swing.js. A swing clears the building it
+  // hangs from only while the rope is shorter than the mast, so masts of
+  // 40-90 against ropes of ~180 meant four swings in five went through the
+  // roof. Tall masts are what make the city swingable at all; the tall-mast
+  // bonus is now a smaller multiplier because the base is already high.
+  mastMin: 160,
+  mastMax: 240,
+  mastMaxGrow: 120,
+  tallMastChance: 0.22,
+  tallMastFactor: 1.3,
+
+  // A ring hangs over the middle of a gap at a height that climbs with the
+  // distance, which is what turns "swing high" from advice into the thing the
+  // score is made of.
+  ringChance: 0.72,
+  ringLiftMin: 60,
+  ringLiftMinGrow: 90,
+  ringLiftMax: 150,
+  ringLiftMaxGrow: 220,
+  ringRadius: 26,
+};
+
+/**
+ * How far up the difficulty curve a given distance is, 0 to (never quite) 1.
+ *
+ * s/(1+s) is the same easing as 1 - 1/(1+s), written the way it reads: a
+ * quantity that grows without bound, squashed into a fraction that approaches
+ * one. Raising the input to a power before squashing is what lets the opening
+ * of a run be flat while the far end keeps climbing.
+ */
 export function difficultyAt(distance) {
-  // Eases toward 1 and never reaches it, so nothing ever stops getting harder.
-  return 1 - 1 / (1 + distance / RAMP);
+  const c = CITY_TUNING;
+  const x = Math.max(0, distance) / c.ramp;
+  const s = c.curve === 1 ? x : x ** c.curve;
+  return s / (1 + s);
 }
 
 /**
@@ -49,20 +102,21 @@ export function difficultyAt(distance) {
  * @param {number} distance  How far the player has travelled, in world units.
  */
 export function nextBuilding(previous, distance) {
+  const c = CITY_TUNING;
   const t = difficultyAt(distance);
 
-  const width = randRange(150 - t * 80, 205 - t * 120);
-  const gap = randRange(85 + t * 170, 145 + t * 290);
+  const width = randRange(c.widthMin - t * c.widthMinDrop, c.widthMax - t * c.widthMaxDrop);
+  const gap = randRange(c.gapMin + t * c.gapMinGrow, c.gapMax + t * c.gapMaxGrow);
 
   // Roofs wander rather than jumping: each is a step from the last one, and
   // the size of the step is what grows. A skyline of independent random
   // heights reads as noise and is impossible to plan a swing across.
-  const spread = 70 + t * 200;
+  const spread = c.roofSpread + t * c.roofSpreadGrow;
   const previousTop = previous ? previous.top : 420;
   const top = clamp(
     previousTop + randRange(-spread, spread),
-    120,          // nothing taller than this, or the anchors leave the screen
-    560,          // nothing shorter, or there is no building left to hit
+    c.roofHighest,   // nothing taller, or the anchors leave the screen
+    c.roofLowest,    // nothing shorter, or there is no building left to hit
   );
 
   const x = previous ? previous.x + previous.w + gap : 0;
@@ -71,8 +125,8 @@ export function nextBuilding(previous, distance) {
     x,
     w: width,
     top,
-    // The mast is the anchor. Taller ones are rarer and are the fast line.
-    mast: randRange(40, 90 + t * 110) * (Math.random() < 0.22 ? 1.7 : 1),
+    mast: randRange(c.mastMin, c.mastMax + t * c.mastMaxGrow)
+      * (Math.random() < c.tallMastChance ? c.tallMastFactor : 1),
     // Cosmetic, but fixed per building so the windows do not shimmer as the
     // camera moves.
     seed: randInt(0, 99999),
@@ -92,16 +146,17 @@ export function anchorOf(building) {
  * something you have to swing up to rather than something you fall through.
  */
 export function ringBetween(left, right, distance) {
-  if (Math.random() > RING_CHANCE) return null;
+  const c = CITY_TUNING;
+  if (Math.random() > c.ringChance) return null;
 
   const t = difficultyAt(distance);
   const floor = Math.max(left.top, right.top);
-  const lift = randRange(60 + t * 90, 150 + t * 220);
+  const lift = randRange(c.ringLiftMin + t * c.ringLiftMinGrow, c.ringLiftMax + t * c.ringLiftMaxGrow);
 
   return {
     x: (left.x + left.w + right.x) / 2,
     y: clamp(floor - lift, 60, 520),
-    r: 26,
+    r: c.ringRadius,
     taken: false,
     missed: false,
   };

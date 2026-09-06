@@ -34,7 +34,10 @@
 // in — and they climb faster than the roofs do. Playing safe is a slow way to
 // lose rather than a way to survive.
 //
-// The city generator is in city.js.
+// The simulation — rope, body, city, rings, collisions — is in swing.js, with
+// no canvas or input device in it, so the difficulty can be driven by a bot a
+// thousand runs at a time rather than argued about. The city generator it
+// draws on is in city.js. This file is the parts that touch a screen.
 
 import { GameCanvas } from '../../engine/canvas.js';
 import { GameLoop } from '../../engine/loop.js';
@@ -43,52 +46,17 @@ import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, clamp, randRange } from '../../engine/util.js';
-import { anchorOf, difficultyAt, nextBuilding, ringBetween } from './city.js';
+import { anchorOf, difficultyAt } from './city.js';
+import { HOOK, Swing } from './swing.js';
 
 const GAME_ID = 'skyhook';
 
 const W = 900;
 const H = 520;
 
-// --- Physics -------------------------------------------------------------
-
-const GRAVITY = 950;
-const AIR_DRAG_PER_SECOND = 0.94;   // very light: momentum has to survive
-const DIVE_ACCEL = 1500;            // tuck in mid-air to trade height for speed
-const MAX_SPEED = 1400;
-
-// Rope limits. The minimum is short enough to whip round the mast, the
-// maximum long enough to cross the widest early gap in one arc.
-const ROPE_MIN = 46;
-const ROPE_MAX = 380;
-const REEL_IN_SPEED = 210;
-const REEL_OUT_SPEED = 260;
-
-// How far the hook can reach, and how far behind the player it will accept an
-// anchor. Anchors behind you are allowed but heavily penalised, because
-// sometimes the only way out of a bad arc is to swing backwards first.
-const GRAPPLE_RANGE = 470;
-const BEHIND_PENALTY = 2.6;
-
-// The hook takes time to fly out. Short, but not zero: an instant attach makes
-// the timing free, and the timing is the game.
-const HOOK_TRAVEL_SPEED = 2600;
-
-// The opening swing. Angle is measured from straight down, negative meaning
-// behind the anchor, so the run starts at the top of a forward arc.
-const START_SPEED = 380;
-const OPENING_MAST = 260;
-const OPENING_ROPE = 170;
-const OPENING_ANGLE = -0.9;
-
-// --- Scoring -------------------------------------------------------------
-//
-// One unit for everything: metres. Distance is metres, and a ring is worth a
-// number of metres you did not have to travel for. Two currencies would make
-// the score unreadable, and "how far did you get" is the whole promise.
-const UNITS_PER_METRE = 20;
-const RING_METRES = 10;
-const COMBO_CAP = 8;
+// Every number the feel of this game lives in is TUNING in swing.js. Nothing
+// here may hold a copy of one: two sets of physics constants is exactly the
+// drift that a separate simulation file exists to prevent.
 
 // --- Art palette ---------------------------------------------------------
 //
@@ -180,372 +148,118 @@ audio.define({
 
 // --- State ---------------------------------------------------------------
 
-const hero = { x: 0, y: 0, vx: 0, vy: 0, r: 11, angle: 0 };
+// The whole simulation. Everything the game knows about where the player is,
+// what the rope is doing and how far they have got lives in here.
+const swing = new Swing();
 
-// The hook has three states, and they are worth naming: nothing out, a hook in
-// flight, and a rope under tension. Most of update() branches on this.
-const HOOK = { IDLE: 'idle', FLYING: 'flying', ATTACHED: 'attached' };
-let hookState = HOOK.IDLE;
-let hookTarget = null;     // { x, y } the anchor being flown at or hung from
-let hookTip = { x: 0, y: 0 };
-let ropeLength = 0;
-
-let buildings = [];
-let rings = [];
 let camX = 0;
 let camY = 0;
-
-let bonusMetres = 0;
-let combo = 0;
-let bestCombo = 0;
-let ringsTaken = 0;
-let ringsMissed = 0;
-let furthest = 0;
-let topSpeed = 0;
-let swings = 0;
-let running = false;
 let shakeTime = 0;
-let deathReason = '';
 
 const stars = [];
 for (let i = 0; i < 90; i++) {
   stars.push({ x: randRange(0, W * 3), y: randRange(0, H * 0.6), r: randRange(0.5, 1.5) });
 }
 
-// --- Distance and score --------------------------------------------------
+// --- Reactions to the simulation -----------------------------------------
+//
+// swing.step() reports what happened; this is the only place that turns those
+// into sound, particles and the game over screen.
 
-const metres = () => Math.floor(furthest / UNITS_PER_METRE) + bonusMetres;
-
-// --- City upkeep ---------------------------------------------------------
-
-function extendCity() {
-  // Keep roughly two screens of city ahead, so an anchor is always visible
-  // before it needs to be aimed at.
-  while (buildings.length === 0
-    || buildings[buildings.length - 1].x < hero.x + W * 2) {
-    const previous = buildings[buildings.length - 1] ?? null;
-    const building = nextBuilding(previous, hero.x);
-    buildings.push(building);
-
-    if (previous) {
-      const ring = ringBetween(previous, building, hero.x);
-      if (ring) rings.push(ring);
+function handleEvents() {
+  for (const event of swing.drainEvents()) {
+    switch (event.type) {
+      case 'fired':
+        audio.play('fire');
+        break;
+      case 'fireMissed':
+        // Nothing in reach. Said out loud, quietly, because a hook fired at
+        // nothing used to be completely silent and read as a dropped input.
+        audio.play('fire', { pitch: 0.5, volume: 0.5 });
+        break;
+      case 'attached':
+        audio.play('attach');
+        break;
+      case 'released':
+        audio.play('release');
+        break;
+      case 'reeling':
+        // Thinned out: the event fires every step the rope is shortening.
+        if (Math.random() < 0.25) audio.play('reel', { pitchVariance: 0.3 });
+        break;
+      case 'ring':
+        audio.play('ring', { pitch: 1 + event.combo * 0.07 });
+        particles.sparkle(event.ring.x, event.ring.y, {
+          count: 16, colors: [ART.ring.outer, ART.hero.body],
+        });
+        break;
+      case 'died':
+        onDied(event.reason);
+        break;
+      default:
+        break;
     }
   }
-
-  // Recycle. A full screen of history is kept so the camera can look back
-  // during a long fall without the world vanishing behind it.
-  const cutoff = hero.x - W;
-  while (buildings.length > 2 && buildings[0].x + buildings[0].w < cutoff) buildings.shift();
-  while (rings.length > 0 && rings[0].x < cutoff) rings.shift();
 }
 
-// --- Grapple -------------------------------------------------------------
-
-/**
- * The anchor the hook would take right now, or null.
- *
- * Scored rather than "nearest": the nearest anchor is often the one directly
- * overhead, which gives a swing that goes nowhere. Anchors ahead and above are
- * preferred, and one behind is only chosen when there is nothing else — which
- * is the escape hatch when an arc has gone wrong.
- */
-function bestAnchor() {
-  let best = null;
-  let bestCost = Infinity;
-
-  for (const building of buildings) {
-    const a = anchorOf(building);
-    const dx = a.x - hero.x;
-    const dy = a.y - hero.y;
-    const dist = Math.hypot(dx, dy);
-
-    if (dist > GRAPPLE_RANGE || dist < ROPE_MIN) continue;
-    // A rope can only pull upward. An anchor level with or below the player
-    // would put them in a rope that goes slack the instant it tightens.
-    if (dy > -20) continue;
-
-    const cost = dist * (dx < 0 ? BEHIND_PENALTY : 1);
-    if (cost < bestCost) { bestCost = cost; best = a; }
-  }
-  return best;
-}
-
-function fireHook() {
-  const anchor = bestAnchor();
-  if (!anchor) {
-    audio.play('fire', { pitch: 0.5, volume: 0.5 });
-    return;
-  }
-
-  hookState = HOOK.FLYING;
-  hookTarget = anchor;
-  hookTip = { x: hero.x, y: hero.y };
-  audio.play('fire');
-}
-
-function attach() {
-  hookState = HOOK.ATTACHED;
-  ropeLength = clamp(
-    Math.hypot(hookTarget.x - hero.x, hookTarget.y - hero.y),
-    ROPE_MIN, ROPE_MAX,
-  );
-  swings++;
-  audio.play('attach');
-}
-
-function release() {
-  if (hookState === HOOK.ATTACHED) audio.play('release');
-  hookState = HOOK.IDLE;
-  hookTarget = null;
-}
-
-/**
- * The rope constraint.
- *
- * Position is pulled back onto the circle of radius `ropeLength` around the
- * anchor, and the component of velocity pointing along the rope is discarded.
- * What survives is the tangential component — the swing — which is exactly
- * what a rope does and exactly what a spring would fail to preserve.
- */
-function applyRope() {
-  const dx = hero.x - hookTarget.x;
-  const dy = hero.y - hookTarget.y;
-  const dist = Math.hypot(dx, dy);
-  if (dist < 0.001) return;
-
-  const nx = dx / dist;
-  const ny = dy / dist;
-
-  // A rope pushes nothing: inside the length it simply goes slack, and the
-  // player falls freely until it comes tight again.
-  if (dist < ropeLength) return;
-
-  hero.x = hookTarget.x + nx * ropeLength;
-  hero.y = hookTarget.y + ny * ropeLength;
-
-  const radial = hero.vx * nx + hero.vy * ny;
-  if (radial > 0) {
-    hero.vx -= radial * nx;
-    hero.vy -= radial * ny;
-  }
-}
-
-/**
- * Changing the rope length while swinging.
- *
- * Angular momentum is conserved, so shortening the rope speeds the swing up
- * and lengthening it slows the swing down — the playground-swing effect,
- * falling out of the maths instead of being bolted on as a bonus. The
- * tangential speed scales by oldLength / newLength.
- */
-function reel(dt, direction) {
-  if (direction === 0) return;
-
-  const previous = ropeLength;
-  ropeLength = clamp(
-    ropeLength + direction * (direction < 0 ? REEL_IN_SPEED : REEL_OUT_SPEED) * dt,
-    ROPE_MIN, ROPE_MAX,
-  );
-  if (ropeLength === previous) return;
-
-  const dx = hero.x - hookTarget.x;
-  const dy = hero.y - hookTarget.y;
-  const dist = Math.hypot(dx, dy) || 1;
-  const nx = dx / dist;
-  const ny = dy / dist;
-
-  // Split the velocity, rescale only the part going round the circle.
-  const radial = hero.vx * nx + hero.vy * ny;
-  let tx = hero.vx - radial * nx;
-  let ty = hero.vy - radial * ny;
-  const scale = previous / ropeLength;
-  tx *= scale;
-  ty *= scale;
-
-  hero.vx = tx + radial * nx;
-  hero.vy = ty + radial * ny;
-
-  if (direction < 0 && Math.random() < 0.25) audio.play('reel', { pitchVariance: 0.3 });
-}
-
-// --- Collisions ----------------------------------------------------------
-
-function buildingUnder(x) {
-  for (const b of buildings) {
-    if (x >= b.x && x <= b.x + b.w) return b;
-  }
-  return null;
-}
-
-function checkCrash() {
-  const b = buildingUnder(hero.x);
-  if (b && hero.y + hero.r > b.top) { die('Hit the roof'); return; }
-
-  // The side of a building, taken while flying into it from the gap.
-  for (const other of buildings) {
-    if (hero.y + hero.r < other.top) continue;
-    if (hero.x + hero.r < other.x || hero.x - hero.r > other.x + other.w) continue;
-    die('Hit the wall');
-    return;
-  }
-
-  if (hero.y > 900) die('Fell');
-}
-
-function die(reason) {
-  if (!running) return;
-  running = false;
-  deathReason = reason;
+function onDied(reason) {
   shakeTime = 0.4;
   audio.play(reason === 'Fell' ? 'fall' : 'crash');
-  particles.explosion(hero.x, hero.y, {
+  particles.explosion(swing.hero.x, swing.hero.y, {
     count: 26,
     colors: [ART.hero.body, ART.hero.cloak, ART.hero.trail],
   });
-  shell.showGameOver(metres(), {
+  shell.showGameOver(swing.metres, {
     ended: reason,
-    rings: `${ringsTaken} taken, ${ringsMissed} missed`,
-    bestCombo,
-    swings,
-    topSpeed: `${Math.round(topSpeed / 10)} m/s`,
+    rings: `${swing.ringsTaken} taken, ${swing.ringsMissed} missed`,
+    bestCombo: swing.bestCombo,
+    swings: swing.swings,
+    topSpeed: `${Math.round(swing.topSpeed / 10)} m/s`,
   });
 }
 
 // --- Reset ---------------------------------------------------------------
 
 function reset() {
-  buildings = [];
-  rings = [];
+  swing.reset();
   particles.clear();
-
-  hero.x = 0;
-  hero.y = 0;
-  hero.vx = 0;
-  hero.vy = 0;
-
-  bonusMetres = 0;
-  combo = 0;
-  bestCombo = 0;
-  ringsTaken = 0;
-  ringsMissed = 0;
-  furthest = 0;
-  topSpeed = 0;
-  swings = 0;
   shakeTime = 0;
-  deathReason = '';
-  hookState = HOOK.IDLE;
-  hookTarget = null;
-  running = true;
 
-  extendCity();
-
-  // A run opens mid-arc: hanging behind the first mast, already swinging
-  // forward. Being dropped onto a roof to work out the controls would teach
-  // the wrong thing about a game whose whole subject is momentum.
-  //
-  // The first mast is forced tall because the opening position is measured
-  // DOWN from the anchor: on a normal 60px mast a 170px rope would put the
-  // player inside the roof they are hanging over, which is a crash on frame
-  // one. Guaranteeing the height is simpler than special-casing the collision.
-  const first = buildings[0];
-  first.mast = OPENING_MAST;
-  const anchor = anchorOf(first);
-
-  ropeLength = OPENING_ROPE;
-  const rx = Math.sin(OPENING_ANGLE);
-  const ry = Math.cos(OPENING_ANGLE);
-  hero.x = anchor.x + rx * ropeLength;
-  hero.y = anchor.y + ry * ropeLength;
-  // Perpendicular to the rope, pointing forward and down: the top of a swing.
-  hero.vx = ry * START_SPEED;
-  hero.vy = -rx * START_SPEED;
-
-  hookState = HOOK.ATTACHED;
-  hookTarget = anchor;
-  swings = 1;
-
-  camX = hero.x - W * 0.32;
-  camY = hero.y - H * 0.5;
+  camX = swing.hero.x - W * 0.32;
+  camY = swing.hero.y - H * 0.5;
 }
 
 // --- Update --------------------------------------------------------------
 
 function update(dt) {
   if (!shell.update()) return;
-  if (!running) return;
+  if (!swing.running) return;
 
   const stick = Input.get(0);
 
-  // --- The hook ---------------------------------------------------------
-  if (Input.pressed('a')) {
-    if (hookState === HOOK.IDLE) fireHook();
-    else release();
-  }
-
-  if (hookState === HOOK.FLYING) {
-    const dx = hookTarget.x - hookTip.x;
-    const dy = hookTarget.y - hookTip.y;
-    const dist = Math.hypot(dx, dy);
-    const step = HOOK_TRAVEL_SPEED * dt;
-    if (dist <= step) {
-      hookTip = { ...hookTarget };
-      attach();
-    } else {
-      hookTip.x += (dx / dist) * step;
-      hookTip.y += (dy / dist) * step;
-    }
-  }
-
-  // --- Forces -----------------------------------------------------------
-  hero.vy += GRAVITY * dt;
-
-  const diving = Boolean(stick.b) && hookState !== HOOK.ATTACHED;
-  if (diving) {
-    hero.vy += DIVE_ACCEL * dt;
-    if (Math.random() < 0.4) {
-      particles.emit(hero.x, hero.y, {
-        count: 1, colors: [ART.hero.trail],
-        speed: [10, 50], life: [0.15, 0.35], size: [2, 4],
-        gravity: 0, drag: 0.6, shrink: true,
-      });
-    }
-  }
-
-  const damp = AIR_DRAG_PER_SECOND ** dt;
-  hero.vx *= damp;
-  hero.vy *= damp;
-
-  if (hookState === HOOK.ATTACHED) {
+  swing.step(dt, {
+    firePressed: Input.pressed('a'),
+    dive: Boolean(stick.b),
     // Up on the stick reels in, down reels out. Reeling in is the pump.
-    reel(dt, stick.y < -0.35 ? -1 : stick.y > 0.35 ? 1 : 0);
+    reel: stick.y < -0.35 ? -1 : stick.y > 0.35 ? 1 : 0,
+  });
+  handleEvents();
+
+  // Dive trail. Driven off the simulation's own answer to "is this a dive",
+  // so the effect cannot disagree with the physics.
+  if (swing.diving && Math.random() < 0.4) {
+    particles.emit(swing.hero.x, swing.hero.y, {
+      count: 1, colors: [ART.hero.trail],
+      speed: [10, 50], life: [0.15, 0.35], size: [2, 4],
+      gravity: 0, drag: 0.6, shrink: true,
+    });
   }
-
-  hero.x += hero.vx * dt;
-  hero.y += hero.vy * dt;
-
-  if (hookState === HOOK.ATTACHED) applyRope();
-
-  const speed = Math.hypot(hero.vx, hero.vy);
-  if (speed > MAX_SPEED) {
-    hero.vx *= MAX_SPEED / speed;
-    hero.vy *= MAX_SPEED / speed;
-  }
-  if (speed > topSpeed) topSpeed = speed;
-
-  // Facing: the figure leans into whatever it is doing.
-  hero.angle = Math.atan2(hero.vy, hero.vx);
-
-  if (hero.x > furthest) furthest = hero.x;
-
-  extendCity();
-  checkRings();
-  checkCrash();
 
   // --- Camera -----------------------------------------------------------
   //
   // Chases rather than snaps, and looks further ahead the faster you go, which
   // is what makes a fast run readable instead of a blur of walls arriving.
+  const hero = swing.hero;
   const lookAhead = clamp(hero.vx * 0.22, -60, 260);
   const wantX = hero.x - W * 0.32 + lookAhead;
   const wantY = clamp(hero.y - H * 0.55, -260, 420);
@@ -554,34 +268,6 @@ function update(dt) {
 
   if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
   particles.update(dt);
-}
-
-function checkRings() {
-  for (const ring of rings) {
-    if (ring.taken || ring.missed) continue;
-
-    if (Math.hypot(ring.x - hero.x, ring.y - hero.y) < ring.r + hero.r) {
-      ring.taken = true;
-      ringsTaken++;
-      combo = Math.min(COMBO_CAP, combo + 1);
-      if (combo > bestCombo) bestCombo = combo;
-      bonusMetres += RING_METRES * combo;
-      audio.play('ring', { pitch: 1 + combo * 0.07 });
-      particles.sparkle(ring.x, ring.y, {
-        count: 16, colors: [ART.ring.outer, ART.hero.body],
-      });
-      continue;
-    }
-
-    // Gone past it. The combo is the only thing a missed ring costs, and that
-    // is enough — a ring you could not reach is usually a swing you misjudged
-    // two buildings ago, and punishing it twice would be punishing it late.
-    if (hero.x - ring.x > ring.r + 30) {
-      ring.missed = true;
-      ringsMissed++;
-      combo = 0;
-    }
-  }
 }
 
 // --- Draw ----------------------------------------------------------------
@@ -699,7 +385,7 @@ function drawBuilding(b) {
 }
 
 function drawRings() {
-  for (const ring of rings) {
+  for (const ring of swing.rings) {
     const x = ring.x - camX;
     const y = ring.y - camY;
     if (x < -60 || x > W + 60) continue;
@@ -723,13 +409,14 @@ function drawRings() {
 }
 
 function drawHero() {
+  const hero = swing.hero;
   const x = hero.x - camX;
   const y = hero.y - camY;
-  const diving = Boolean(Input.get(0).b) && hookState !== HOOK.ATTACHED;
+  const diving = swing.diving;
 
   // Rope or hook line.
-  if (hookState !== HOOK.IDLE) {
-    const tip = hookState === HOOK.ATTACHED ? hookTarget : hookTip;
+  if (swing.hookState !== HOOK.IDLE) {
+    const tip = swing.hookState === HOOK.ATTACHED ? swing.hookTarget : swing.hookTip;
     ctx.strokeStyle = ART.hero.rope;
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.85;
@@ -748,8 +435,8 @@ function drawHero() {
   ctx.save();
   ctx.translate(x, y);
   // Hanging figures point at the anchor; flying ones point along their path.
-  ctx.rotate(hookState === HOOK.ATTACHED
-    ? Math.atan2(hero.y - hookTarget.y, hero.x - hookTarget.x) - Math.PI / 2
+  ctx.rotate(swing.hookState === HOOK.ATTACHED
+    ? Math.atan2(hero.y - swing.hookTarget.y, hero.x - swing.hookTarget.x) - Math.PI / 2
     : hero.angle - Math.PI / 2);
 
   ctx.fillStyle = ART.hero.cloak;
@@ -775,8 +462,8 @@ function drawHero() {
 // A faint marker on whichever anchor the hook would take. Without it the
 // targeting rule is invisible and firing the hook is a guess.
 function drawTarget() {
-  if (hookState !== HOOK.IDLE) return;
-  const a = bestAnchor();
+  if (swing.hookState !== HOOK.IDLE) return;
+  const a = swing.bestAnchor();
   if (!a) return;
 
   ctx.strokeStyle = ART.hud.target;
@@ -789,7 +476,7 @@ function drawTarget() {
 }
 
 function drawHudExtras() {
-  const speed = Math.hypot(hero.vx, hero.vy);
+  const speed = swing.speed;
 
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
@@ -800,11 +487,11 @@ function drawHudExtras() {
   ctx.font = '700 22px ui-monospace, monospace';
   ctx.fillText(`${Math.round(speed / 10)}`, W - 20, H - 40);
 
-  if (combo > 1) {
+  if (swing.combo > 1) {
     ctx.textAlign = 'center';
     ctx.fillStyle = ART.hud.combo;
     ctx.font = '800 24px system-ui, sans-serif';
-    ctx.fillText(`RINGS x${combo}`, W / 2, 22);
+    ctx.fillText(`RINGS x${swing.combo}`, W / 2, 22);
   }
 
   // How high the run has climbed the difficulty curve. Not a level number,
@@ -813,7 +500,7 @@ function drawHudExtras() {
   ctx.textAlign = 'left';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText(`CITY ${Math.round(difficultyAt(furthest) * 100)}%`, 20, H - 28);
+  ctx.fillText(`CITY ${Math.round(difficultyAt(swing.furthest) * 100)}%`, 20, H - 28);
 }
 
 // `alpha` is unused: the camera moves the whole world every tick, and
@@ -828,15 +515,15 @@ function render() {
     ctx.translate(randRange(-m, m), randRange(-m, m));
   }
 
-  for (const b of buildings) drawBuilding(b);
+  for (const b of swing.buildings) drawBuilding(b);
   drawRings();
   drawTarget();
   particles.draw(ctx);
-  if (running) drawHero();
+  if (swing.running) drawHero();
 
   ctx.restore();
 
-  shell.drawHud({ score: metres(), best: Session.getBest(GAME_ID) });
+  shell.drawHud({ score: swing.metres, best: Session.getBest(GAME_ID) });
   drawHudExtras();
   shell.render();
 }

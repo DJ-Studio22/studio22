@@ -118,6 +118,80 @@ seven before, none after, and the flip budget tightened from 3.75-4.00 columns
 to 3.78-3.83.
 
 
+## Phase 9 — a puzzle category, and the Skyhook difficulty pass
+
+### Puzzle is a fourth category
+
+Block Buster, Tower Stack and Ballast were all filed under `arcade`, which
+made the arcade tab mean "everything that is not a lesson or a car".
+`CATEGORIES` in engine/manifest.js gains `puzzle` and the hub builds its
+filter tabs from that list, so the tab appeared on its own. Both card grids
+tint the art panel by category; puzzle got a blend of the two accents rather
+than a share of one, because arcade already owns amber and learning already
+owns green.
+
+### Skyhook was refusing the player, not beating them
+
+The complaint was that a first run felt like the game had said no. Two
+measurements found out why, and neither was the dial anyone would have
+reached for first.
+
+**Skyhook's simulation moved into `swing.js`** to make any of this
+measurable — rope, body, city, rings and collisions, with no canvas, no input
+device and no clock. `city.js` grew a `CITY_TUNING` object for the same
+reason. A bot can now play a thousand runs in a second, against seeded cities
+so a before/after comparison is run over identical geometry. Same arrangement
+and the same reason as Circuit Racer's driving.js.
+
+Two bots: a *competent* one (180ms reaction, a wide sloppy release window,
+pumps the swing less than half the time) and a *good* one (60ms, a tight
+release window near the top of the arc, always pumps, dives for speed). A
+change that helps only the competent bot is forgiveness; one that closes the
+gap between them has flattened the ceiling.
+
+**Finding 1 — the hook refused 86% of the anchors it could reach.**
+`bestAnchor` rejected anything below the player on the grounds that "a rope
+can only pull upward". Measured at the moment of release, 86% of next anchors
+were inside grapple range but BELOW. So the hook was thrown at nothing, the
+player fell, and it read as a dropped input. A rope you fall past and catch is
+a real move; it is now allowed, penalised so anchors above are still preferred.
+
+**Finding 2 — four swings in five were geometrically doomed.** A pendulum
+sweeps over the roof its mast stands on, so the arc clears that building only
+while ROPE IS SHORTER THAN MAST. The median mast was 71 tall and the median
+rope 178: only **21% of swings could clear the roof they were anchored to.**
+Attaching usually committed the player to swinging into the building, which is
+why "Hit the roof" was the commonest ending. Masts went up (40-90 to 160-240)
+and `ropeMax` came down (380 to 210) until the contract holds nearly always.
+The contract is now written down in both files so it cannot be quietly broken.
+
+Then the actual tuning: `curve` on the difficulty ramp went from 1 to 2, so
+the opening of a run is nearly flat and the escalation happens later, and
+`ringMetres` went 10 to 14 because rings are where a good run separates from
+a competent one.
+
+**Measured over 300 seeded runs per skill level:**
+
+| | competent, before | competent, after | good, before | good, after |
+|---|---:|---:|---:|---:|
+| median distance | 21 m | **67 m** | 35 m | **602 m** |
+| median run length | 1.8 s | **5.5 s** | 1.5 s | **16.2 s** |
+| 90th percentile | 27 m | **205 m** | 60 m | **1,771 m** |
+| best run | 61 m | **515 m** | 123 m | **5,141 m** |
+| runs under 25 m | 256 / 300 | **33 / 300** | 0 | 0 |
+
+The good/competent median ratio went from 1.67x to 8.99x, so the ceiling got
+further away rather than closer. A competent run now dies at about 0.2% of the
+way up the difficulty curve — which is the point: it ends because of how it
+was played, not because the city had already got hard.
+
+**Worth recording: GRAPPLE_RANGE was not the problem.** It was one of the
+three dials nominated, and once the masts were tall enough, 470, 540 and 620
+measured *identically* for a competent player. It went to 540 because it costs
+nothing and makes the hook less fussy at the edge of reach, not because it
+earned it. Gentler early gaps and wider early buildings were both tried and
+both made the competent bot WORSE, so neither shipped.
+
 ## Performance audit (Phase 8)
 
 Measured, not estimated. Every page gzipped, as built:
@@ -293,4 +367,7 @@ Moving domain is: edit site.config.json, run the two tools, build, push.
 - Enter and Space are BOTH bound to the `a` button (see DEFAULT_PLAYER0_LAYOUT). The keypress that dismisses a title screen is therefore still down when the game takes over, and its keyup fires `Input.released('a')` on the first frame of play. Skyhook was cutting its own opening rope this way. Prefer `pressed()` over `released()` for anything a title screen can reach, or the game will act on an input meant for the menu
 - Gravity Flip scales gravity by the SQUARE of run speed so a flip always costs the same number of tiles of ground. That is what lets hand-authored rooms stay passable forever. Any change to BASE_SPEED, BASE_GRAVITY or the room height has to keep `checkFlipBudget()` under rooms.js's FLIP_COLUMNS — it warns at boot if not
 - Anything whose per-tick movement can exceed a tile MUST substep. Gravity Flip's speed grows without bound, so by room 50 a single tick moved further than a tile and the player passed through solid blocks. Collision only ever looks at where a step ENDED. Circuit Racer and Sinkhole are safe because their speeds are capped; nothing else in the suite may assume that
+- A pendulum clears the building its mast stands on only while the ROPE IS SHORTER THAN THE MAST. Skyhook shipped with median mast 71 and median rope 178, so 79% of swings were committed to hitting a roof the moment they attached. If mast heights or rope limits are ever retuned, check that ratio again — it is the difference between a hard game and an unfair one
+- Skyhook's hook may take anchors BELOW the player. It used to refuse them, which rejected 86% of the anchors actually in range and read as the button not working. An anchor you fall past and catch is a real move
+- Tuning claims for Skyhook are measured, not argued: swing.js and city.js both expose every number as a plain object, and a bot plays seeded runs at two skill levels so before/after runs over identical cities. A change that helps only the weaker bot is forgiveness; one that narrows the gap has flattened the ceiling
 - Block Buster's board rules are in board.js, free of the DOM, for the same reason Number Crunch's arithmetic is in problems.js: a cascade that fails to chain is not visible in a screenshot. Test that file, not the game
