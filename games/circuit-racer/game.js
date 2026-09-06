@@ -691,14 +691,27 @@ function finishRace() {
 
 // --- Formatting ----------------------------------------------------------
 
+/**
+ * Seconds as a lap time.
+ *
+ * Rounded to hundredths ONCE, up front, and everything else derived from that
+ * integer. Splitting the seconds and the fraction apart first is wrong twice
+ * over: flooring the fraction displayed a stored 4.55 as "4.54", because
+ * 4.55 % 1 is 0.5499999999999998 in binary floating point; and rounding it
+ * instead would display 4.999 as "4.100", because the hundredths carry into
+ * the seconds and nothing was there to catch it.
+ */
 function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return '--.--';
-  const mins = Math.floor(seconds / 60);
-  const rest = seconds - mins * 60;
-  const secs = String(Math.floor(rest)).padStart(2, '0');
-  const hundredths = String(Math.floor((rest % 1) * 100)).padStart(2, '0');
-  return mins > 0 ? mins + ':' + secs + '.' + hundredths
-    : Math.floor(rest) + '.' + hundredths;
+
+  const total = Math.round(seconds * 100);      // hundredths, carried correctly
+  const mins = Math.floor(total / 6000);
+  const secs = Math.floor((total % 6000) / 100);
+  const hundredths = String(total % 100).padStart(2, '0');
+
+  return mins > 0
+    ? mins + ':' + String(secs).padStart(2, '0') + '.' + hundredths
+    : secs + '.' + hundredths;
 }
 
 // --- Draw ----------------------------------------------------------------
