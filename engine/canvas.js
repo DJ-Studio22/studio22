@@ -299,6 +299,12 @@ export class GameCanvas {
     this.#ctx = this.#canvas.getContext('2d');
 
     this.#container.appendChild(this.#canvas);
+    // The game has booted, so the "if this stays, it failed" message can go.
+    // Removed HERE rather than by the game, because this is the first thing
+    // that runs once the whole module graph has actually parsed — which is
+    // the failure the message exists for.
+    document.getElementById('boot-fallback')?.remove();
+
     this.#parent.appendChild(this.#container);
 
     if (this.#requireOrientation) this.#buildOverlay(rotateMessage);

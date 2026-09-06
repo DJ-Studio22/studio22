@@ -70,9 +70,35 @@
       -webkit-user-select: none;
       user-select: none;
     }
+
+    #boot-fallback {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 8px;
+      text-align: center;
+      padding: 24px;
+      color: #f5f0e8;
+      font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    #boot-fallback h1 { font-size: 1.4rem; margin: 0 0 12px; color: #ffa22b; }
+    #boot-fallback p { margin: 0 0 8px; max-width: 32rem; }
+    #boot-fallback a { color: #948b7f; }
+
   </style>
 </head>
 <body>
+  <!-- Shown until the game boots, and NOT removed by script that could itself
+       be the thing that failed: engine/canvas.js deletes it when it builds the
+       canvas. If the module never parses — which is exactly what took every
+       game to a black screen once — this stays on screen and says so. -->
+  <div id="boot-fallback">
+    <h1>Loading&hellip;</h1>
+    <p>If this message stays, the game failed to start. Reloading usually fixes it.</p>
+    <p><a href="/arcade.html">Back to the arcade</a></p>
+  </div>
   <!-- GameCanvas builds its own letterboxed container inside <body>. -->
   <script type="module" src="./game.js"></script>
 </body>

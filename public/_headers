@@ -1,0 +1,42 @@
+# Cloudflare Pages response headers.
+#
+# Pages reads this file from the root of the build output. Vite copies
+# everything in public/ there, so this is the source of truth for it.
+#
+# The policy below is tight because the site genuinely earns it: no backend, no
+# analytics, no fonts, no CDN, no embeds, not one raster image. A site with
+# nothing third-party in it should say so in a header a browser will enforce,
+# not only in prose on the landing page.
+#
+# Two allowances, and both are real rather than lazy:
+#
+#   style-src needs 'unsafe-inline' because the game pages carry a small inline
+#   <style> block (they must style html/body before any stylesheet arrives, or
+#   the canvas letterboxes against a white flash) and because the reveal
+#   animations pass their stagger index as a style attribute. Hashing the block
+#   would not help: style attributes are covered by the same directive and
+#   cannot be hashed.
+#
+#   script-src is 'self' with NO 'unsafe-inline'. Vite extracts every inline
+#   module into a hashed file, so nothing needs it. The JSON-LD blocks are
+#   type="application/ld+json", which browsers do not execute and CSP does not
+#   gate.
+#
+# img-src needs data: for the grain texture. It is an inline SVG noise filter
+# in the CSS, not a file, and 'self' alone blocks it — measured, not assumed:
+# the browser raised an img-src violation and the grain vanished silently,
+# which is precisely the sort of thing that ships broken.
+#
+# connect-src 'self' is the one that backs the privacy promise: the page cannot
+# reach another origin even if something later tried to. It is 'self' rather
+# than 'none' so a game can still load a sound file from this origin, which
+# engine/audio.js supports and nothing uses yet.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; media-src 'self'; manifest-src 'self'; worker-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), midi=(), serial=(), bluetooth=(), display-capture=(), idle-detection=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  X-Frame-Options: DENY

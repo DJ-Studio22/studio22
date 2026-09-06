@@ -83,6 +83,64 @@ const MAX_STEPS_PER_FRAME = 8;
 // half a second is responsive but stable.
 const FPS_SAMPLE_MS = 500;
 
+/**
+ * The last thing a broken game does.
+ *
+ * Plain DOM rather than canvas, deliberately: if the thing that threw was the
+ * renderer, drawing the apology with the renderer is not going to work. No
+ * inline script either, so it survives the site's Content-Security-Policy.
+ *
+ * The failure this exists for is real and shipped once: a parse error in
+ * engine/canvas.js took every game to a black screen, and a black screen tells
+ * a player nothing. A frozen game is barely better. Either way they should be
+ * told to reload rather than left guessing.
+ */
+export function showFatalError(error) {
+  if (document.getElementById('s22-fatal')) return;
+
+  const panel = document.createElement('div');
+  panel.id = 's22-fatal';
+  panel.setAttribute('role', 'alert');
+  panel.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:9999', 'display:grid',
+    'place-items:center', 'padding:24px', 'text-align:center',
+    'background:#0a0908', 'color:#f5f0e8',
+    'font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif',
+  ].join(';');
+
+  const inner = document.createElement('div');
+  inner.style.cssText = 'max-width:34rem';
+
+  const title = document.createElement('h1');
+  title.textContent = 'This game stopped.';
+  title.style.cssText = 'margin:0 0 12px;font-size:1.5rem;color:#ffa22b';
+
+  const body = document.createElement('p');
+  body.textContent = 'Something went wrong and it cannot carry on. Reloading usually fixes it. Nothing was saved, and nothing was sent anywhere.';
+  body.style.cssText = 'margin:0 0 20px';
+
+  // The message itself, so a bug report can carry something useful. Text, not
+  // markup — the string comes from an exception and is not to be trusted.
+  const detail = document.createElement('p');
+  detail.textContent = String(error && error.message ? error.message : error);
+  detail.style.cssText = 'margin:0 0 20px;font:12px ui-monospace,monospace;color:#948b7f;word-break:break-word';
+
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.textContent = 'Reload';
+  reload.style.cssText = 'font:600 15px system-ui,sans-serif;padding:12px 28px;border:0;border-radius:8px;background:#ffa22b;color:#0a0908;cursor:pointer';
+  reload.addEventListener('click', () => window.location.reload());
+
+  const back = document.createElement('a');
+  back.href = '/arcade.html';
+  back.textContent = 'Back to the arcade';
+  back.style.cssText = 'display:inline-block;margin-left:16px;color:#948b7f';
+
+  inner.append(title, body, detail, reload, back);
+  panel.append(inner);
+  document.body.append(panel);
+}
+
 export class GameLoop {
   // --- Internal state -----------------------------------------------------
 
@@ -218,6 +276,11 @@ export class GameLoop {
     let frameMs = nowMs - this.#lastTimeMs;
     this.#lastTimeMs = nowMs;
 
+    // Everything from here is inside a guard. Scheduling the next frame up
+    // front keeps one bad frame from killing the loop, but a game that throws
+    // every frame is not recovering — it is spraying the console while the
+    // player looks at a frozen picture. Stop, and say so.
+
     // See MAX_FRAME_MS above -- this single clamp is what stops a long stall
     // from turning into an unrecoverable spiral.
     if (frameMs > MAX_FRAME_MS) frameMs = MAX_FRAME_MS;
@@ -235,27 +298,36 @@ export class GameLoop {
     // Drain whole simulation steps. Zero iterations is normal and correct on
     // a high-refresh display: that frame just redraws the same world state
     // at a slightly larger alpha.
-    let steps = 0;
-    while (this.#accumulatorMs >= STEP_MS && steps < MAX_STEPS_PER_FRAME) {
-      // Polled once per simulation step, before the game reads anything, so
-      // every tick sees one coherent input snapshot -- and so pressed()/
-      // released() edges line up with exactly one tick of game logic.
-      Input.update();
-      this.#update(STEP_SECONDS);
-      this.#accumulatorMs -= STEP_MS;
-      steps++;
-    }
+    try {
+      let steps = 0;
+      while (this.#accumulatorMs >= STEP_MS && steps < MAX_STEPS_PER_FRAME) {
+        // Polled once per simulation step, before the game reads anything, so
+        // every tick sees one coherent input snapshot -- and so pressed()/
+        // released() edges line up with exactly one tick of game logic.
+        Input.update();
+        this.#update(STEP_SECONDS);
+        this.#accumulatorMs -= STEP_MS;
+        steps++;
+      }
 
-    // Hit the step ceiling with time still owed: we're running slower than
-    // real time, so throw the backlog away and keep only the sub-step
-    // remainder that alpha needs. The game visibly slows down, which is
-    // recoverable; a spiral is not.
-    if (this.#accumulatorMs >= STEP_MS) {
-      this.#accumulatorMs %= STEP_MS;
-    }
+      // Hit the step ceiling with time still owed: we're running slower than
+      // real time, so throw the backlog away and keep only the sub-step
+      // remainder that alpha needs. The game visibly slows down, which is
+      // recoverable; a spiral is not.
+      if (this.#accumulatorMs >= STEP_MS) {
+        this.#accumulatorMs %= STEP_MS;
+      }
 
-    this.#render(this.#accumulatorMs / STEP_MS);
-    this.#trackFps(nowMs);
+      this.#render(this.#accumulatorMs / STEP_MS);
+      this.#trackFps(nowMs);
+    } catch (error) {
+      // One bad frame is not survivable in practice: whatever state made this
+      // throw is still there next frame. Stop cleanly and tell the player,
+      // rather than freezing the picture and filling the console.
+      this.stop();
+      console.error('[loop] The game loop threw and has been stopped.', error);
+      showFatalError(error);
+    }
   };
 
   #resetTiming() {
