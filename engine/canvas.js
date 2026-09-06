@@ -91,6 +91,12 @@ export class GameCanvas {
   #overlay = null;
   #orientationBlocked = false;
 
+  // The accessible name for the <canvas>. A game page is one canvas and
+  // nothing else, so this is the only text an assistive reader has to go on.
+  // Defaults to the page title, which every game index.html already sets to
+  // "<Game> — Studio 22", so a game gets a correct label without passing one.
+  #label;
+
   // Display size / game size. Exposed via the `scale` getter so games can
   // reason about things like touch target sizes in real screen terms.
   #scale = 1;
@@ -111,6 +117,8 @@ export class GameCanvas {
    *                                             "rotate your device" overlay when the
    *                                             device is held the other way.
    * @param {string}  [options.rotateMessage]    Text for that overlay.
+   * @param {string}  [options.label]            Accessible name for the canvas.
+   *                                             Defaults to document.title.
    */
   constructor(options = {}) {
     this.#gameWidth = options.width ?? DEFAULT_GAME_WIDTH;
@@ -121,6 +129,7 @@ export class GameCanvas {
     this.#tvUiScale = options.tvUiScale ?? DEFAULT_TV_UI_SCALE;
     this.#maxPixelRatio = options.maxPixelRatio ?? DEFAULT_MAX_PIXEL_RATIO;
     this.#requireOrientation = options.requireOrientation ?? null;
+    this.#label = options.label ?? document.title ?? 'Game';
 
     this.#buildDom(options.rotateMessage ?? 'Rotate your device');
     this.#listen();

@@ -157,6 +157,16 @@
     background-color var(--dur-fast) var(--ease-out);
 }
 
+/* [hidden] is how the search and the category tabs take a card off the grid.
+   The browser default rule for it is [hidden] { display: none }, which any
+   author rule outranks — and .card sets display: flex just above, so without
+   this the hidden property is set on the element and changes nothing on
+   screen. That is exactly what "search filters nothing" looked like. Scoped
+   to .card because it is the only thing here that overrides its own display. */
+.card[hidden] {
+  display: none;
+}
+
 .card__media {
   position: relative;
   aspect-ratio: 16 / 10;
