@@ -106,6 +106,20 @@ export const TUNING = {
   deathY: 900,
 
   heroRadius: 11,
+
+  // How far the body may sink into a roof before it counts as a crash.
+  //
+  // It used to be zero: the hero's radius touching the roof plane ended the
+  // run. At 500+ units/sec that is a single frame between "clean pass" and
+  // "dead", and since the camera is chasing you it reads as being killed by
+  // something you had already cleared. This is forgiveness, not a smaller
+  // hitbox — the roof still kills, it just wants to be sure.
+  roofForgiveness: 22,
+
+  // Pushing left or right while hanging adds to the arc, the way a real swing
+  // is pumped. Applied along the TANGENT so it can only ever change the speed
+  // round the circle, never fight the rope.
+  pumpAccel: 620,
 };
 
 export const HOOK = { IDLE: 'idle', FLYING: 'flying', ATTACHED: 'attached' };
@@ -293,6 +307,38 @@ export class Swing {
   }
 
   /**
+   * Leaning into the swing.
+   *
+   * A push left or right while hanging adds speed ALONG THE ARC, which is what
+   * a person on a swing actually does — you cannot pull yourself sideways
+   * through a rope, you can only put energy into the direction you are already
+   * travelling. Projecting the lean onto the tangent means the rope constraint
+   * never has to fight it, so the arc grows instead of the physics arguing
+   * with itself.
+   *
+   * @param {number} lean -1 for left, +1 for right, or anything between.
+   */
+  pump(dt, lean) {
+    if (!lean || this.hookState !== HOOK.ATTACHED) return;
+
+    const dx = this.hero.x - this.hookTarget.x;
+    const dy = this.hero.y - this.hookTarget.y;
+    const dist = Math.hypot(dx, dy) || 1;
+
+    // The tangent, pointing the way a positive (rightward) lean should push.
+    const tx = -dy / dist;
+    const ty = dx / dist;
+    const sign = tx >= 0 ? 1 : -1;
+
+    // sign is applied ONCE. Applying it to both the scalar and the vector
+    // squares it away to nothing, and the lean then pushes whichever way the
+    // tangent happens to face — which is backwards half the arc.
+    const push = lean * this.t.pumpAccel * dt * sign;
+    this.hero.vx += tx * push;
+    this.hero.vy += ty * push;
+  }
+
+  /**
    * Changing rope length while swinging, conserving angular momentum: the
    * tangential speed scales by oldLength / newLength. Shortening therefore
    * speeds the swing up, which is the pump.
@@ -330,7 +376,10 @@ export class Swing {
     const hero = this.hero;
 
     for (const b of this.buildings) {
-      if (hero.y + hero.r < b.top) continue;
+      // The forgiveness is applied to the roof plane only, not to the sides:
+      // a wall you fly into is a wall, but skimming a rooftop should not be
+      // decided by one frame at 500 units a second.
+      if (hero.y + hero.r < b.top + this.t.roofForgiveness) continue;
       if (hero.x + hero.r < b.x || hero.x - hero.r > b.x + b.w) continue;
       // Whether it reads as a roof or a wall is only about where the centre
       // is; both end the run the same way.
@@ -421,7 +470,10 @@ export class Swing {
     hero.vx *= damp;
     hero.vy *= damp;
 
-    if (this.hookState === HOOK.ATTACHED) this.reel(dt, input.reel ?? 0);
+    if (this.hookState === HOOK.ATTACHED) {
+      this.reel(dt, input.reel ?? 0);
+      this.pump(dt, input.lean ?? 0);
+    }
 
     hero.x += hero.vx * dt;
     hero.y += hero.vy * dt;

@@ -240,8 +240,11 @@ function update(dt) {
   swing.step(dt, {
     firePressed: Input.pressed('a'),
     dive: Boolean(stick.b),
-    // Up on the stick reels in, down reels out. Reeling in is the pump.
+    // Up on the stick reels in, down reels out.
     reel: stick.y < -0.35 ? -1 : stick.y > 0.35 ? 1 : 0,
+    // Left and right lean into the arc. Same axis on a gamepad stick, the
+    // arrow keys and the touch joystick, so all three pump the same way.
+    lean: Math.abs(stick.x) > 0.2 ? stick.x : 0,
   });
   handleEvents();
 
@@ -549,6 +552,7 @@ shell = new GameShell({
     { action: 'Throw the hook', gamepad: 'A', keyboard: 'Space', touch: 'Hook pad' },
     { action: 'Let go', gamepad: 'A again', keyboard: 'Space again', touch: 'Hook pad again' },
     { action: 'Reel in', gamepad: 'Push the stick up', keyboard: 'Up or W', touch: 'Drag up' },
+    { action: 'Lean into the swing', gamepad: 'Left / right on the stick', keyboard: 'Left / Right or A / D', touch: 'Drag left or right' },
     { action: 'Reel out', gamepad: 'Pull the stick down', keyboard: 'Down or S', touch: 'Drag down' },
     { action: 'Dive', gamepad: 'B, in the air', keyboard: 'Shift, in the air', touch: 'Dive pad' },
     { action: 'Go faster', gamepad: 'Reel in at the bottom of a swing', keyboard: 'Reel in at the bottom of a swing', touch: 'Reel in at the bottom of a swing' },

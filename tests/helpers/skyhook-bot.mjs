@@ -35,6 +35,8 @@ export const SKILL = {
     releaseFrom: 0.15,   // radians past the bottom of the arc
     releaseTo: 1.15,     // a wide, sloppy window
     pumpChance: 0.45,
+    // A first-timer does not know to lean into the arc at all.
+    leanSkill: 0,
     dive: false,
     fireDelay: 0.20,
   },
@@ -43,6 +45,10 @@ export const SKILL = {
     releaseFrom: 0.55,
     releaseTo: 0.80,     // a tight window near the top of the forward arc
     pumpChance: 1,
+    // Leans the way the arc is already going, which is how a swing is
+    // pumped. Without this the bot never touches the mechanic and the
+    // measurement covers only half the change.
+    leanSkill: 1,
     dive: true,
     fireDelay: 0.05,
   },
@@ -60,6 +66,7 @@ export function runOnce(skill, seed, swingOverrides = {}) {
     let firePressed = false;
     let dive = false;
     let reel = 0;
+    let lean = 0;
 
     const pickRelease = () => s.releaseFrom + Math.random() * (s.releaseTo - s.releaseFrom);
     let releaseAt = pickRelease();
@@ -97,12 +104,17 @@ export function runOnce(skill, seed, swingOverrides = {}) {
             reel = 0;
           }
 
+          // Lean the way the swing is already travelling: that is what adds
+          // to the arc rather than fighting it.
+          lean = (s.leanSkill ?? 0) * (goingForward ? 1 : -1);
+
           if (theta > releaseAt && goingForward) {
             firePressed = true;
             sinceRelease = 0;
           }
         } else if (swing.hookState === HOOK.IDLE) {
           reel = 0;
+          lean = 0;
           dive = s.dive && swing.hero.vy > -50 && !swing.bestAnchor();
 
           const anchor = sinceRelease > s.fireDelay ? swing.bestAnchor() : null;
@@ -118,7 +130,7 @@ export function runOnce(skill, seed, swingOverrides = {}) {
         }
       }
 
-      swing.step(DT, { firePressed, dive, reel });
+      swing.step(DT, { firePressed, dive, reel, lean });
       swing.drainEvents();
     }
 
