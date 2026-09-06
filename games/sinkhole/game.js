@@ -18,6 +18,7 @@ import { GameShell } from '../../engine/shell.js';
 import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
+import { chaseCeiling, isSafeLanding, isSpikeAt, ledgeSegments, makeLedge, SHAFT_TUNING } from './shaft.js';
 import { ParticleSystem, randRange as R, clamp } from '../../engine/util.js';
 
 const GAME_ID = 'sinkhole';
@@ -108,6 +109,9 @@ const PLAYER_R = 14;
 // Thick enough to be the shelf engine/shell.js draws its HUD on. A thin
 // ceiling put the score on top of the spikes, where it was unreadable — and
 // the slab reads as the roof of the cave rather than as padding.
+// Where the ceiling STARTS. It does not stay there: see chaseCeiling in
+// shaft.js. Kept as the starting value and as the thickness of the slab the
+// HUD is drawn on.
 const CEILING_H = 100;
 const LEDGE_H = 16;
 const LEDGE_SPACING = 132;
@@ -143,6 +147,10 @@ let lives = START_LIVES;
 let invuln = 0;
 let shake = 0;
 let ledges = [];
+
+// Where the ceiling has closed to. Starts at CEILING_H and descends —
+// chaseCeiling in shaft.js decides how fast.
+let ceilingY = CEILING_H;
 let dead = false;
 let camY = 0;              // how far the view has scrolled below the shaft top
 
@@ -168,19 +176,9 @@ function scrollSpeed() {
   return Math.min(BASE_SCROLL + depth * SCROLL_PER_DEPTH, MAX_SCROLL);
 }
 
-/**
- * One ledge: a full-width shelf with a single gap in it.
- *
- * The gap narrows with depth and the spiked share rises, which is the whole
- * difficulty curve — there is no separate "level", just a floor that gets
- * harder to fall through.
- */
-function makeLedge(y) {
-  const gapW = clamp(168 - depth * 0.012, 76, 168);
-  const gapX = R(16, W - gapW - 16);
-  const spiked = Math.random() < Math.min(0.08 + depth * 0.00012, 0.42);
-  return { y, gapX, gapW, spiked };
-}
+// A floor is built by shaft.js, which also holds the guarantee that every
+// one of them has somewhere survivable to land. See the header there.
+const newLedge = (y) => makeLedge(y, depth, SHAFT_TUNING);
 
 function lowestLedgeY() {
   let low = -Infinity;
@@ -204,9 +202,10 @@ function reset() {
   P.onGround = false;
   P.squash = 0;
 
+  ceilingY = CEILING_H;
   ledges = [];
   for (let y = 360; y < H + LEDGE_SPACING; y += LEDGE_SPACING) {
-    ledges.push(makeLedge(y));
+    ledges.push(newLedge(y));
   }
 }
 
@@ -264,9 +263,13 @@ function update(dt) {
 
   recycleLedges();
 
-  // The ceiling. Being carried into it is the death this game is about.
-  if (P.y - PLAYER_R < CEILING_H) {
-    P.y = CEILING_H + PLAYER_R;
+  // The ceiling closes rather than sitting still. A dive used to outrun it
+  // permanently, which removed the threat the game is named for at exactly
+  // the moment the player got good at it.
+  ceilingY = chaseCeiling(ceilingY, P.y, scrollSpeed(), dt, SHAFT_TUNING);
+
+  if (P.y - PLAYER_R < ceilingY) {
+    P.y = ceilingY + PLAYER_R;
     hurt();
   }
 
@@ -356,7 +359,10 @@ function landOnLedges(bottomBefore, rise) {
   for (const ledge of crossed) {
     if (fitsThroughGap(ledge)) continue;
 
-    if (ledge.spiked) {
+    // A spiked floor is no longer uniformly deadly: shaft.js guarantees a
+    // safe band on every one of them, so the question is where the player
+    // landed rather than which kind of floor it was.
+    if (isSpikeAt(ledge, P.x, PLAYER_R)) {
       hurt();
       return;
     }
@@ -379,7 +385,7 @@ function recycleLedges() {
   // the last generated ledge has nothing left to land on, and falls for ever.
   ledges = ledges.filter((ledge) => ledge.y > -LEDGE_H * 2);
   while (lowestLedgeY() < camY + H + LEDGE_SPACING) {
-    ledges.push(makeLedge(lowestLedgeY() + LEDGE_SPACING));
+    ledges.push(newLedge(lowestLedgeY() + LEDGE_SPACING));
   }
 }
 
@@ -476,16 +482,13 @@ function render() {
 }
 
 function drawLedge(ledge) {
-  const top = ledge.spiked ? ART.ledgeSpikedTop : ART.ledgeTop;
-  const body = ledge.spiked ? ART.ledgeSpiked : ART.ledge;
-
-  const segments = [
-    [0, ledge.gapX],
-    [ledge.gapX + ledge.gapW, W - (ledge.gapX + ledge.gapW)],
-  ];
-
-  for (const [x, width] of segments) {
+  // The runs come from shaft.js so the picture cannot disagree with the
+  // collision: a stretch drawn as plain shelf IS a stretch you can land on.
+  for (const segment of ledgeSegments(ledge, SHAFT_TUNING)) {
+    const { x, w: width } = segment;
     if (width <= 0) continue;
+    const body = segment.spiked ? ART.ledgeSpiked : ART.ledge;
+    const top = segment.spiked ? ART.ledgeSpikedTop : ART.ledgeTop;
     ctx.fillStyle = body;
     ctx.fillRect(x, ledge.y, width, LEDGE_H);
     ctx.fillStyle = top;
@@ -494,7 +497,7 @@ function drawLedge(ledge) {
     // Spikes are drawn as actual spikes rather than signalled by colour
     // alone: the difference between a ledge you can stand on and one that
     // hurts has to survive a player who cannot separate the two hues.
-    if (ledge.spiked) {
+    if (segment.spiked) {
       ctx.fillStyle = ART.spike;
       const step = 14;
       for (let sx = x + 3; sx < x + width - 3; sx += step) {
@@ -513,26 +516,26 @@ function drawLedge(ledge) {
 
 function drawCeiling() {
   ctx.fillStyle = ART.ceiling;
-  ctx.fillRect(0, 0, W, CEILING_H);
+  ctx.fillRect(0, 0, W, ceilingY);
 
   ctx.fillStyle = ART.ceilingSpike;
   const step = 24;
   for (let x = 0; x < W; x += step) {
     ctx.beginPath();
-    ctx.moveTo(x, CEILING_H);
-    ctx.lineTo(x + step / 2, CEILING_H + 16);
-    ctx.lineTo(x + step, CEILING_H);
+    ctx.moveTo(x, ceilingY);
+    ctx.lineTo(x + step / 2, ceilingY + 16);
+    ctx.lineTo(x + step, ceilingY);
     ctx.closePath();
     ctx.fill();
   }
 
   // A warning wash that grows as the player nears the spikes, so the danger
   // is legible before it is fatal.
-  const nearness = clamp(1 - (P.y - CEILING_H) / 220, 0, 1);
+  const nearness = clamp(1 - (P.y - ceilingY) / 220, 0, 1);
   if (nearness > 0) {
     ctx.globalAlpha = nearness;
     ctx.fillStyle = ART.ceilingWarn;
-    ctx.fillRect(0, CEILING_H, W, 150);
+    ctx.fillRect(0, ceilingY, W, 150);
     ctx.globalAlpha = 1;
   }
 }
@@ -578,11 +581,11 @@ function drawPlayer() {
  * abruptly, so the two never both read as the ceiling at once.
  */
 function drawCeilingMarker() {
-  const ceilingOnScreen = CEILING_H - camY;
+  const ceilingOnScreen = ceilingY - camY;
   const hidden = clamp(-ceilingOnScreen / 40, 0, 1);
   if (hidden <= 0) return;
 
-  const clearance = Math.max(0, Math.round(P.y - PLAYER_R - CEILING_H));
+  const clearance = Math.max(0, Math.round(P.y - PLAYER_R - ceilingY));
 
   ctx.save();
   ctx.globalAlpha = hidden;

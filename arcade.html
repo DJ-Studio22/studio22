@@ -384,7 +384,21 @@
         : `${shown} of ${total} games.`;
     }
 
-    search.addEventListener('input', applyFilters);
+    // Three events, not one, and the extra two are not belt-and-braces.
+    //
+    // This is <input type="search">, so the browser draws its own clear (x)
+    // button inside the field. Clicking it empties the value and fires
+    // `search` — and in Safari that is the ONLY event it fires. Listening
+    // for `input` alone left the box looking empty while the grid stayed
+    // filtered, which reads exactly like "the search is broken": you clear
+    // it and your games do not come back. Escape inside the field does the
+    // same thing in some browsers.
+    //
+    // applyFilters is idempotent, so a browser that fires both costs one
+    // extra pass over thirteen cards and nothing else.
+    for (const event of ['input', 'search', 'change']) {
+      search.addEventListener(event, applyFilters);
+    }
 
     // Leaving the search field. input.js ignores every key while a text
     // field has focus — correctly, or typing would drive the grid — so this

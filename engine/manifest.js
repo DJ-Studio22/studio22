@@ -29,7 +29,7 @@
 // whereas a game that silently vanishes from the hub is the exact failure
 // this validation exists to prevent.
 
-import games from '../games.json';
+import games from '../games.json' with { type: 'json' };
 
 // --- The shape of an entry ----------------------------------------------
 
