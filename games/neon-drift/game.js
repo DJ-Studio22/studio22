@@ -232,6 +232,10 @@ let deliveries = 0;
 let charge = 0;
 let boosting = false;
 let sliding = false;
+let braking = false;
+// Throttles the "no boost" callout so holding an empty trigger does not
+// machine-gun it.
+let emptyBoostSaid = 0;
 let combo = 0;
 let comboTimer = 0;
 let bestCombo = 0;
@@ -374,6 +378,8 @@ function reset() {
   charge = 0;
   boosting = false;
   sliding = false;
+  braking = false;
+  emptyBoostSaid = 0;
   combo = 0;
   comboTimer = 0;
   bestCombo = 0;
@@ -466,8 +472,30 @@ function update(dt) {
   if (timeLeft <= 0) { timeLeft = 0; finish(); return; }
 
   // --- Throttle, boost, handbrake ---------------------------------------
-  sliding = Boolean(stick.b) && Math.abs(stick.x) > 0.25 && car.speed > 200;
-  boosting = Boolean(stick.a) && charge > 0;
+  // Boost on the right trigger, brake on the left, with A and B carrying the
+  // same two actions. Reaching for the triggers on a pad and finding nothing
+  // there is what "boost and brake do nothing on gamepad" actually was: the
+  // buttons were mapped, the triggers were not, and a driving game is played
+  // with the triggers.
+  const wantBoost = Boolean(stick.rt || stick.a);
+  const wantBrake = Boolean(stick.lt || stick.b);
+
+  // The handbrake step-out still needs a turn and some speed — that is the
+  // move. But the brake now also just brakes, which is what the control is
+  // called and what a player expects it to do.
+  sliding = wantBrake && Math.abs(stick.x) > 0.25 && car.speed > 200;
+  braking = wantBrake && !sliding;
+
+  boosting = wantBoost && charge > 0;
+
+  // Pressing boost on an empty meter used to be completely silent, which is
+  // indistinguishable from a dead button. It now says no.
+  if (wantBoost && charge <= 0 && emptyBoostSaid <= 0) {
+    audio.play('warn', { pitch: 0.6, volume: 0.5 });
+    floater(car.x, EYE_Y - 30, 'NO BOOST', ART.hud.warn);
+    emptyBoostSaid = 0.9;
+  }
+  if (emptyBoostSaid > 0) emptyBoostSaid = Math.max(0, emptyBoostSaid - dt);
 
   if (boosting) {
     charge = Math.max(0, charge - BOOST_DRAIN * dt);
@@ -484,6 +512,8 @@ function update(dt) {
     if (car.speed < target) car.speed += ACCEL * dt;
     else car.speed -= BRAKE * 0.35 * dt;
   }
+
+  if (braking) car.speed -= BRAKE * dt;
 
   if (sliding) {
     car.speed -= SLIDE_SPEED_COST * dt;
@@ -536,7 +566,7 @@ function update(dt) {
   if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
 
   // --- Traffic ----------------------------------------------------------
-  traffic.update(dt, car, { behind: 700, ahead: 2200 });
+  traffic.update(dt, car, { behind: 700, ahead: 2200 }, oncomingLanes());
   traffic.refill(car, {
     density: trafficDensity(),
     spanFrom: 900,
@@ -1021,8 +1051,9 @@ shell = new GameShell({
   onRestart: reset,
   controls: [
     { action: 'Steer', gamepad: 'Left stick or D-pad', keyboard: 'Left / Right or A / D', touch: 'Drag the left side' },
-    { action: 'Boost', gamepad: 'A', keyboard: 'Space', touch: 'Boost pad' },
-    { action: 'Handbrake', gamepad: 'B', keyboard: 'Shift', touch: 'Slide pad' },
+    { action: 'Boost', gamepad: 'Right trigger or A', keyboard: 'Space', touch: 'Boost pad' },
+    { action: 'Brake', gamepad: 'Left trigger or B', keyboard: 'Shift', touch: 'Slide pad' },
+    { action: 'Handbrake turn', gamepad: 'Brake while steering hard', keyboard: 'Brake while steering hard', touch: 'Brake while steering hard' },
     { action: 'Charge boost', gamepad: 'Pass traffic close', keyboard: 'Pass traffic close', touch: 'Pass traffic close' },
     { action: 'Deliver', gamepad: 'Drive onto the lit pad', keyboard: 'Drive onto the lit pad', touch: 'Drive onto the lit pad' },
     { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },

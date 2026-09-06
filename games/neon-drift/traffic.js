@@ -18,6 +18,12 @@
 //                  move over.
 //   3. YIELD       If something much faster is closing from behind in your
 //                  lane, treat that as a reason to move over too.
+//   4. CLEAR OUT   If the lane you are in has just been turned over to
+//                  oncoming traffic, get out of it. The road gains a
+//                  contraflow lane as the run escalates, and a car that
+//                  simply stayed put was left driving head-on into the
+//                  traffic now coming the other way — which reads as a bug
+//                  rather than as a hazard, because it is one.
 //
 // Rule 3 is what makes the player part of the traffic rather than a ghost
 // driving through a diorama. It is also a deliberate difficulty valve: driving
@@ -156,7 +162,7 @@ export class Traffic {
    * @param {object} bounds   { behind, ahead } world distances outside which a
    *                          car is recycled.
    */
-  update(dt, player, bounds) {
+  update(dt, player, bounds, oncomingLanes = 0) {
     const { laneX, laneCount } = this.#config;
 
     for (const car of this.#cars) {
@@ -168,7 +174,7 @@ export class Traffic {
       // full behaviour model would have it politely pulling over for a player
       // it is not sharing a lane with.
       if (!car.oncoming) {
-        this.#driveWithTraffic(car, dt, player, laneCount);
+        this.#driveWithTraffic(car, dt, player, laneCount, oncomingLanes);
       }
 
       car.y += car.speed * dt;
@@ -195,7 +201,7 @@ export class Traffic {
     }
   }
 
-  #driveWithTraffic(car, dt, player, laneCount) {
+  #driveWithTraffic(car, dt, player, laneCount, oncomingLanes = 0) {
     // --- 1. Follow ---------------------------------------------------------
     const lead = this.#leaderFor(car, player);
     let desired = car.cruise;
@@ -221,8 +227,10 @@ export class Traffic {
     if (car.speed < car.cruise * HELD_UP_MARGIN) car.heldUp += dt;
     else car.heldUp = Math.max(0, car.heldUp - dt * 2);
 
+    // Standing in a contraflow lane is not something to be patient about.
+    const inContraflow = car.lane < oncomingLanes;
     const yielding = this.#shouldYield(car, player);
-    const wantsOut = car.heldUp > PATIENCE || yielding;
+    const wantsOut = inContraflow || car.heldUp > PATIENCE || yielding;
 
     if (car.signal > 0) {
       car.signal -= dt;
@@ -231,7 +239,7 @@ export class Traffic {
         // went on may have closed while it was blinking, and pulling into it
         // anyway is the one behaviour that would read as a bug.
         const lane = car.lane + car.signalDir;
-        if (this.#laneIsClear(car, lane, player)) {
+        if (lane >= oncomingLanes && this.#laneIsClear(car, lane, player, car.lane < oncomingLanes)) {
           car.targetLane = lane;
           car.changing = true;
           car.heldUp = 0;
@@ -246,11 +254,14 @@ export class Traffic {
 
     // Prefer the outside lane when overtaking, the inside when yielding — the
     // same instinct a driver has, and it keeps the fast lane usable.
-    const order = yielding ? [-1, 1] : [1, -1];
+    // Getting out of a contraflow lane only ever means moving right, and it
+    // is urgent enough to take a tighter gap than an overtake would.
+    const order = inContraflow ? [1] : yielding ? [-1, 1] : [1, -1];
     for (const dir of order) {
       const lane = car.lane + dir;
       if (lane < 0 || lane >= laneCount) continue;
-      if (!this.#laneIsClear(car, lane, player)) continue;
+      if (lane < oncomingLanes) continue;      // never move INTO the contraflow
+      if (!this.#laneIsClear(car, lane, player, inContraflow)) continue;
       car.signal = SIGNAL_TIME;
       car.signalDir = dir;
       return;
@@ -287,16 +298,23 @@ export class Traffic {
   }
 
   // Room in `lane` both ahead of and behind this car, counting the player.
-  #laneIsClear(car, lane, player) {
+  #laneIsClear(car, lane, player, urgent = false) {
+    // A car escaping a contraflow lane accepts a tighter gap than one merely
+    // fancying an overtake. It is still a gap — it will not merge into
+    // somebody — but it will take a smaller one, because the alternative is
+    // a head-on.
+    const ahead = urgent ? MERGE_GAP_AHEAD * 0.5 : MERGE_GAP_AHEAD;
+    const behind = urgent ? MERGE_GAP_BEHIND * 0.5 : MERGE_GAP_BEHIND;
+
     for (const other of this.#cars) {
       if (other === car || !other.active) continue;
       if (other.lane !== lane && other.targetLane !== lane) continue;
       const gap = other.y - car.y;
-      if (gap > -MERGE_GAP_BEHIND && gap < MERGE_GAP_AHEAD) return false;
+      if (gap > -behind && gap < ahead) return false;
     }
     if (player.lane === lane) {
       const gap = player.y - car.y;
-      if (gap > -MERGE_GAP_BEHIND && gap < MERGE_GAP_AHEAD) return false;
+      if (gap > -behind && gap < ahead) return false;
     }
     return true;
   }
