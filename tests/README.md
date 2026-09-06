@@ -54,7 +54,10 @@ tuning splits into:
 | **`game.js`** | canvas, input, audio, camera, shell wiring |
 | **a rules module** | the simulation, free of the DOM, importable from Node |
 
-Four games have done this, and it has paid for itself every time:
+Seven games have done this, and it has paid for itself every time — twice by
+saying a game did not work yet. Ember was arithmetically impossible past
+25 km; Ballast's whole twist was decoration until two rules were added
+because this harness would not stop saying so.
 
 | Game | Module | What it exists to make measurable |
 |---|---|---|
@@ -63,10 +66,13 @@ Four games have done this, and it has paid for itself every time:
 | Block Buster | `board.js` | clears, charged columns, cascade, the chains it creates |
 | Skyhook | `swing.js`, `city.js` | rope physics, and how far each skill level actually gets |
 | Gravity Flip | `rooms.js`, `motion.js` | room passability; the flip-budget invariant |
+| Ember | `gorge.js` | whether every generated gap is actually reachable |
+| Ballast | `hold.js` | whether managing the list is worth anything at all |
 
 ### 3. Tuning is a plain object, so a test can clone it
 
-`swing.js` exports `TUNING`; `city.js` exports `CITY_TUNING`. Both are flat
+`swing.js` exports `TUNING`; `city.js` exports `CITY_TUNING`; `gorge.js` and
+`hold.js` export a `TUNING` each. All are flat
 objects the game reads at runtime and a test can copy, override one figure in,
 and run both versions side by side. That is what turns "this feels better"
 into a measurement.
@@ -92,9 +98,13 @@ run a *competent* bot and a *good* one and report both.
 tests/
   helpers/seeded.mjs              seeded Math.random, and percentile helpers
   helpers/skyhook-bot.mjs         the two-skill Skyhook bot (imported, not run)
+  helpers/ember-bot.mjs           position-control vs rate-control balloonists
+  helpers/ballast-bot.mjs         one stacking brain, with and without the list
+  ballast.hold.test.mjs
   block-buster.board.test.mjs
   circuit-racer.driving.test.mjs
   gravity-flip.physics.test.mjs
+  ember.gorge.test.mjs
   gravity-flip.rooms.test.mjs
   number-crunch.problems.test.mjs
   skyhook.swing.test.mjs
@@ -111,3 +121,26 @@ are deliberately kept to sample sizes that stay inside that budget — large
 enough for the medians to be stable, small enough that nobody avoids running
 them. If a run needs a bigger sample to answer a specific question, raise it
 locally for that investigation rather than in the committed test.
+
+---
+
+## 6. A rule measured against a clock needs the clock running
+
+Added after Ballast. Its water comes in per SECOND, and the bots slammed every
+crate the instant it spawned — so a seventy-crate voyage took 1.3 seconds of
+simulated time and no bot could sink at any tuning. Twelve combinations of
+threshold and rate returned byte-identical results, which is what gave it
+away: a parameter that changes nothing is usually not a boring parameter, it
+is a parameter nothing is reading.
+
+The bots now take a fixed think time over each crate before hard-dropping it,
+the same for both so it is never the variable under test.
+
+## 7. A bot is not a player, and the difference has shipped a bug
+
+Ember's balloon reached the rock in 0.53 seconds from a standing start. Every
+bot missed it, because every bot was already flying on frame one. Nobody would
+have found that except by opening the game and looking at it.
+
+The harness is for claims about numbers. It is not a substitute for playing
+the thing, and neither is a substitute for the other.

@@ -270,7 +270,7 @@
     "featured": false,
     "tournamentReady": true,
     "estimatedRunTime": 300,
-    "status": "coming-soon"
+    "status": "live"
   },
   {
     "id": "ember",
@@ -291,6 +291,6 @@
     "featured": false,
     "tournamentReady": true,
     "estimatedRunTime": 120,
-    "status": "coming-soon"
+    "status": "live"
   }
 ]

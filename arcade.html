@@ -36,7 +36,7 @@
     "url": "https://studio22-anw.pages.dev/arcade.html",
     "mainEntity": {
       "@type": "ItemList",
-      "numberOfItems": 11,
+      "numberOfItems": 13,
       "itemListElement": [
         {
           "@type": "ListItem",
@@ -103,6 +103,18 @@
           "position": 11,
           "url": "https://studio22-anw.pages.dev/games/gravity-flip/index.html",
           "name": "Gravity Flip"
+        },
+        {
+          "@type": "ListItem",
+          "position": 12,
+          "url": "https://studio22-anw.pages.dev/games/ballast/index.html",
+          "name": "Ballast"
+        },
+        {
+          "@type": "ListItem",
+          "position": 13,
+          "url": "https://studio22-anw.pages.dev/games/ember/index.html",
+          "name": "Ember"
         }
       ]
     }
@@ -380,12 +392,15 @@
       const soon = games.filter((game) => game.status === 'coming-soon').length;
       const total = games.length;
       const label = document.getElementById('count');
-      // Deliberately plain about the fact that none of them are playable
-      // yet. Everything being "coming soon" is the honest state of the page
-      // today, and saying so reads better than a grid that looks broken.
-      label.textContent = shown === total
-        ? `${total} games. ${soon} still in development.`
-        : `${shown} of ${total} games.`;
+      // Deliberately plain about how many are not playable yet — a grid with
+      // inert cards in it reads as broken unless the page says why. Now that
+      // the last two placeholders have shipped there are none, and "0 still
+      // in development" is a sentence about nothing, so it is not said.
+      label.textContent = shown !== total
+        ? `${shown} of ${total} games.`
+        : soon > 0
+          ? `${total} games. ${soon} still in development.`
+          : `${total} games. All playable.`;
     }
 
     // Three events, not one, and the extra two are not belt-and-braces.

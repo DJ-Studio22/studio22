@@ -108,12 +108,28 @@ test('search matches title and tags, case and whitespace insensitively', () => {
   assert.deepEqual(Manifest.search('zzzz'), []);
 });
 
-test('search covers coming-soon games too — the hub filters the whole catalogue', () => {
-  const soon = Manifest.getAll().filter((g) => g.status !== 'live');
-  assert.ok(soon.length > 0, 'no coming-soon games to check');
-  for (const game of soon) {
+test('search does not filter by status — the hub searches the whole catalogue', () => {
+  // Stated as a property of EVERY game rather than as a check on the
+  // coming-soon ones. The original version asserted that some coming-soon
+  // game existed to test against, and shipping the last two placeholders
+  // emptied that set and failed a test about search. What it was actually
+  // protecting is this: a game is findable by its own title whatever its
+  // status, which is checkable on any catalogue including an all-live one.
+  const all = Manifest.getAll();
+  assert.ok(all.length > 0, 'the catalogue is empty');
+
+  for (const game of all) {
     const hit = Manifest.search(game.title).some((g) => g.id === game.id);
-    assert.ok(hit, `${game.id} cannot be found by its own title`);
+    assert.ok(hit, `${game.id} (${game.status}) cannot be found by its own title`);
+  }
+
+  // And when there IS a coming-soon game, it is still in the unfiltered set.
+  const soon = all.filter((g) => g.status !== 'live');
+  for (const game of soon) {
+    assert.ok(
+      Manifest.search('').some((g) => g.id === game.id),
+      `${game.id} is missing from an empty-query search`,
+    );
   }
 });
 

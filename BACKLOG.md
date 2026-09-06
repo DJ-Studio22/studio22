@@ -179,105 +179,40 @@ A top-down time-trial racer.
 
 ---
 
-## 11. Ballast and Ember — NOT STARTED
+## 11. Ballast and Ember — [x] DONE
 
-Both are in `games.json` as `coming-soon` with taglines, descriptions,
-tags and artwork. Neither has a `games/` folder yet, so both are listed
-and neither is reachable.
+Both built, both live. The manifest now has no `coming-soon` entries at all
+for the first time — thirteen games, all playable.
 
-**Ballast** — falling crates into a floating hold. The twist is that a
-crate is a WEIGHT: where it lands tilts the hull, a hull far enough over
-ships water, and a packed row battens down and slides out of the bottom
-rather than vanishing. Crates are odd shapes, deliberately not the seven
-standard ones, with their own rotation and their own scoring (tonnage
-stowed, not lines cleared).
+**Ballast** — `games/ballast/`, `game.js` + `hold.js`. Crates into a floating
+hold: where the weight lands tilts the hull, a hull far enough over ships
+water, and a packed row battens down and slides out of the bottom. Score is
+tonnage stowed. Crates are deliberately not the standard seven and the rule
+is one line — no crate is four cells.
 
-**Ember** — one-button balloon up a gorge at dusk. Hold the burner to
-rise, release to sink; momentum is the whole skill, so the gap has to be
-read early. The genre is shared; the character, the palette and the place
-are not.
-
----
-
-## 12. Five new games — [x] DONE
-
-Block Buster, Neon Drift Delivery, Skyhook, Tower Stack, Gravity Flip. Each
-got the full treatment: engine integration, own `ART` palette, universal
-input, SVG thumbnail, `games.json` entry, live status. All endless; the score
-is how far you got in every one.
+**Ember** — `games/ember/`, `game.js` + `gorge.js`. One-button balloon up a
+gorge at dusk. Hold the burner to rise, release to sink; every gap the
+generator produces is provably reachable from the worst state a player could
+arrive in, and the physics scale with speed so that stays true at any
+distance.
 
 **Verified**
-- Board rules for Block Buster: 18 assertions against `board.js` covering full
-  rows, charged columns, cascade gravity, the chain it creates, and the rising
-  garbage row. All pass.
-- Room library for Gravity Flip: 19 rooms, all passing the file's own checker
-  (clear doorway, no column blocked on both surfaces, four clear columns
-  between opposite forced stretches). Sequencer checked over 4,000 picks — no
-  tier leaks, no immediate repeats.
-- Gravity Flip's flip-budget invariant measured across seven run lengths up to
-  room 600: 3.78-3.83 columns at every speed, under the budget of 4.
-- Played in a browser against a PRODUCTION build: Block Buster clears lines and
-  chains (verified with a seeded board); Neon Drift delivers, crashes, and
-  scores near misses; Skyhook swings, re-hooks and takes rings; Tower Stack
-  shears and tapers; Gravity Flip reached room 37 on a reactive bot and
-  restarted cleanly.
-- All 13 thumbnails validated by script: tag balance, quote balance, every
-  colour a real colour, every gradient reference defined, no id collisions.
-- All eleven games launched from `npm run preview`. Every one boots, paints,
-  and carries its accessible name. Console clean on all of them, with a canary
-  message proving the capture was actually working.
+- 39 new assertions across `tests/ember.gorge.test.mjs` (16) and
+  `tests/ballast.hold.test.mjs` (23). Full suite 208, all passing.
+- Two bots each, per the convention. Ember: competent median 153 m against
+  good 449 m. Ballast: the bot that ignores the list founders 28 times in 40
+  and stows 436 t; the one that weighs it never founders and stows 855 t.
+- Played in a browser against a PRODUCTION build, both to game over. Boot
+  fallback cleared, canvas painted, console clean, shell game over showing a
+  score and a stated ending.
+- Page weights: Ballast 24.3 KB, Ember 23.5 KB gzipped.
+
+**Four faults the process found**, all written up in PROGRESS.md Phase 11:
+Ember became arithmetically impossible past 25 km; its gorge lost a wall to a
+fixed margin; its balloon reached the rock in 0.53 s from a standing start,
+which only playing it could have caught; and Ballast's whole twist was
+decoration until the crate weights went bimodal and a listing hull started
+sliding cargo. Plus a harness bug — bots that slam instantly make a
+seventy-crate run take 1.3 seconds, and a rule charged per second never fires.
 
 ---
-
-## 13. OPEN — judgement calls left for Duval
-
-- **Skyhook difficulty — [x] DONE.** Two real faults found by measurement
-  rather than tuning: the hook refused 86% of the anchors it could reach
-  (anything below the player), and only 21% of swings were on a rope short
-  enough to clear the roof they hung from. Competent first runs went from
-  21 m / 1.8 s to 67 m / 5.5 s, runs under 25 m from 256/300 to 33/300, while
-  the good/competent gap widened from 1.67x to 8.99x. Full numbers in
-  PROGRESS.md.
-- **Categories — [x] DONE.** `puzzle` added; Block Buster, Tower Stack and
-  Ballast moved into it.
-- **OPEN: the bot harness is not in the repo.** Skyhook's difficulty numbers
-  come from a script that drives swing.js at two skill levels over seeded
-  runs. It lives in a scratch directory, like Circuit Racer's race simulation
-  and Number Crunch's arithmetic checks before it — this repo has never kept
-  its test scripts. Worth deciding whether that stays true now that three
-  games have testable rule modules.
-
----
-
-## 6b. Social card images — [x] DONE
-
-One image for the whole site: public/social-card.png, wired by
-tools/inject-meta.mjs onto all fourteen pages as og:image and twitter:image,
-with the card set to "summary_large_image". The width and height in the tags
-are measured from the PNG itself rather than written in site.config.json, so
-they cannot disagree with the file. Per-game cards were considered and not
-built — eleven more images to keep in step with eleven descriptions, for a
-preview most visitors never see.
-
----
-
-## 7. Phase 8 — custom domain — [x] DONE (code side; registrar steps are yours)
-
-**Do**
-- Document what the user has to do at the registrar and in Cloudflare Pages,
-  since I cannot do it for them.
-- Make any code change the domain move needs — absolute URLs in metadata,
-  canonical links, sitemap host.
-
-**Verify**
-- No hardcoded `pages.dev` host left anywhere it would break.
-- Written steps the user can follow without me.
-
----
-
-## Notes
-
-- `reference/` holds the pre-port originals. Do not edit them.
-- Nothing persists between visits. sessionStorage only, via
-  `engine/session.js` — see the hard constraints in CLAUDE.md.
-- Every game owns its palette locally; only site chrome uses tokens.css.

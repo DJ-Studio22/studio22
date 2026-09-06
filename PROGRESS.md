@@ -14,6 +14,10 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 11: Ballast and Ember built — the last two `coming-soon` placeholders.
+  THIRTEEN games live and nothing left in the manifest that is not playable.
+  Both have a rules module and a bot harness; both had a design fault the bots
+  found and the browser could not, and one had the reverse. See below
 - Phase 10: the editorial layer on the landing page — display type, a section
   index 00-07, mono telemetry, depth planes and one pinned section. Plus the
   sound toggle, which is now a visit preference in engine/session.js rather
@@ -24,7 +28,8 @@
 - Nothing in flight
 
 ## Next
-- Ballast and Ember are still the only two `coming-soon` entries. See BACKLOG item 11.
+- Nothing queued. Every entry in games.json is `live` — the arcade has no
+  placeholder cards left for the first time.
 
 
 ## Phase 9 — the two production bugs
@@ -200,25 +205,27 @@ both made the competent bot WORSE, so neither shipped.
 
 Measured, not estimated. Every page gzipped, as built:
 
-Re-measured at eleven games (HTML plus every asset the page loads up front,
+Re-measured at THIRTEEN games (HTML plus every asset the page loads up front,
 gzipped at level 9):
 
 | Page | Total (gzipped) |
 |---|---:|
-| games/circuit-racer/ | 27.8 KB |
-| games/keystroke/ | 25.8 KB |
-| games/neon-drift/ | 25.3 KB |
-| arcade.html | 24.6 KB |
-| games/block-buster/ | 24.4 KB |
+| games/circuit-racer/ | 29.2 KB |
+| games/keystroke/ | 27.0 KB |
+| games/neon-drift/ | 26.7 KB |
+| games/block-buster/ | 25.6 KB |
+| games/skyhook/ | 25.2 KB |
+| games/gravity-flip/ | 24.8 KB |
+| games/number-crunch/ | 24.7 KB |
+| arcade.html | 24.7 KB |
+| games/ballast/ | 24.3 KB |
 | index.html | 23.7 KB |
-| games/number-crunch/ | 23.5 KB |
-| games/gravity-flip/ | 23.5 KB |
-| games/skyhook/ | 22.9 KB |
-| games/tower-stack/ | 21.8 KB |
-| games/comet/ | 21.6 KB |
-| games/updraft/ | 21.3 KB |
-| games/sinkhole/ | 21.2 KB |
-| party.html | 20.7 KB |
+| games/ember/ | 23.5 KB |
+| games/sinkhole/ | 23.0 KB |
+| games/tower-stack/ | 23.0 KB |
+| games/comet/ | 22.8 KB |
+| games/updraft/ | 22.5 KB |
+| party.html | 20.6 KB |
 
 The shared chunks are util 11.5 KB (util + shell + ui + canvas + loop +
 session + audio), input 4.3 KB and tokens 0.4 KB — 16.1 KB carried by every
@@ -505,3 +512,149 @@ frame width are tuned as a set at each breakpoint and cannot be moved apart.
 index.html went 19.6 KB to 23.7 KB gzipped, arcade.html 23.5 to 24.6. Most of
 the landing page's growth is the manifest and thumbnail chunks it now shares
 with the arcade, plus session.js for the sound toggle.
+
+## Phase 11 — Ballast and Ember, and four faults the harness found
+
+The last two `coming-soon` entries. Both got the full treatment: own folder,
+own `ART` palette, universal input, engine integration, manifest entry, and a
+rules module with a two-skill bot harness because both games make a claim
+about difficulty.
+
+The interesting part is not that the bots passed. It is what they refused.
+
+### Ember — one burner up a gorge at dusk
+
+`games/ember/`, two files. Hold to rise, let go to sink. The gorge scrolls
+past and the rock ahead has a gap in it.
+
+**The reachability contract.** The game claims momentum is the skill, so the
+gap has to be read early. That is arithmetic, and `gorge.js` states it as one
+function: `reachableOffset()` answers how far the balloon can move vertically
+in the time before the next gate, starting from the WORST state a player
+could legitimately arrive in — at the edge of the previous gap, at terminal
+velocity, moving the wrong way, with the gust against them, under the WEAKER
+of its two accelerations. `nextGate()` clamps every generated gap into that
+band, so the contract holds by construction rather than by hoping.
+
+The test asserts the contract AND that the clamp actually binds on a decent
+fraction of gates. A guarantee that never fires is a coincidence.
+
+**FAULT 1 — the gorge became literally impossible at 25 km.** The first cut
+let the forward drift rise forever while the balloon's accelerations stayed
+fixed. Every kilometre shrank the reachable band; it hit zero at about 25 km
+and went negative after. Past there, no perfect player could have crossed it.
+
+Same fault as Gravity Flip and the same fix: accelerations scale with the
+SQUARE of the drift and terminal velocities scale linearly with it, so the
+time terms shrink exactly as fast as the speed rises and every vertical
+distance is invariant in pixels. Measured after: the reachable band settles at
+303.6 px and does not move between 30 km and 10,000 km, and the momentum cost
+is 82 px at every speed. What escalates instead is honest — the gap narrows,
+the gates tighten, and it all happens in less wall-clock time.
+
+**FAULT 2 — the gorge lost a wall.** A fixed 74 px margin bounded the gap
+CENTRE, but half a 265 px gap is 133, so the ceiling was drawn 58 px above the
+top of the world. The margin is derived from the gap width now, which also
+fixes a difficulty that was backwards: a wide early gap can no longer roam as
+far as a narrow late one.
+
+**FAULT 3 — found by playing it, not by the bots.** The accelerations were
+nearly three times what they are now. From a standing start the envelope
+reached the rock in **0.53 seconds**, so a run was over before a player had
+finished reading the screen. Every bot missed it because every bot was
+already flying on frame one. Slower is also better for the claim: the momentum
+cost is now 82 px against a 265 px channel instead of 55.
+
+**Measured, 40 seeded runs per skill:**
+
+| | competent | good |
+|---|---:|---:|
+| median | 153 m | **449 m** |
+| 90th percentile | 332 m | 702 m |
+| best | 353 m | 841 m |
+| worst | 69 m | 212 m |
+
+The two bots share everything except how far ahead they read and whether they
+control position or RATE. That gap — 2.9x — is the momentum claim, measured.
+
+### Ballast — stack the hold, keep her level
+
+`games/ballast/`, two files. Crates drop into a floating barge. Where the
+weight goes tilts the hull, a hull far enough over ships water, and a packed
+row battens down and slides out of the bottom. Tonnage stowed is the score.
+
+Crates are deliberately not the standard seven, and the rule that keeps it
+that way is one line: **no crate is four cells.** Sizes are one, two, three
+and five, which rules out all seven tetrominoes at a stroke.
+
+**The two bots share one stacking brain and differ only in whether they look
+at the list.** So the gap between them is not "how good is the player", it is
+"what is the twist worth". That question turned out to have an uncomfortable
+answer three times running.
+
+**FAULT 4 — the twist was decoration, and stayed decoration through two
+attempted fixes.**
+
+First measurement: the careful bot scored **a third** of the careless one. It
+was paying for a hazard that never arrived — with 47 t of cargo against a
+120 t hull it was arithmetically impossible to reach the shipping threshold.
+
+Fixing the hull mass was not enough. A bot that packs a flat, low, hole-free
+stack **stays level for free**, because "flat and even" and "balanced" are
+almost the same objective, and random weights average out faster than they
+accumulate: relative lopsidedness falls as the count grows. Twelve
+combinations of threshold and rate returned identical results.
+
+Two rules exist because of that, and the game does not work without either:
+
+- **The weights are bimodal.** A 26-tonne ingot in one cell against five-cell
+  crates of 1 t/cell. A quarter of a typical load in a single cell cannot be
+  averaged away, so where it goes is a decision on its own.
+- **A listing hull slides cargo.** Past 5 degrees a landing crate shifts one
+  column downhill. That breaks the equivalence: careful packing stops working
+  while she is over, so the list is something you must fix before you can go
+  back to stacking. It is also exactly what the game said it was about.
+
+**And a harness bug worth recording.** Even after both rules, no bot could
+ever sink. The bots slammed every crate the instant it spawned, so a
+seventy-crate run took **1.3 seconds** of simulated time — and the water is
+charged per second. A rule measured against a clock has to be measured with
+the clock running. The bots now take 0.75 s over each crate before dropping
+it, which is how the game is actually played.
+
+**Measured, 40 seeded voyages per bot, identical crate sequences:**
+
+| | packer (ignores the list) | mate (weighs it) |
+|---|---:|---:|
+| median tonnage | 436 t | **855 t** |
+| 90th percentile | 1,616 t | 3,837 t |
+| best | 2,967 t | 4,869 t |
+| foundered | **28 / 40** | **0 / 40** |
+
+Two things at once: managing the list is worth 1.96x, and it is genuinely
+manageable — the careful bot never once shipped enough water to sink. That
+second number is the fairness claim. A list you cannot undo is a countdown.
+
+The recoverability is also asserted directly rather than inferred: a test
+loads her hard over and adds cargo to the high side one cell at a time,
+checking the list comes back MONOTONICALLY at every step.
+
+### Also in this phase
+
+- `Flight.gatesPassed` counted gates as they were dropped from the render
+  window, which is a much later event than passing them — the game over panel
+  reported zero gates passed on a run that had flown through six.
+- Ballast's controls now match Block Buster's exactly (turn on A, hard drop on
+  B or up). They did not, and a player who knows one stacker should not have
+  to relearn their thumbs for the other.
+- Ember's parallax far wall poked into the channel and read as slabs of rock
+  floating in the gorge. In a game whose contract is that what is drawn is
+  what is solid, a background that looks solid is a lie. It is haze now.
+- Ballast's landing ghost was a filled rectangle and read as cargo already
+  stowed. It is a dashed outline with a downhill arrow when she is sliding.
+- The arcade no longer says "0 still in development".
+- `engine.manifest.test.mjs` asserted that some coming-soon game existed to
+  test search against. Shipping the last two placeholders emptied that set and
+  failed a test about search. It states the property directly now — every game
+  is findable by its own title whatever its status — which holds on any
+  catalogue including an all-live one.
