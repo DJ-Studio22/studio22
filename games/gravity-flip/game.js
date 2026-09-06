@@ -38,42 +38,26 @@ import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, clamp, randRange } from '../../engine/util.js';
-import { FLIP_COLUMNS, ROOM_COLS, ROOM_ROWS, pickRoom } from './rooms.js';
+import { ROOM_COLS, pickRoom } from './rooms.js';
+import {
+  BASE_GRAVITY, BASE_SPEED, FLIP_COLUMNS, GRID_ROWS, MAX_STEP_FRACTION,
+  PLAYER_H, PLAYER_W, TILE, flipColumns, gravityAt, maxFallAt, speedAt,
+} from './motion.js';
 
 const GAME_ID = 'gravity-flip';
 
 // --- Geometry ------------------------------------------------------------
+//
+// TILE, GRID_ROWS, the player's size and every motion number live in
+// motion.js, so that the flip-budget invariant can be checked against the
+// values the game actually runs on rather than against a second copy of them.
 
-const TILE = 40;
-// The interior rows plus a solid ceiling above and a solid floor below.
-const GRID_ROWS = ROOM_ROWS + 2;
 const W = 880;
 const H = GRID_ROWS * TILE;          // 440
 const ROOM_WIDTH = ROOM_COLS * TILE; // 800
 
 // Where the player sits on screen. Everything ahead of this is reaction time.
 const EYE_X = 200;
-
-const PLAYER_W = 22;
-const PLAYER_H = 26;
-
-// --- Motion --------------------------------------------------------------
-
-const BASE_SPEED = 300;
-const SPEED_PER_ROOM = 7;
-
-// Chosen so that a full floor-to-ceiling flip at BASE_SPEED covers
-// FLIP_COLUMNS tiles of ground. See checkFlipBudget().
-const BASE_GRAVITY = 2540;
-
-// Terminal velocity, scaled with speed like everything else, so the arc keeps
-// its shape rather than flattening out at the bottom of a long flip.
-const BASE_MAX_FALL = 1500;
-
-// The longest a single movement slice may travel, as a fraction of a tile.
-// Anything approaching 1 can skip a tile entirely; see the substepping in
-// update() for why that matters more the longer a run goes on.
-const MAX_STEP_FRACTION = 0.4;
 
 // --- Tiers ---------------------------------------------------------------
 //
@@ -178,22 +162,10 @@ for (let i = 0; i < 18; i++) trail.push({ x: 0, y: 0, life: 0, flipped: false })
 
 // --- Derived numbers -----------------------------------------------------
 
-const speed = () => BASE_SPEED + roomsCleared * SPEED_PER_ROOM;
-
-/**
- * Gravity scaled so that a flip always costs the same number of COLUMNS.
- *
- * Fall distance for a given fall time goes as g*t^2, and the ground covered in
- * that time goes as v*t. Holding (ground covered) fixed while v grows means t
- * must shrink as 1/v, which means g must grow as v^2. This one line is what
- * keeps every authored room passable at any speed.
- */
-function gravity() {
-  const ratio = speed() / BASE_SPEED;
-  return BASE_GRAVITY * ratio * ratio;
-}
-
-const maxFall = () => BASE_MAX_FALL * (speed() / BASE_SPEED);
+// All three come from motion.js; these just bind them to the run in progress.
+const speed = () => speedAt(roomsCleared);
+const gravity = () => gravityAt(roomsCleared);
+const maxFall = () => maxFallAt(roomsCleared);
 
 const theme = () => ART.tiers[Math.min(tier, ART.tiers.length - 1)];
 
@@ -690,9 +662,7 @@ function render() {
  * files are made to agree out loud, at boot, rather than by convention.
  */
 function checkFlipBudget() {
-  const travel = (GRID_ROWS - 2) * TILE - PLAYER_H;   // surface to surface
-  const time = Math.sqrt((2 * travel) / BASE_GRAVITY);
-  const columns = (BASE_SPEED * time) / TILE;
+  const columns = flipColumns();
 
   if (columns > FLIP_COLUMNS) {
     console.warn(
@@ -704,7 +674,7 @@ function checkFlipBudget() {
   return columns;
 }
 
-const flipColumns = checkFlipBudget();
+const flipCost = checkFlipBudget();
 
 // --- Boot ----------------------------------------------------------------
 
@@ -726,7 +696,7 @@ shell = new GameShell({
   controls: [
     { action: 'Flip gravity', gamepad: 'A', keyboard: 'Space', touch: 'Flip pad' },
     { action: 'Running', gamepad: 'Automatic', keyboard: 'Automatic', touch: 'Automatic' },
-    { action: 'A flip', gamepad: `Costs about ${flipColumns.toFixed(1)} tiles of ground`, keyboard: `Costs about ${flipColumns.toFixed(1)} tiles of ground`, touch: `Costs about ${flipColumns.toFixed(1)} tiles of ground` },
+    { action: 'A flip', gamepad: `Costs about ${flipCost.toFixed(1)} tiles of ground`, keyboard: `Costs about ${flipCost.toFixed(1)} tiles of ground`, touch: `Costs about ${flipCost.toFixed(1)} tiles of ground` },
     { action: 'Spikes and saws', gamepad: 'Kill on contact', keyboard: 'Kill on contact', touch: 'Kill on contact' },
     { action: 'Walls', gamepad: 'There is no brake', keyboard: 'There is no brake', touch: 'There is no brake' },
     { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },

@@ -623,5 +623,19 @@ export function leaderProgressOf(cars) {
 }
 
 export function ordinal(n) {
-  return n === 1 ? '1st' : n === 2 ? '2nd' : n === 3 ? '3rd' : n + 'th';
+  // The teens are the exception that catches every naive version of this:
+  // 11, 12 and 13 take "th" even though they end in 1, 2 and 3. Everything
+  // else goes by its last digit, so 21 is "21st" rather than "21th".
+  //
+  // A four-car race never gets past 4th, so this was wrong and invisible for
+  // as long as it existed. It is exported, and a bigger field or a tournament
+  // standing would have shown it.
+  const tens = Math.abs(n) % 100;
+  if (tens >= 11 && tens <= 13) return n + 'th';
+  switch (Math.abs(n) % 10) {
+    case 1: return n + 'st';
+    case 2: return n + 'nd';
+    case 3: return n + 'rd';
+    default: return n + 'th';
+  }
 }

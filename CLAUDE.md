@@ -66,6 +66,35 @@ HUD must be instantly recognisable in all twelve games — a player who pauses
 should know they are in Studio 22, not in whatever world the game just built
 around them. Games never restyle the shell.
 
+## Testing — a game with real tuning gets its simulation extracted
+
+"This is hard but fair" is a claim about numbers, and it cannot be checked by
+playing a browser at one run every few seconds. So a game whose difficulty is
+a claim splits in two:
+
+- `game.js` keeps canvas, input, audio, camera and shell wiring.
+- A **rules module** holds the simulation, free of the DOM, importable from
+  Node — `driving.js`, `problems.js`, `board.js`, `swing.js`, `rooms.js`,
+  `motion.js`.
+
+Then a bot in `tests/` plays it thousands of times a second.
+
+Three rules, all of them learned the hard way:
+
+- **A test imports the real module, or it is not a test.** Never restate a
+  constant. The flip-budget check once restated Gravity Flip's physics instead
+  of importing them, passed happily, and was measuring a copy of the game
+  rather than the game.
+- **Tuning is a plain exported object**, so a test can clone it, change one
+  figure and run both versions side by side. See `TUNING` in swing.js and
+  `CITY_TUNING` in city.js.
+- **Bots come in at least two skill levels.** A change that helps a weak
+  player is forgiveness; one that helps both equally is an easier game; one
+  that closes the gap has flattened the ceiling. One bot cannot tell those
+  apart.
+
+`npm test` runs the lot. The convention is written up in `tests/README.md`.
+
 ## Code style
 - Clear, readable, heavily commented. I am maintaining this long term.
 - Prefer simple and obvious over clever and compact.
