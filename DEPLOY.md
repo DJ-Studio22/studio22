@@ -141,11 +141,3 @@ worse than having no card.
 **One image serves every page.** Per-game cards would be better and are
 deliberately not built - six more images to keep in step with six
 descriptions, for a link preview most visitors never see.
-
----
-
-## Still outstanding
-
-**`test-engine.html` and `identity.html`** are development pages. They are
-not in the Vite build inputs, so they are not deployed — they live in the
-repo only. Nothing to do before launch; noted so nobody goes looking.

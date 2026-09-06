@@ -267,6 +267,18 @@ export class GameCanvas {
 
     this.#canvas = document.createElement('canvas');
     this.#canvas.style.display = 'block';
+
+    // A game page is a <body> with one canvas in it, so without this it has
+    // no heading and no named content at all: a screen reader lands on an
+    // unlabelled graphic on a page it cannot navigate. Both fixes live here
+    // rather than in nine copies of index.html, so a new game gets them by
+    // existing rather than by remembering.
+    this.#canvas.setAttribute('role', 'img');
+    this.#canvas.setAttribute('aria-label', this.#label);
+    // Read by assistive tech that ignores canvas entirely, and by anyone who
+    // has canvas turned off.
+    this.#canvas.textContent =
+      `${this.#label}. A game played on a canvas, which this browser cannot show.`;
     if (this.#pixelArt) {
       // Belt and braces: imageSmoothingEnabled governs what the 2D context
       // does when it scales images, this governs what the browser does when
