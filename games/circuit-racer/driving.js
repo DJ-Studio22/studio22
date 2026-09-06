@@ -28,6 +28,17 @@ export const OFF_TRACK_DRAG = 0.12;
 export const TURN_RATE = 2.9;      // radians/sec at full lock
 export const GRIP_SPEED = 180;     // speed at which steering reaches full lock
 
+// Below this stick deflection the player is not asking for a heading, they
+// have just not centred the stick. Steering toward the noise would make the
+// car twitch at rest.
+export const HEADING_DEADZONE = 0.28;
+
+// How many radians of error count as full lock. Smaller means the car snaps
+// to the requested heading; larger means it eases into it. A quarter turn
+// keeps the car feeling like a car — you point it and it comes round, rather
+// than rotating instantly like a twin-stick ship.
+export const HEADING_FULL_LOCK = Math.PI / 4;
+
 export const CAR_L = 26;
 export const CAR_W = 15;
 export const CAR_R = 11;           // collision radius, a little under half-length
@@ -90,8 +101,8 @@ export const DIFFICULTIES = [
     id: 'standard',
     label: 'Standard',
     blurb: 'Holds a tidy line. You will have to earn the place.',
-    topSpeed: 0.92,
-    cornerSkill: 0.82,
+    topSpeed: 0.94,
+    cornerSkill: 0.88,
     lineWobble: 11,
     mistakeEvery: 13,
     rubberBand: 0.16,
@@ -101,7 +112,7 @@ export const DIFFICULTIES = [
     label: 'Pro',
     blurb: 'Quick, precise, and rarely hands anything back.',
     topSpeed: 1.0,
-    cornerSkill: 0.93,
+    cornerSkill: 0.98,
     lineWobble: 6,
     mistakeEvery: 24,
     rubberBand: 0.05,
@@ -220,6 +231,54 @@ export function makeField(track, { rivals = 3, difficulty = DEFAULT_DIFFICULTY }
 }
 
 // --- Motion --------------------------------------------------------------
+
+/**
+ * The steering command that turns a car toward a heading in WORLD space.
+ *
+ * This is what makes the player's controls screen-relative: the stick names a
+ * direction on the screen, and the car turns toward it at its own rate rather
+ * than the stick being a rotation command. Everything downstream is unchanged
+ * — grip, drift, the slipstream and the AI all still work in car space, and
+ * the rival brains still hand stepCar a plain steer value.
+ *
+ * Returns -1..1, so it drops straight into the same input the AI produces.
+ */
+export function steerTowardHeading(car, desiredAngle) {
+  // Shortest way round. Without the wrap a car facing just past pi would take
+  // the long way and visibly steer away from where the stick is pointing.
+  let error = desiredAngle - car.angle;
+  error = Math.atan2(Math.sin(error), Math.cos(error));
+
+  // Reversing flips which way the wheels have to go to swing the nose round.
+  const facing = car.speed < -1 ? -1 : 1;
+  return clamp((error / HEADING_FULL_LOCK) * facing, -1, 1);
+}
+
+/**
+ * Turns a raw stick or key vector into a driving input, screen-relative.
+ *
+ * @param {object} car
+ * @param {object} pad   normalised input state: x, y, and the buttons
+ * @returns {{throttle:number, brake:number, steer:number}}
+ */
+export function playerInput(car, pad) {
+  const magnitude = Math.hypot(pad.x || 0, pad.y || 0);
+
+  // No steer at all when the stick is centred, rather than steering toward
+  // whatever atan2(0, 0) happens to be.
+  const steer = magnitude < HEADING_DEADZONE
+    ? 0
+    : steerTowardHeading(car, Math.atan2(pad.y, pad.x));
+
+  // Right trigger accelerates, left trigger brakes. A and B carry the same
+  // two actions so a keyboard (Space / Shift) and the touch pads land on
+  // exactly the same model as a gamepad, which is the point of doing this at
+  // all — one mental model across three devices.
+  const throttle = pad.rt || pad.a ? 1 : 0;
+  const brake = pad.lt || pad.b ? 1 : 0;
+
+  return { throttle, brake, steer };
+}
 
 /**
  * One car, one tick.

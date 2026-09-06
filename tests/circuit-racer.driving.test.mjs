@@ -284,3 +284,68 @@ test('the AI keeps its car on the road', () => {
     assert.ok(share < 0.15, `the AI spent ${Math.round(share * 100)}% of the race on the grass`);
   });
 });
+
+// --- Pace, measured against the track rather than against a bot -----------
+//
+// PROGRESS.md recorded "first-timer wins 75% on Casual and 0% above it" from a
+// tuning pass whose code did not survive. That figure is retired rather than
+// re-established, because it is not a property of the game: it is a property
+// of whatever reference bot was driving, and there is no calibrated
+// first-timer to drive it. Three harnesses written against this module gave
+// 0%, then 100%, then 100% again — the first two because they called functions
+// that do not exist and never ended the race, and the third because a bot that
+// holds the throttle down laps near the theoretical floor and beats every
+// difficulty on the open circuits.
+//
+// What IS a property of the module: how close each difficulty gets to a lap
+// with the throttle pinned and no corners. That depends on nothing but the
+// code, so it is what is asserted here.
+
+const FLAT_OUT = (track) => track.length / MAX_SPEED;
+
+function soloLapTime(track, difficultyId, seed) {
+  return withSeed(seed, () => {
+    const { cars } = makeField(track, { rivals: 3, difficulty: difficultyId });
+    const ai = cars.find((c) => !c.isPlayer);
+    let t = 0;
+    let ticks = 0;
+    while (ticks++ < 60 * 200 && ai.laps < 4) {
+      t += DT;
+      stepCar(track, ai, aiControls(track, ai, [ai], DT, 0), DT);
+      advanceLap(track, ai, 99);
+    }
+    return t / 4;
+  });
+}
+
+const paceOf = (track, id) => [1, 2, 3]
+  .map((seed) => soloLapTime(track, id, seed))
+  .reduce((a, b) => a + b, 0) / 3;
+
+test('each difficulty is quicker than the one below it, on every circuit', () => {
+  for (const track of built) {
+    const casual = paceOf(track, 'casual');
+    const standard = paceOf(track, 'standard');
+    const pro = paceOf(track, 'pro');
+    assert.ok(standard < casual, `${track.id}: standard ${standard.toFixed(2)}s is not quicker than casual ${casual.toFixed(2)}s`);
+    assert.ok(pro < standard, `${track.id}: pro ${pro.toFixed(2)}s is not quicker than standard ${standard.toFixed(2)}s`);
+  }
+});
+
+test('Pro is quick enough to be worth the name, and still not perfect', () => {
+  // A Pro rival lapping at twice the flat-out floor is not "rarely hands
+  // anything back"; one lapping AT the floor would be driving through the
+  // corners and would stop being beatable at all.
+  for (const track of built) {
+    const ratio = paceOf(track, 'pro') / FLAT_OUT(track);
+    assert.ok(ratio < 1.45, `${track.id}: pro laps at ${ratio.toFixed(2)}x the flat-out floor — too slow to be Pro`);
+    assert.ok(ratio > 1.05, `${track.id}: pro laps at ${ratio.toFixed(2)}x the floor — it is ignoring the corners`);
+  }
+});
+
+test('Casual is beatable — it gives away real time on every circuit', () => {
+  for (const track of built) {
+    const ratio = paceOf(track, 'casual') / FLAT_OUT(track);
+    assert.ok(ratio > 1.6, `${track.id}: casual laps at ${ratio.toFixed(2)}x the floor, which is not casual`);
+  }
+});

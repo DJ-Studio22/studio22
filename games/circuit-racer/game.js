@@ -112,6 +112,8 @@ const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 220 });
 
 Input.setTouchLayout([
+  // Same two actions as the triggers, so a thumb and a trigger are the same
+  // control rather than two different games.
   { name: 'a', xRatio: 0.90, yRatio: 0.78, radius: 50, label: 'Gas' },
   { name: 'b', xRatio: 0.74, yRatio: 0.88, radius: 40, label: 'Brake' },
 ]);
@@ -489,15 +491,15 @@ function playerInput() {
   // the car is stationary and visibly being punished, not frozen mid-frame.
   if (penaltyLeft > 0) return { throttle: 0, brake: 1, steer: 0 };
 
-  const pad = Input.get();
-
-  // Up on the stick or A is throttle, down or B is the brake. Reading both
-  // means the virtual joystick, a d-pad and a gamepad face button all drive
-  // the car without any of them being the "real" control.
-  const throttle = (pad.y < -0.15 ? -pad.y : 0) + (pad.a || pad.rt ? 1 : 0);
-  const brake = (pad.y > 0.15 ? pad.y : 0) + (pad.b || pad.lt ? 1 : 0);
-
-  return { throttle: clamp(throttle, 0, 1), brake: clamp(brake, 0, 1), steer: pad.x };
+  // SCREEN-RELATIVE. The stick names a direction on the screen and the car
+  // turns toward it; it is not a rotation command. On a top-down track that
+  // is what most people expect the first time they pick it up — push right,
+  // go right — and it stops the car steering "backwards" whenever it happens
+  // to be pointing down the screen at you.
+  //
+  // The mapping itself lives in driving.js so it can be tested without a
+  // browser, and so the AI and the player still hand stepCar the same shape.
+  return Drive.playerInput(player, Input.get());
 }
 
 /**
@@ -1143,9 +1145,9 @@ shell = new GameShell({
   audio,
   onRestart: () => { phase = PHASE.SETUP; setupRow = 0; },
   controls: [
-    { action: 'Steer', gamepad: 'Left stick or D-pad', keyboard: 'Left / Right', touch: 'Drag the left side' },
-    { action: 'Accelerate', gamepad: 'A, RT, or stick up', keyboard: 'Up arrow or W', touch: 'Gas button' },
-    { action: 'Brake', gamepad: 'B, LT, or stick down', keyboard: 'Down arrow or S', touch: 'Brake button' },
+    { action: 'Point the car', gamepad: 'Left stick — the direction on screen', keyboard: 'Arrows or WASD', touch: 'Drag the left side' },
+    { action: 'Accelerate', gamepad: 'Right trigger', keyboard: 'Space', touch: 'Gas pad' },
+    { action: 'Brake', gamepad: 'Left trigger', keyboard: 'Shift', touch: 'Brake pad' },
     { action: 'Slipstream', gamepad: 'Tuck in behind a rival', keyboard: 'Tuck in behind a rival', touch: 'Tuck in behind a rival' },
     { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },
   ],
