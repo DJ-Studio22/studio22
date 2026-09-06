@@ -14,6 +14,10 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 10: the editorial layer on the landing page — display type, a section
+  index 00-07, mono telemetry, depth planes and one pinned section. Plus the
+  sound toggle, which is now a visit preference in engine/session.js rather
+  than a per-page default. See the Phase 10 section below
 - Phase 9: TWO PRODUCTION BUGS FIXED (see the section below), then five new games — Block Buster, Neon Drift Delivery, Skyhook, Tower Stack, Gravity Flip. Eleven games live
 
 ## In progress
@@ -204,17 +208,17 @@ gzipped at level 9):
 | games/circuit-racer/ | 27.8 KB |
 | games/keystroke/ | 25.8 KB |
 | games/neon-drift/ | 25.3 KB |
+| arcade.html | 24.6 KB |
 | games/block-buster/ | 24.4 KB |
+| index.html | 23.7 KB |
 | games/number-crunch/ | 23.5 KB |
 | games/gravity-flip/ | 23.5 KB |
-| arcade.html | 23.5 KB |
 | games/skyhook/ | 22.9 KB |
 | games/tower-stack/ | 21.8 KB |
 | games/comet/ | 21.6 KB |
 | games/updraft/ | 21.3 KB |
 | games/sinkhole/ | 21.2 KB |
-| party.html | 20.5 KB |
-| index.html | 19.6 KB |
+| party.html | 20.7 KB |
 
 The shared chunks are util 11.5 KB (util + shell + ui + canvas + loop +
 session + audio), input 4.3 KB and tokens 0.4 KB — 16.1 KB carried by every
@@ -371,3 +375,133 @@ Moving domain is: edit site.config.json, run the two tools, build, push.
 - Skyhook's hook may take anchors BELOW the player. It used to refuse them, which rejected 86% of the anchors actually in range and read as the button not working. An anchor you fall past and catch is a real move
 - Tuning claims for Skyhook are measured, not argued: swing.js and city.js both expose every number as a plain object, and a bot plays seeded runs at two skill levels so before/after runs over identical cities. A change that helps only the weaker bot is forgiveness; one that narrows the gap has flattened the ceiling
 - Block Buster's board rules are in board.js, free of the DOM, for the same reason Number Crunch's arithmetic is in problems.js: a cascade that fails to chain is not visible in a screenshot. Test that file, not the game
+
+## Phase 10 — the editorial layer, and one class of bug worth naming
+
+A typographic and structural pass over the landing page, taken from four
+reference sites: display type at a tight lead against widely tracked mono
+metadata (Sharplink), a headline split into lines with content sitting
+BETWEEN them and a long sticky section (Otsuka), edge-anchored live telemetry
+and toggles written LABEL[STATE] (Haoqi), and a flush-left composition at low
+contrast (United).
+
+Still no image request, no webfont, no network call of any kind.
+
+### The bug worth naming: two owners, one property
+
+The first cut of this put both `.plane__wash` and `.hero__blob--a` on the same
+element. Both declare `animation`, both animate `transform`, and they have
+IDENTICAL specificity — so source order decided, silently:
+
+- In Chrome, `.plane__wash { animation: plane-drift }` sits later in the file
+  than `.hero__blob--a { animation: drift-a }`, so it REPLACED it. The ambient
+  drift the hero has always had was gone and nobody would have noticed.
+- In a browser without scroll timelines, the `@supports` block does not apply,
+  so `drift-a` kept running — and a running animation beats the declared
+  `transform` the parallax fallback writes. So `--scroll-y` was computed every
+  frame by the rAF loop and rendered nothing.
+
+Both movements were broken, in opposite directions, and the page looked fine
+in both.
+
+The fix is structural rather than a specificity patch: **one element owns one
+transform.** The wash is now an invisible carrier that owns the scroll
+parallax and draws nothing; the blob nests inside it and owns its ambient
+drift. Nesting composes the two without either rule having to win. The same
+rule is why `.pin__row > *` explicitly sets `transition: none` — the device
+list has its own reveal transition on exactly the two properties `--pin-p`
+now drives, and leaving both in place is the same bug again.
+
+The general form: **if two rules want the same property on the same element,
+one of them is already losing and the cascade will not tell you which.**
+
+### Verified in a real browser, on both paths
+
+No Firefox on this machine and the Blink flag for disabling scroll timelines
+no longer exists, so the fallback is exercised by patching `CSS.supports` to
+answer false BEFORE the page module runs (that is what picks the JS branch)
+and deleting the `@supports` rule from the stylesheet (that is what a
+non-supporting parser does with it). Driven over CDP against a PRODUCTION
+build. Measured at the same scroll position:
+
+| | native scroll timeline | rAF fallback |
+|---|---:|---:|
+| wash transform at y=0 | −90.00 px | 0.00 px |
+| wash transform at y=2600 | −50.42 px | −50.42 px |
+| `animation-name` on the wash | `plane-drift` | `none` |
+| `--scroll-y` written by rAF | unset | −0.568 |
+| ambient drift on the blob | `drift-a` | `drift-a` |
+
+The two paths agree to two decimal places, which is the point of writing the
+same custom property from both.
+
+Reduced motion: `--pin-p` holds at 1, the stage is `static`, the wash has no
+animation and no transform, and every held-back element is at full opacity —
+the finished composition, with nothing moving.
+
+### The pin
+
+`.anywhere` is the one pinned section: 220svh of scroller around a sticky
+stage, so 120svh of scroll is spent on progress rather than on movement. The
+headline is split and the devices stand between its two lines.
+
+Progress is one number, `--pin-p`, 0 to 1, written by the SAME rAF loop that
+runs the clock and the viewport readout. Deliberately not a scroll-timeline
+pair like the parallax: a pin is a composition rather than an ambient effect,
+so behaving identically in every browser is worth more than running off the
+main thread. It defaults to 1 in CSS, so the no-JS and reduced-motion state is
+the finished composition rather than a half-faded one.
+
+The heading stays ONE `<h2>`. `display: contents` promotes its two spans to
+grid items of the stage so the device row can be placed on the row between
+them; inherited properties still reach the spans, so the display type is
+unaffected. Confirmed in the accessibility tree: still `H2`, still reads
+"The same game, wherever you open it."
+
+### FOUND WHILE MEASURING: the display type only answered to width
+
+`--type-display: clamp(3rem, 13vw, 11rem)` is fine on its own and wrong in a
+viewport. Four lines at 13vw is 651 px of headline, so on a 1440x900 laptop
+the hero measured **989 px tall in a 900 px viewport** — the accent rule, the
+metadata row and the scroll cue were all below the fold, on every desktop size
+tested. 1280x720 was worse at 955.
+
+Both display sizes now answer to both axes — `min(13vw, 16vh)` — and the same
+correction was needed on the pinned stage's headline, its lead paragraph and
+its gaps. Measured after, stage height against viewport height:
+
+| Viewport | Stage | Fits |
+|---|---:|:--|
+| 1920x1080 | 1080 | yes |
+| 1440x900 | 900 | yes |
+| 1280x720 | 720 | yes |
+| 820x1180 (iPad) | 1180 | yes |
+| 390x844 (iPhone) | unpinned | n/a |
+
+A first attempt shrank only the shelf the devices stand on. That was wrong and
+the screenshot showed it immediately: the frames are sized by WIDTH, so they
+overflowed the shorter shelf and collided with the headline. Shelf height and
+frame width are tuned as a set at each breakpoint and cannot be moved apart.
+
+### The rest
+
+- **Section index 00-07** across the landing page, replacing `.eyebrow`
+  everywhere including the card builder and the arcade head. Zero `.eyebrow`
+  elements left on either page.
+- **Card metadata** — a positional 1-based number, the category, difficulty
+  and age, and what the game can be played with. The input field is the one
+  load-bearing entry: it is how somebody on a phone learns Keystroke wants a
+  keyboard before tapping it, and it comes from the manifest's required
+  `inputRequirement`.
+- **Sound is a visit preference.** Every game page is its own document, so
+  `#soundOn` was born true twelve times over; muting a game and opening
+  another lost it. It lives in `engine/session.js` now beside the score
+  directions, for the same reason — a preference about the visit rather than
+  data about it.
+- **Dead CSS removed**: `.hero__title`, `.hero__word`, `.hero__word--accent`,
+  `.hero__tagline`. `.card-meta`, `.meta--dim` and `.pin` are all in use now
+  rather than written and unreferenced.
+
+index.html went 19.6 KB to 23.7 KB gzipped, arcade.html 23.5 to 24.6. Most of
+the landing page's growth is the manifest and thumbnail chunks it now shares
+with the arcade, plus session.js for the sound toggle.

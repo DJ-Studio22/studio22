@@ -534,18 +534,6 @@ html.lit-fallback .lit .word {
   margin-inline: auto;
 }
 
-.hero__title {
-  font-size: var(--fs-hero);
-  font-weight: var(--wordmark-weight);
-  letter-spacing: var(--wordmark-tracking);
-  line-height: 0.84;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 0.1em;
-  text-transform: uppercase;
-}
-
 /* The one ornament above the fold. Width tracks the wordmark rather than
    being a fixed measure, so it reads as belonging to it. */
 .hero__rule {
@@ -553,22 +541,6 @@ html.lit-fallback .lit .word {
   height: 3px;
   background: var(--color-accent);
   margin-top: clamp(var(--space-lg), 3vh, var(--space-xl));
-}
-
-.hero__word--accent {
-  color: var(--color-accent);
-  /* Just enough bloom to read as lit rather than printed. */
-  text-shadow: 0 0 clamp(1rem, 5vw, 4rem) color-mix(in srgb, var(--color-accent) 45%, transparent);
-}
-
-.hero__tagline {
-  /* Generous, because the whole point of this screen is the space around
-     the three things on it. */
-  margin-top: clamp(var(--space-lg), 3.5vh, var(--space-xl));
-  font-size: var(--fs-lead);
-  color: var(--color-text-secondary);
-  max-width: var(--maxw-text);
-  text-wrap: balance;
 }
 
 .scroll-cue {
@@ -1062,4 +1034,450 @@ html.lit-fallback .lit .word {
   .device--tablet  { --dev-w: 10rem; }
   .device--desktop { --dev-w: 17rem; }
   .device--tv      { --dev-w: 22rem; }
+}
+
+/* ==========================================================================
+   THE EDITORIAL LAYER
+   ==========================================================================
+   A typographic and structural vocabulary, taken from four reference sites
+   and measured rather than eyeballed. What was borrowed, and from where:
+
+   Sharplink   display type at line-height 1.06 and letter-spacing -0.02em,
+               against 12px uppercase metadata tracked +0.08em. That contrast
+               — huge and tight against tiny and wide — is doing most of the
+               work on all four sites.
+   Otsuka      display type used as a background PLANE: split across lines at
+               low opacity with content sitting between them, and long sticky
+               sections that pin while their contents change. 17 sticky
+               elements over 46 viewport-heights of scroll.
+   Haoqi       edge-anchored monospace telemetry, and toggles written as
+               LABEL[STATE] rather than as buttons. Their corners carry a
+               clock, a timezone and a live viewport readout.
+   United      near-black, mono uppercase at low contrast, and a composition
+               made of a flush-left column against a flush-right one.
+
+   Everything here is transform and opacity only, and the site still makes no
+   image request and loads no webfont.
+   ========================================================================== */
+
+:root {
+  /* Display sizes answer to BOTH axes. Width alone was the first version and
+     it was wrong: four lines at 13vw is 651px of headline on a 1440x900
+     laptop, which pushed the rule, the metadata row and the scroll cue below
+     the fold on every desktop size measured. A headline that fills the
+     screen is the point; one that evicts the rest of the composition is not.
+     The floor and ceiling still keep it sane on a phone and on a large
+     monitor. */
+  --type-display: clamp(3rem, min(13vw, 16vh), 11rem);
+  --type-section: clamp(2.25rem, min(7.5vw, 11vh), 5.5rem);
+
+  /* The other half of the contrast. 11px, and it never grows. */
+  --type-meta: 0.6875rem;
+  --track-meta: 0.16em;
+
+  /* Tight enough that the lines read as one block rather than as a list. */
+  --lead-display: 0.87;
+  --track-display: -0.035em;
+}
+
+/* --- Monospace metadata --------------------------------------------------
+   The texture layer. Small, widely tracked, and deliberately quiet: it is
+   meant to be read second. */
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  font-weight: 500;
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta--dim { color: var(--color-text-disabled); }
+.meta--accent { color: var(--color-accent); }
+
+/* A row of metadata separated by hairlines rather than punctuation. */
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-md);
+  align-items: baseline;
+}
+
+.meta-row > * + *::before {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 0.75em;
+  margin-right: var(--space-md);
+  background: var(--color-bg-4);
+  vertical-align: -0.05em;
+}
+
+/* --- Display type --------------------------------------------------------
+   Headlines are the design, not decoration on it. Lines are authored as
+   spans rather than left to the browser, so the break points are chosen. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--type-display);
+  line-height: var(--lead-display);
+  letter-spacing: var(--track-display);
+  margin: 0;
+  /* A long word on a narrow phone would otherwise push the page sideways. */
+  overflow-wrap: break-word;
+}
+
+.display--section { font-size: var(--type-section); }
+
+.display .line { display: block; }
+
+/* Indented lines are what make a broken headline read as composed rather
+   than as a paragraph that happened to wrap. */
+.display .line--in { padding-left: 1.2em; }
+.display .line--far { padding-left: 2.6em; }
+.display .line--quiet { color: var(--color-text-secondary); }
+
+/* --- The section index ---------------------------------------------------
+   00 through 07, beside every section. A hairline runs from the number to
+   the label so the pair reads as one mark rather than two. */
+.index {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.index__num {
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  font-weight: 700;
+  letter-spacing: var(--track-meta);
+  color: var(--color-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.index__rule {
+  flex: 0 0 auto;
+  width: clamp(2rem, 6vw, 5rem);
+  height: 1px;
+  background: var(--color-accent-quiet);
+}
+
+/* The warm section keeps the second accent it already had. */
+.index--warm .index__num { color: var(--color-accent-2); }
+.index--warm .index__rule { background: var(--color-accent-2); }
+
+/* The closing section is centred, so its mark is too. */
+.index--centred { justify-content: center; }
+
+.index__label {
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+/* --- Header utilities ----------------------------------------------------
+   Unlabelled where obvious, and written as LABEL[STATE] the way Haoqi does,
+   so a toggle reads as telemetry rather than as a form control. */
+.util {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: var(--space-sm) var(--space-md);
+  margin: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  letter-spacing: var(--track-meta);
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.util:hover,
+.util:focus-visible { color: var(--color-text-primary); }
+.util[aria-pressed="true"] { color: var(--color-accent); }
+
+/* --- Corner telemetry ----------------------------------------------------
+   Live data as ornament. Every figure is genuinely live: the counts come
+   from the manifest, the clock from the device, the viewport from the
+   window, the best from this visit's session. Nothing here is a decorative
+   number that would quietly go stale. */
+.hud {
+  position: fixed;
+  z-index: 30;
+  bottom: var(--space-lg);
+  pointer-events: none;
+  display: flex;
+  gap: var(--space-md);
+  color: var(--color-text-disabled);
+}
+
+.hud--left { left: var(--space-lg); }
+.hud--right { right: var(--space-lg); }
+
+/* --- Depth planes --------------------------------------------------------
+   TWO movements, on TWO elements, and that separation is the whole point.
+
+   Ambient drift and scroll parallax both want to write `transform`, and one
+   element cannot serve both: whichever rule loses the cascade is silently
+   discarded. That is exactly what happened here the first time — the wash
+   carried both classes, `animation` on `.hero__blob--a` and `animation` on
+   `.plane__wash` had identical specificity, so source order decided, the
+   ambient drift was quietly replaced, and in browsers WITHOUT scroll
+   timelines the running drift keyframes overrode the parallax transform so
+   neither movement survived in full.
+
+   So the wash is now a carrier that owns ONE transform and nothing else,
+   and the blob nests inside it owning its own. Nesting composes the two
+   without either rule having to win. Any future movement gets its own
+   element rather than a third opinion about this one.
+
+   The carrier is invisible: no blur, no opacity, no radius. The blob inside
+   already IS a soft radial gradient, and stacking a 70px blur on top of one
+   is the expensive mobile paint the note above .hero__blob warns against. */
+.plane {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* The parallax carrier. Owns the scroll-linked transform, draws nothing. */
+.plane__wash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+  transform: translate3d(0, calc(var(--scroll-y, 0) * var(--drift, 60px)), 0);
+}
+
+/* Scroll-linked where the browser can do it off the main thread. The rAF
+   fallback in index.html writes the same --scroll-y into the same custom
+   property, so there is one set of numbers, one transform, and no scroll
+   listener in either path. */
+@supports (animation-timeline: scroll()) {
+  .plane__wash {
+    animation: plane-drift linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+
+@keyframes plane-drift {
+  from { transform: translate3d(0, calc(var(--drift, 60px) * -1), 0); }
+  to { transform: translate3d(0, var(--drift, 60px), 0); }
+}
+
+/* --- Sticky sections -----------------------------------------------------
+   The Otsuka move: a display headline split into lines, with real content
+   sitting BETWEEN those lines, and the whole composition pinned while the
+   page scrolls past it. The section is a tall scroller; the stage inside it
+   is sticky, so the stage holds still and the scroll is spent on progress
+   through it rather than on moving it off screen.
+
+   Progress is one number, --pin-p, 0 to 1 across the pinned stretch. It is
+   written by the single rAF loop in index.html and by nothing else. This is
+   deliberately NOT a scroll-timeline/rAF pair like the depth planes: one
+   owner, one number, one behaviour in every browser. Defaulting it to 1
+   means the no-JS and reduced-motion state is the FINISHED composition,
+   never a half-faded one. */
+.pin {
+  position: relative;
+  --pin-p: 1;
+}
+
+.pin__stage {
+  position: sticky;
+  top: 0;
+  min-height: 100svh;
+  display: grid;
+  align-content: center;
+  /* Both are height-relative: the whole composition has to fit one screen,
+     or the pin shows a stage whose bottom is permanently below the fold. */
+  gap: clamp(var(--space-sm), 2vh, var(--space-lg));
+  padding-block: clamp(var(--space-md), 3vh, var(--space-xl));
+}
+
+/* The headline lines that bracket the pinned content. The second is held
+   back and arrives as the stage is scrolled through, which is the only
+   reason the pin earns its extra height. */
+/* display:contents promotes the heading's two spans to grid items of the
+   stage, which is what lets the device row be placed on the row BETWEEN
+   them while the markup keeps them inside one <h2>. Inherited properties
+   (font, tracking, colour) still reach the spans, so the display type is
+   unaffected; only the box goes away. */
+.pin__headline {
+  display: contents;
+  /* Sized against the HEIGHT as well as the width. Everything else in the
+     stage is roughly fixed, so the headline is what has to give on a short
+     screen -- and inheritance still carries this to the two spans. */
+  font-size: clamp(1.9rem, min(6vw, 8vh), 4.5rem);
+}
+
+/* Visual order inside the stage. The index and the first line take the
+   default 0, so this is only the three that move. */
+.pin__line { display: block; order: 1; }
+.pin__row { order: 2; }
+.pin__line--late { order: 3; }
+/* The paragraph is the block that pushes the stage past one viewport on a
+   short screen -- the devices and the headline are already accounted for --
+   so it is sized against the height as well. */
+.pin__lead {
+  order: 4;
+  max-width: var(--maxw-text);
+  font-size: clamp(0.95rem, 2.1vh, var(--fs-lead));
+}
+
+/* The scroller. Its height MINUS one viewport is the pinned stretch, so
+   220svh buys 120svh of scroll spent on progress rather than on movement.
+   Enough to read the composition; short enough not to feel like a hijack. */
+.anywhere.pin { min-height: 220svh; }
+
+.pin__line--late {
+  opacity: calc(0.18 + 0.82 * clamp(0, (var(--pin-p) - 0.45) * 3, 1));
+  transform: translate3d(0, calc(0.4em * (1 - clamp(0, (var(--pin-p) - 0.45) * 3, 1))), 0);
+}
+
+/* Each device arrives on its own beat, --d, as progress passes it.
+
+   The list this sits on has a reveal transition of its own on exactly these
+   two properties. --pin-p is the owner here, so that transition is switched
+   off rather than left to fight a per-frame value — the same one-owner rule
+   the depth planes above are built on. The markup drops data-reveal for the
+   same reason: is-visible would never be added, and a rule that can never
+   apply is a trap for whoever reads this next. */
+.pin__row > * {
+  transition: none;
+  opacity: calc(0.25 + 0.75 * clamp(0, (var(--pin-p) - var(--d, 0)) * 7, 1));
+  transform: translate3d(0, calc(22px * (1 - clamp(0, (var(--pin-p) - var(--d, 0)) * 7, 1))), 0);
+}
+
+/* --- Card metadata -------------------------------------------------------
+   A numbered index, the category, and what the game can be played with, in
+   the same mono as everything else. The input support is the one line here
+   that is load-bearing rather than decorative: it is how somebody on a
+   phone finds out that Keystroke wants a keyboard before they tap it. */
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+/* The index number leads, in accent, so the row starts on a mark rather
+   than on a word. */
+.card-meta__num {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* Hairlines between the fields, matching .meta-row. */
+.card-meta > * + *::before {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 0.72em;
+  margin-right: var(--space-sm);
+  background: var(--color-bg-4);
+  vertical-align: -0.04em;
+}
+
+/* A hardware requirement is not a neutral field. It keeps the mono texture
+   but takes the warm accent, so it separates from the row it sits in
+   without colour being the only thing carrying it -- the text still says
+   "keyboard only". */
+.card-meta__needs { color: var(--color-accent-2); }
+
+/* --- Reduced motion ------------------------------------------------------
+   No parallax and no pinning. The layout stays; only the movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  .plane__wash {
+    animation: none !important;
+    transform: none !important;
+  }
+  .pin {
+    --pin-p: 1;
+  }
+  .pin__stage {
+    position: static;
+    min-height: 0;
+  }
+  .pin__line--late,
+  .pin__row > * {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* --- Small screens -------------------------------------------------------
+   Fewer planes and no fixed telemetry on a phone. A large blur is the most
+   expensive paint on the page, and the corners are where a thumb lives. */
+@media (max-width: 47.9375em) {
+  .plane__wash:nth-child(n + 2) { display: none; }
+  .hud--right { display: none; }
+  .hud--left {
+    position: static;
+    padding: var(--space-lg) var(--space-lg) 0;
+  }
+  .pin {
+    --pin-p: 1;
+  }
+  .pin__stage {
+    position: static;
+    min-height: 0;
+  }
+  .pin__line--late,
+  .pin__row > * {
+    opacity: 1;
+    transform: none;
+  }
+  .display .line--in { padding-left: 0.6em; }
+  .display .line--far { padding-left: 1.2em; }
+}
+
+/* --- The top line --------------------------------------------------------
+   A wordmark and two utilities, and nothing else. It sits over the hero
+   rather than pushing it down, because the hero is the page. */
+.topline {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.topline__mark {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+
+.topline__mark span { color: var(--color-accent); }
+
+.topline__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* The hero has to clear the top line, and its headline is measured from the
+   left edge rather than centred: a broken headline needs an axis. */
+.hero__display { margin-block: var(--space-lg) var(--space-xl); }
+.hero__meta { margin-top: var(--space-lg); }
+
+@media (max-width: 47.9375em) {
+  .topline { padding: var(--space-md) var(--space-lg); }
 }

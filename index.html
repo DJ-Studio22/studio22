@@ -53,6 +53,31 @@
   <div class="vignette" aria-hidden="true"></div>
   <div class="grain" aria-hidden="true"></div>
 
+  <!-- Radical restraint: a wordmark, and one toggle that does something
+       real. SOUND[ON] is written the way Haoqi writes its toggles, as
+       telemetry rather than as a form control, and it is a real preference
+       — engine/session.js stores it and every game's shell reads it at
+       boot, so turning it off here starts the next game muted. -->
+  <div class="topline">
+    <a class="topline__mark" href="/index.html">Studio<span>22</span></a>
+    <nav class="topline__nav" aria-label="Utilities">
+      <a class="util" href="/arcade.html">Arcade</a>
+      <button class="util" type="button" id="sound-toggle" aria-pressed="true">
+        Sound[<span data-sound-state>on</span>]
+      </button>
+    </nav>
+  </div>
+
+  <!-- Live data as ornament. Every figure is genuinely live, which is the
+       point: a decorative number would go stale and start lying. -->
+  <div class="hud hud--left meta" aria-hidden="true">
+    <span data-stat="clock">--:--:--</span>
+    <span data-stat="best"></span>
+  </div>
+  <div class="hud hud--right meta" aria-hidden="true">
+    <span data-stat="viewport">0000 x 0000</span>
+  </div>
+
   <main id="main">
 
     <!-- ============================================================
@@ -80,26 +105,50 @@
       file): phones never download it and keep the gradient hero instead.
     -->
     <section class="hero" aria-labelledby="hero-title" data-hero-video="">
-      <div class="hero__glow" aria-hidden="true">
-        <span class="hero__blob hero__blob--a"></span>
-        <span class="hero__blob hero__blob--b"></span>
-        <span class="hero__blob hero__blob--c"></span>
+      <!-- Three washes on separate planes, each drifting at its own rate.
+           Radial gradients, so this is still zero network requests.
+
+           Two elements per wash, and the nesting is the point: the outer
+           .plane__wash owns the SCROLL parallax, the inner .hero__blob owns
+           its own ambient drift. Both want to write transform, and one
+           element cannot serve two owners -- see the note in site.css. The
+           first wash survives on a phone; the other two are dropped by the
+           small-screen rule, because a large soft paint is the most
+           expensive thing on this page. -->
+      <div class="plane hero__glow" aria-hidden="true">
+        <span class="plane__wash" style="--drift: 90px"><span class="hero__blob hero__blob--a"></span></span>
+        <span class="plane__wash" style="--drift: -50px"><span class="hero__blob hero__blob--b"></span></span>
+        <span class="plane__wash" style="--drift: 130px"><span class="hero__blob hero__blob--c"></span></span>
       </div>
 
-      <!-- Three things and nothing else: wordmark, one line, scroll cue.
-           The accent rule is the only ornament above the fold. Everything
-           that used to live up here is now in the sections below. -->
+      <!-- The headline IS the design here. Lines are authored as spans so
+           the breaks are chosen rather than whatever the viewport produces,
+           and the indents are what make it read as composed. -->
       <div class="hero__inner">
-        <h1 class="hero__title" id="hero-title" data-reveal="up" style="--i: 0">
-          <span class="hero__word">Studio</span><span class="hero__word hero__word--accent">22</span>
+        <div class="index" data-reveal="up" style="--i: 0">
+          <span class="index__num">00</span>
+          <span class="index__rule" aria-hidden="true"></span>
+          <span class="index__label">Studio 22 &mdash; Index</span>
+        </div>
+
+        <h1 class="display hero__display" id="hero-title" data-reveal="up" style="--i: 1">
+          <span class="line">Original</span>
+          <span class="line line--in">games,</span>
+          <span class="line line--far line--quiet">nothing</span>
+          <span class="line line--far line--quiet">to install.</span>
         </h1>
-        <div class="hero__rule" data-reveal="up" style="--i: 1" aria-hidden="true"></div>
-        <p class="hero__tagline" data-reveal="up" style="--i: 2">
-          Original games. Nothing to install.
-        </p>
+
+        <div class="hero__rule" data-reveal="up" style="--i: 2" aria-hidden="true"></div>
+
+        <div class="meta-row hero__meta" data-reveal="up" style="--i: 3">
+          <span class="meta" data-stat="games">&mdash;</span>
+          <span class="meta">Browser only</span>
+          <span class="meta">No account</span>
+          <span class="meta meta--accent">Free</span>
+        </div>
       </div>
 
-      <a class="scroll-cue" href="#statement" data-reveal="up" style="--i: 3">
+      <a class="scroll-cue" href="#statement" data-reveal="up" style="--i: 4">
         <span class="scroll-cue__label">Scroll</span>
         <span class="scroll-cue__rail" aria-hidden="true"><span class="scroll-cue__dot"></span></span>
       </a>
@@ -113,6 +162,11 @@
          ============================================================ -->
     <section class="statement" id="statement" aria-labelledby="statement-title" data-reveal="none">
       <h2 class="visually-hidden" id="statement-title">What Studio 22 is</h2>
+      <div class="index">
+        <span class="index__num">01</span>
+        <span class="index__rule" aria-hidden="true"></span>
+        <span class="index__label">What this is</span>
+      </div>
       <p class="statement__line lit">
         <span class="word" style="--i: 0">Studio</span>
         <span class="word" style="--i: 1">22</span>
@@ -137,8 +191,12 @@
          ============================================================ -->
     <section class="section featured" aria-labelledby="featured-title">
       <header class="section__head">
-        <p class="eyebrow" data-reveal="up">The line-up</p>
-        <h2 class="section__title" id="featured-title" data-lit-split>
+        <div class="index" data-reveal="up">
+          <span class="index__num">02</span>
+          <span class="index__rule" aria-hidden="true"></span>
+          <span class="index__label">The line-up</span>
+        </div>
+        <h2 class="section__title display display--section" id="featured-title" data-lit-split>
           Every one of these runs on the same engine.
         </h2>
       </header>
@@ -154,66 +212,89 @@
     </section>
 
     <!-- ============================================================
-         PLAY ANYWHERE
+         PLAY ANYWHERE — the pinned section
          The devices are drawn in CSS. Each holds the same 16:9 play
          area, so the shapes themselves show what the engine does:
          one fixed play field, letterboxed to fit whatever it lands on.
+
+         This is the one section that pins. The headline is split and
+         the devices stand BETWEEN its two lines, so the shapes are
+         inside the sentence rather than illustrating it underneath.
+         The stage holds still while the page scrolls past, and the
+         devices arrive one at a time as it does — that progress is
+         what the pin buys, and the only reason it earns the height.
          ============================================================ -->
-    <section class="section anywhere" aria-labelledby="anywhere-title">
-      <header class="section__head">
-        <p class="eyebrow" data-reveal="up">Play anywhere</p>
-        <h2 class="section__title" id="anywhere-title" data-lit-split>
-          The same game, wherever you open it.
+    <section class="section anywhere pin" aria-labelledby="anywhere-title">
+      <div class="pin__stage">
+        <div class="index" data-reveal="up">
+          <span class="index__num">03</span>
+          <span class="index__rule" aria-hidden="true"></span>
+          <span class="index__label">Play anywhere</span>
+        </div>
+
+        <!-- ONE heading, both halves, so the sentence reads as a single
+             heading to a screen reader. The halves are separated visually
+             by the grid rather than by the markup: pin__headline is
+             display:contents, which promotes the two spans to grid items
+             of the stage so the device row can be placed on the row
+             between them. Reading order and DOM order still match. -->
+        <h2 class="section__title display display--section pin__headline" id="anywhere-title">
+          <span class="pin__line">The same game,</span>
+          <span class="pin__line pin__line--late">wherever you open it.</span>
         </h2>
-        <p class="section__lead" data-reveal="up" style="--i: 2">
+
+        <!-- data-reveal is deliberately absent: --pin-p owns opacity and
+             transform on these now, and a second owner writing the same
+             two properties is the exact bug this pass was about. -->
+        <ul class="devices pin__row">
+          <!-- Each device's visual sits in a fixed-height stage so all four
+               stand on one shelf line, stands and legs included. -->
+          <li class="device device--phone">
+            <div class="device__visual">
+              <div class="device__frame">
+                <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+              </div>
+            </div>
+            <p class="device__name">Phone</p>
+            <p class="device__input">Touch. Stick and buttons.</p>
+          </li>
+          <li class="device device--tablet">
+            <div class="device__visual">
+              <div class="device__frame">
+                <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+              </div>
+            </div>
+            <p class="device__name">Tablet</p>
+            <p class="device__input">Touch. More room.</p>
+          </li>
+          <li class="device device--desktop">
+            <div class="device__visual">
+              <div class="device__frame">
+                <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+              </div>
+              <span class="device__stand" aria-hidden="true"></span>
+            </div>
+            <p class="device__name">Desktop</p>
+            <p class="device__input">Keyboard. WASD or arrows.</p>
+          </li>
+          <li class="device device--tv">
+            <div class="device__visual">
+              <div class="device__frame">
+                <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
+              </div>
+              <span class="device__legs" aria-hidden="true"></span>
+            </div>
+            <p class="device__name">Television</p>
+            <p class="device__input">Gamepad. Xbox or PlayStation.</p>
+          </li>
+        </ul>
+
+        <p class="section__lead pin__lead pin__line--late">
           Every game reads a gamepad, a keyboard and a touchscreen. Same code, all three.
           The play area is a fixed shape that scales to fit the screen. Nothing is cropped,
           nothing is stretched. A phone gets the same game as a television.
         </p>
-      </header>
-
-      <ul class="devices" data-reveal="none">
-        <!-- Each device's visual sits in a fixed-height stage so all four
-             stand on one shelf line, stands and legs included. -->
-        <li class="device device--phone">
-          <div class="device__visual">
-            <div class="device__frame">
-              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
-            </div>
-          </div>
-          <p class="device__name">Phone</p>
-          <p class="device__input">Touch. Stick and buttons.</p>
-        </li>
-        <li class="device device--tablet">
-          <div class="device__visual">
-            <div class="device__frame">
-              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
-            </div>
-          </div>
-          <p class="device__name">Tablet</p>
-          <p class="device__input">Touch. More room.</p>
-        </li>
-        <li class="device device--desktop">
-          <div class="device__visual">
-            <div class="device__frame">
-              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
-            </div>
-            <span class="device__stand" aria-hidden="true"></span>
-          </div>
-          <p class="device__name">Desktop</p>
-          <p class="device__input">Keyboard. WASD or arrows.</p>
-        </li>
-        <li class="device device--tv">
-          <div class="device__visual">
-            <div class="device__frame">
-              <div class="device__screen"><span class="device__play" aria-hidden="true"></span></div>
-            </div>
-            <span class="device__legs" aria-hidden="true"></span>
-          </div>
-          <p class="device__name">Television</p>
-          <p class="device__input">Gamepad. Xbox or PlayStation.</p>
-        </li>
-      </ul>
+      </div>
     </section>
 
     <!-- ============================================================
@@ -222,7 +303,11 @@
     <section class="section learning" aria-labelledby="learning-title">
       <div class="learning__grid">
         <div class="learning__copy">
-          <p class="eyebrow eyebrow--warm" data-reveal="up">For parents</p>
+          <div class="index index--warm" data-reveal="up">
+            <span class="index__num">04</span>
+            <span class="index__rule" aria-hidden="true"></span>
+            <span class="index__label">For parents</span>
+          </div>
           <h2 class="section__title" id="learning-title" data-lit-split>
             The learning games are games first.
           </h2>
@@ -248,7 +333,11 @@
          alternative, and it only reads as true if it is stated plainly.
          ============================================================ -->
     <section class="section privacy" aria-labelledby="privacy-title">
-      <p class="eyebrow" data-reveal="up">Privacy</p>
+      <div class="index" data-reveal="up">
+        <span class="index__num">05</span>
+        <span class="index__rule" aria-hidden="true"></span>
+        <span class="index__label">Privacy</span>
+      </div>
       <h2 class="privacy__title" id="privacy-title" data-lit-split>
         We remember nothing about you, and ask for nothing in return.
       </h2>
@@ -273,7 +362,11 @@
          ============================================================ -->
     <section class="section party" aria-labelledby="party-title">
       <header class="section__head">
-        <p class="eyebrow" data-reveal="up">Party mode</p>
+        <div class="index" data-reveal="up">
+          <span class="index__num">06</span>
+          <span class="index__rule" aria-hidden="true"></span>
+          <span class="index__label">Party mode</span>
+        </div>
         <h2 class="section__title" id="party-title" data-lit-split>
           One controller. One screen. Everybody watching.
         </h2>
@@ -312,6 +405,11 @@
          CTA
          ============================================================ -->
     <section class="cta" aria-labelledby="cta-title">
+      <div class="index index--centred" data-reveal="up">
+        <span class="index__num">07</span>
+        <span class="index__rule" aria-hidden="true"></span>
+        <span class="index__label">Start</span>
+      </div>
       <h2 class="cta__title" id="cta-title" data-lit-split>Ready when you are.</h2>
       <p class="cta__sub" data-reveal="up" style="--i: 1">No sign-up. No download. It just starts.</p>
       <a class="button" href="/arcade.html" data-reveal="up" style="--i: 2">
@@ -357,6 +455,7 @@
 
   <script type="module">
     import { Manifest } from '/engine/manifest.js';
+    import { Session } from '/engine/session.js';
     import { thumbnailFor } from '/thumbnails.js';
 
     // Honour the OS setting once, up front. Everything below branches on it
@@ -398,9 +497,36 @@
       const body = document.createElement('div');
       body.className = 'game-card__body';
 
+      // Card metadata, in the mono texture the rest of the page uses. The
+      // index number is 1-based and positional, so it reads as a line-up
+      // rather than as an id.
+      //
+      // The input field is the one entry here that is load-bearing rather
+      // than decorative: it is how somebody on a phone finds out that a
+      // game wants a keyboard BEFORE they tap into it. It comes straight
+      // from the manifest's required inputRequirement, so a game cannot
+      // quietly omit it.
       const meta = document.createElement('p');
-      meta.className = 'eyebrow';
-      meta.textContent = `${game.category} · ${game.difficulty} · ${game.ageRange}`;
+      meta.className = 'card-meta';
+
+      const num = document.createElement('span');
+      num.className = 'meta card-meta__num';
+      num.textContent = String(index + 1).padStart(2, '0');
+
+      const cat = document.createElement('span');
+      cat.className = 'meta';
+      cat.textContent = game.category;
+
+      const level = document.createElement('span');
+      level.className = 'meta meta--dim';
+      level.textContent = `${game.difficulty} · ${game.ageRange}`;
+
+      const needsKeyboard = game.inputRequirement === 'keyboard';
+      const input = document.createElement('span');
+      input.className = needsKeyboard ? 'meta card-meta__needs' : 'meta meta--dim';
+      input.textContent = needsKeyboard ? 'Keyboard only' : 'Pad · Keys · Touch';
+
+      meta.append(num, cat, level, input);
 
       const title = document.createElement('h3');
       title.className = 'game-card__title';
@@ -717,6 +843,148 @@
         if (!onScreenNow.has(el)) observer.observe(el);
       });
     }
+    /* ==================================================================
+       LIVE TELEMETRY, THE SOUND TOGGLE, AND THE PARALLAX FALLBACK
+       ==================================================================
+       Three small things that share one animation frame between them.
+
+       Everything shown is genuinely live. That is the whole reason to put
+       numbers in the corner at all: a decorative figure would go stale and
+       start lying, and this site has spent a lot of effort not doing that.
+       The game count comes from the manifest, the clock from the device,
+       the viewport from the window, the best from this visit's session.
+       ================================================================== */
+    (() => {
+      const stat = (name) => document.querySelector(`[data-stat="${name}"]`);
+      const pad = (n, w = 2) => String(n).padStart(w, '0');
+
+      // --- The counts, which never change during a visit ----------------
+      const games = Manifest.getAll();
+      const live = games.filter((g) => g.status === 'live').length;
+      const gamesEl = stat('games');
+      if (gamesEl) gamesEl.textContent = `${live} games`;
+
+      // --- The parts that tick ------------------------------------------
+      const clockEl = stat('clock');
+      const viewEl = stat('viewport');
+      const bestEl = stat('best');
+
+      // The session best is only shown once there is one, because "BEST —"
+      // is noise on a first visit.
+      function bestLine() {
+        const played = Session.getPlayedGames();
+        if (played.length === 0) return '';
+        const id = played[played.length - 1];
+        const best = Session.getBest(id);
+        if (best === null) return '';
+        const title = Manifest.getById(id)?.title ?? id;
+        return `${title} ${best}`;
+      }
+
+      // ONE rAF loop for the clock, the viewport readout and the parallax
+      // fallback. Three separate loops would be three wake-ups a frame for
+      // work that is measured in microseconds.
+      const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const nativeScrollTimeline = CSS.supports('animation-timeline: scroll()');
+      const washes = nativeScrollTimeline || reduced
+        ? []
+        : [...document.querySelectorAll('.plane__wash')];
+
+      // The pinned sections. Unlike the parallax above, progress through a
+      // pin has ONE owner in every browser -- this loop -- rather than a
+      // scroll-timeline path and a fallback path. A pin is a composition
+      // rather than an ambient effect, so it is worth more that it behaves
+      // identically everywhere than that it runs off the main thread.
+      //
+      // Under reduced motion the CSS already pins nothing and holds --pin-p
+      // at its finished value of 1, so the loop leaves the sections alone.
+      const pins = reduced ? [] : [...document.querySelectorAll('.pin')];
+      const lastPin = new WeakMap();
+
+      let lastSecond = -1;
+      let lastW = -1;
+      let lastH = -1;
+      let lastScroll = -1;
+
+      function frame() {
+        // Clock: only touches the DOM when the second actually changes.
+        const now = new Date();
+        const sec = now.getSeconds();
+        if (sec !== lastSecond) {
+          lastSecond = sec;
+          if (clockEl) {
+            clockEl.textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(sec)}`;
+          }
+          if (bestEl) {
+            const line = bestLine();
+            if (line !== bestEl.textContent) bestEl.textContent = line;
+          }
+        }
+
+        // Viewport: same, only on a real change.
+        if (viewEl && (innerWidth !== lastW || innerHeight !== lastH)) {
+          lastW = innerWidth;
+          lastH = innerHeight;
+          viewEl.textContent = `${pad(lastW, 4)} x ${pad(lastH, 4)}`;
+        }
+
+        // Parallax, for browsers without scroll-driven animations. Reads the
+        // scroll position rather than listening for it, so there is no scroll
+        // handler anywhere on the page in either path. -1 to 1 across the
+        // whole document, written once as a custom property that the same
+        // CSS transform consumes.
+        if (washes.length) {
+          const max = Math.max(1, document.documentElement.scrollHeight - innerHeight);
+          const y = Math.round((scrollY / max) * 2000 - 1000) / 1000;
+          if (y !== lastScroll) {
+            lastScroll = y;
+            for (const w of washes) w.style.setProperty('--scroll-y', y);
+          }
+        }
+
+        // Pin progress: 0 as the stage starts pinning, 1 as it lets go.
+        //
+        // The pinned stretch is the section's height minus the one viewport
+        // the sticky stage occupies, so progress is how far the section's
+        // top has travelled above the top of the screen, over that. One
+        // rect read per pin per frame, and the property is only written
+        // when the rounded value actually changes.
+        for (const pin of pins) {
+          const rect = pin.getBoundingClientRect();
+          // Off screen entirely: nothing to do, and no write.
+          if (rect.bottom < 0 || rect.top > innerHeight) continue;
+          const travel = Math.max(1, rect.height - innerHeight);
+          const p = Math.round(Math.min(1, Math.max(0, -rect.top / travel)) * 1000) / 1000;
+          if (p !== lastPin.get(pin)) {
+            lastPin.set(pin, p);
+            pin.style.setProperty('--pin-p', p);
+          }
+        }
+
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+
+      // --- The sound toggle ---------------------------------------------
+      // A real preference, not an ornament: engine/session.js stores it and
+      // every game's shell reads it at boot.
+      const toggle = document.getElementById('sound-toggle');
+      const state = document.querySelector('[data-sound-state]');
+      if (toggle && state) {
+        const paint = () => {
+          const on = Session.isSoundOn();
+          toggle.setAttribute('aria-pressed', String(on));
+          toggle.setAttribute('aria-label', on ? 'Sound on. Turn sound off.' : 'Sound off. Turn sound on.');
+          state.textContent = on ? 'on' : 'off';
+        };
+        toggle.addEventListener('click', () => {
+          Session.setSoundOn(!Session.isSoundOn());
+          paint();
+        });
+        paint();
+      }
+    })();
+
   </script>
 </body>
 </html>
