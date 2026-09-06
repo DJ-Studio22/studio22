@@ -122,23 +122,24 @@
   {
     "id": "circuit-racer",
     "title": "Circuit Racer",
-    "tagline": "Three laps. Hold your line.",
-    "description": "Top-down racing against a rival that defends its line. Three laps, and your fastest one is the score. Clean laps beat reckless ones.",
+    "tagline": "Four circuits. Three rivals. One line.",
+    "description": "Top-down racing on four circuits against a field of three, with a slipstream to work for and split times to chase. Pick your track, your race length and how hard the rivals push. Your fastest lap is the score.",
     "category": "racing",
     "thumbnail": "/assets/img/circuit-racer.png",
     "path": "/games/circuit-racer/index.html",
-    "difficulty": "hard",
+    "difficulty": "medium",
     "ageRange": "all",
     "inputRequirement": "universal",
     "tags": [
       "racing",
       "ai",
       "laps",
-      "time-trial"
+      "slipstream",
+      "single-player"
     ],
     "featured": true,
     "tournamentReady": true,
-    "estimatedRunTime": 180,
+    "estimatedRunTime": 240,
     "status": "live"
   }
 ]
