@@ -5,6 +5,6 @@
   "socialCard": {
     "_comment": "Served from the site root, so the file itself lives in public/. Width and height are NOT written here on purpose -- tools/inject-meta.mjs reads them out of the PNG, so the tags can never disagree with the file.",
     "path": "/social-card.png",
-    "alt": "Studio 22 - a small arcade of original browser games."
+    "alt": "The Studio 22 wordmark, gold on black."
   }
 }

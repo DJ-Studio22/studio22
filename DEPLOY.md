@@ -103,39 +103,48 @@ Run them when:
 - a game's `status` changes to `live` in `games.json` (both)
 - a game's `description` or `title` changes (inject-meta)
 - the domain changes (both)
+- the social card image is replaced (inject-meta, so the dimensions in
+  the tags are re-measured from the new file)
 
 ---
 
-## Still outstanding
+## The social card
 
-**Social card image.** The tooling is in place and waiting for the file.
-Drop a **1200×630 PNG** at:
+One image, used by every page:
 
 ```
 public/social-card.png
 ```
 
-then run `node tools/inject-meta.mjs`. That adds `og:image`,
-`og:image:width`, `og:image:height`, `og:image:alt`, `twitter:image` and
-`twitter:image:alt` to all nine pages and switches the Twitter card to
-`summary_large_image`. The URL is built from `origin` in
-`site.config.json`, like every other absolute URL.
+`tools/inject-meta.mjs` writes `og:image`, `og:image:width`,
+`og:image:height`, `og:image:alt`, `twitter:image` and `twitter:image:alt`
+onto all nine pages and sets the Twitter card to `summary_large_image`. The
+URL is built from `origin` in `site.config.json`, like every other absolute
+URL, so moving the domain carries the card with it.
 
-Until that file exists the tool prints a warning and emits no image tags at
-all — a card pointing at a missing image renders as a broken box, which is
+Replacing it: overwrite that file, then run `node tools/inject-meta.mjs`.
+The filename and the alt text live in `site.config.json` under `socialCard`.
+
+**The dimensions in the tags are measured from the PNG itself**, never
+written in the config, so they cannot drift out of step with the file.
+
+The check is on the ASPECT RATIO, not the exact size. 1200x630 is the
+recommended size, but any image of that same 1.91:1 shape is fine and the
+networks scale it down themselves. The file currently there is 1731x909,
+which is that shape to within a rounding error. An image of the wrong shape
+gets a warning, because the wrong shape is what actually renders cropped.
+
+If the file ever goes missing the tool says so and emits no image tags at
+all: a card pointing at a missing image renders as a broken box, which is
 worse than having no card.
 
-The dimensions in the tags are read out of the PNG itself rather than taken
-from the config, so they cannot disagree with the file. If the image is not
-1200×630 the tool says so and still states the true size; the big networks
-crop to roughly 1.91:1, so anything else loses its edges.
+**One image serves every page.** Per-game cards would be better and are
+deliberately not built - six more images to keep in step with six
+descriptions, for a link preview most visitors never see.
 
-The filename and alt text are in `site.config.json` under `socialCard` if
-you would rather call it something else.
+---
 
-One image is used for every page. Per-game cards would be better — six more
-images to keep in step with six descriptions — and are deliberately not
-built yet.
+## Still outstanding
 
 **`test-engine.html` and `identity.html`** are development pages. They are
 not in the Vite build inputs, so they are not deployed — they live in the

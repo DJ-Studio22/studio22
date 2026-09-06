@@ -32,8 +32,20 @@ const SITE_NAME = CONFIG.siteName;
 // config. A config that says 1200x630 over a file that is 1200x600 produces
 // tags a crawler believes and a card that renders cropped, and nothing would
 // ever tell you. Measuring means the tags cannot disagree with the file.
+//
+// What is checked is the ASPECT RATIO, not the exact size. 1200x630 is the
+// recommended size, but a bigger image of the same shape is fine -- the
+// networks scale it down and nothing is lost. What actually gets cropped is
+// an image of the wrong SHAPE, so that is what earns a warning. Checking for
+// 1200x630 exactly would cry wolf over a perfectly good 1731x909.
 const CARD_W = 1200;
 const CARD_H = 630;
+const CARD_RATIO = CARD_W / CARD_H;      // 1.905, the 1.91:1 the networks crop to
+const RATIO_TOLERANCE = 0.03;
+
+// Below this the networks either refuse the large card or upscale it into
+// mush. Their published floor is 600x315.
+const CARD_MIN_W = 600;
 
 /**
  * Width and height out of a PNG header.
@@ -93,14 +105,31 @@ function socialCard() {
     return null;
   }
 
-  if (size.width !== CARD_W || size.height !== CARD_H) {
+  const ratio = size.width / size.height;
+  const shape = `${size.width}x${size.height} (${ratio.toFixed(3)}:1)`;
+
+  if (Math.abs(ratio - CARD_RATIO) > RATIO_TOLERANCE) {
     console.warn([
       '',
-      `[inject-meta] Social card is ${size.width}x${size.height}, not ${CARD_W}x${CARD_H}.`,
-      '  The tags state its real size, so nothing lies -- but the big networks',
-      '  crop to roughly 1.91:1, so expect the edges to be cut off.',
+      `[inject-meta] Social card is ${shape}, but the networks crop to`,
+      `  ${CARD_RATIO.toFixed(3)}:1. Expect the ${ratio > CARD_RATIO ? 'left and right' : 'top and bottom'}`,
+      `  edges to be cut off. ${CARD_W}x${CARD_H} is the size to aim for.`,
       '',
     ].join('\n'));
+  } else if (size.width < CARD_MIN_W) {
+    console.warn([
+      '',
+      `[inject-meta] Social card is only ${shape}. The right shape, but below`,
+      `  the ${CARD_MIN_W}px minimum the networks want for a large card.`,
+      '',
+    ].join('\n'));
+  } else if (size.width !== CARD_W || size.height !== CARD_H) {
+    // Not a problem, just worth saying out loud so the number in the tags is
+    // never a surprise.
+    console.log(
+      `[inject-meta] Social card is ${shape} rather than the recommended `
+      + `${CARD_W}x${CARD_H} -- same shape, so it will not crop.`,
+    );
   }
 
   return {
