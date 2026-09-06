@@ -671,6 +671,11 @@ html.lit-fallback .lit .word {
 .game-card__media[data-category="learning"] {
   background: linear-gradient(140deg, color-mix(in srgb, var(--color-accent-2) 16%, var(--color-bg-1)), var(--color-bg-1));
 }
+.game-card__media[data-category="puzzle"] {
+  background: linear-gradient(140deg,
+    color-mix(in srgb, var(--color-accent-2) 20%, var(--color-bg-1)),
+    color-mix(in srgb, var(--color-accent) 9%, var(--color-bg-1)));
+}
 .game-card__media[data-category="racing"] {
   background: linear-gradient(140deg, color-mix(in srgb, var(--color-bg-3) 90%, var(--color-accent)), var(--color-bg-1));
 }

@@ -49,7 +49,7 @@ const REQUIRED_FIELDS = [
 // Exported because the hub needs them to build its filter controls, and
 // deriving the list from whatever games happen to exist would mean a category
 // disappears from the UI the moment its last game is removed.
-export const CATEGORIES = ['arcade', 'learning', 'racing'];
+export const CATEGORIES = ['arcade', 'learning', 'puzzle', 'racing'];
 export const DIFFICULTIES = ['easy', 'medium', 'hard'];
 export const STATUSES = ['live', 'coming-soon'];
 
