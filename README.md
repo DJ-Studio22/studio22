@@ -27,15 +27,15 @@ a parse-time `SyntaxError` in `engine/canvas.js`; the build failed, Cloudflare
 kept serving the previous version, and the site looked alive while the repo
 was broken. **A failed build is a silent deploy.**
 
-That is a mechanism now rather than a sentence. GitHub Actions runs the whole
-of `npm run ci` on every pull request and every push to `main`, on Node 22 and
-24 — and `main` is protected: a pull request is required and both checks must
-pass before it can merge. Direct pushes to `main` are refused.
+GitHub Actions runs the whole of `npm run ci` on every pull request and every
+push to `main`, on Node 22 and 24. So a break is caught loudly, in minutes,
+without anyone remembering to look.
 
-So the workflow is: **branch, commit, push, open a PR, wait for the checks,
-merge.** Run `npm run ci` before pushing — it is the identical sequence, so a
-green local run means a green remote one. Written up in
-[`DEPLOY.md`](DEPLOY.md).
+The workflow is **branch, commit, push, open a PR, wait for the checks,
+merge** — a convention rather than an enforced rule, because branch protection
+is not available on a private repo on GitHub's free plan. Run `npm run ci`
+before pushing; it is the identical sequence, so a green local run means a
+green remote one. Written up in [`DEPLOY.md`](DEPLOY.md).
 
 ---
 
