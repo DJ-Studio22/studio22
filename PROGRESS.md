@@ -2543,3 +2543,69 @@ Contrast sampling: the predicted line, the gate and a body measure 566, 554 and
 **The second batch of five is complete**: Colour Heist, Asteroid Salvage, Beat
 Blocker, Pixel Paintball and Gravity Well, plus Hangman and the revisions to
 Tank Tactics and Dungeon Dice. Twenty-four live games.
+
+## Phase 31 — Beat Blocker: a proof that did not survive contact with the game
+
+Reported: notes sometimes appear right in front of the shield instead of
+entering from the top, and there is nothing to be done about them.
+
+### What it was
+
+Not a spawn position, and not a note dealt into the shield's lane mid-travel.
+**The chart was dealt a phrase at a time, at the moment that phrase began.** So
+an attack landing in the first `approachSeconds` of a phrase had never been on
+screen at all: it came into existence somewhere down the track, or at the
+strike line itself.
+
+Measured over eight phrases before the fix:
+
+| | |
+|---|---|
+| attacks with less than the full approach | **18 of 78** |
+| warning given to the first attack of most phrases | **−0.001s** |
+
+Negative. It appeared at the line it had to be blocked on.
+
+### Why every test passed
+
+The reachability floors were never wrong. They are about whether the SHIELD can
+physically get from one lane to the next in the time the chart allows, and it
+always could — the anchoring across phrase seams saw to that, and the test that
+walks two hundred phrases looking for a breach was telling the truth.
+
+But that is a guarantee about **travel time**, and the fault was about
+**visibility**. Nothing in the suite measured how long a note is on screen
+before it must be hit. tests/README.md convention 10, in the game that already
+had two conventions written from it: a check can be right about what it measures
+and blind to everything else.
+
+### The fix
+
+One clock, running from the start of the run, with every attack carrying the
+absolute time it lands at, and phrases dealt a full approach-and-a-bit before
+their first attack could be drawn. There is no seam to fall through because
+there is no seam.
+
+| | before | after |
+|---|---|---|
+| attacks with less than the full approach (12 phrases) | 18 of 78 | **0 of 146** |
+| worst warning any attack got | −0.001s | **2.89s** |
+
+And two standing tests so it cannot come back: one asserts every attack gets at
+least the full approach across three seeds, and one asserts the chart is always
+dealt further ahead than the screen is deep — the mechanism rather than a
+restatement of the symptom.
+
+Checked from the outside as well, by watching the rendered canvas rather than
+the simulation, since the report was about what the screen does: over 45 seconds
+of play the median depth at which a note first appears is **0.04** of the way
+down the track. (Two of fourteen appearances read deeper, which is the detector
+losing a disc for a frame rather than a note popping in — the same warm colour
+is used by the block and miss particles, and two attacks in one lane merge and
+split as they fall.)
+
+The distributions barely moved — median 756 → 774 for the on-beat bot — which is
+the right shape for a fix that changed what the player can see rather than what
+the chart asks.
+
+20 assertions in the file; suite 491 → 493.
