@@ -910,6 +910,67 @@ function hangman() {
   return out + '</svg>';
 }
 
+/**
+ * Asteroid Salvage -- the ship, threading, with the trade on the card.
+ *
+ * What is different about this one is not the asteroids, it is the shop: the
+ * armour you bolt on is the reason you cannot dodge. So the card carries the
+ * three bars, with hull raised and thrust visibly paid for it.
+ */
+function asteroidSalvage() {
+  const rock = (x, y, r) => {
+    let d = '';
+    for (let i = 0; i <= 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const w = 1 + Math.sin(a * 3 + x) * 0.14;
+      d += (i ? ' L' : 'M') + (x + Math.cos(a) * r * w).toFixed(1) + ' '
+        + (y + Math.sin(a) * r * w).toFixed(1);
+    }
+    return '<path d="' + d + ' Z" fill="#6b7385" stroke="#8f99ad" stroke-width="2"/>'
+      + '<circle cx="' + (x - r * 0.2) + '" cy="' + (y - r * 0.15) + '" r="' + (r * 0.24)
+      + '" fill="#3a4049"/>';
+  };
+  const gem = (x, y) => '<g><circle cx="' + x + '" cy="' + y + '" r="10"'
+    + ' fill="rgba(93,242,192,.28)"/><path d="M' + x + ' ' + (y - 7) + ' L' + (x + 6) + ' ' + y
+    + ' L' + x + ' ' + (y + 7) + ' L' + (x - 6) + ' ' + y + ' Z" fill="#5df2c0"'
+    + ' stroke="#1c8f6e" stroke-width="2"/></g>';
+  const bar = (x, y, w, fill) => '<rect x="' + x + '" y="' + y + '" width="' + w
+    + '" height="7" rx="3.5" fill="' + fill + '"/>';
+
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="as-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#070a12"/><stop offset="1" stop-color="#0e1422"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#as-sky)"/>';
+
+  // Stars.
+  const stars = [[24, 30], [70, 18], [128, 52], [196, 26], [258, 62], [300, 40],
+    [46, 96], [166, 108], [286, 124], [96, 168], [214, 176], [312, 158]];
+  for (const [x, y] of stars) out += '<circle cx="' + x + '" cy="' + y + '" r="1.6" fill="rgba(200,220,255,.55)"/>';
+
+  out += rock(206, 44, 22) + rock(268, 104, 15) + rock(150, 132, 26) + rock(300, 176, 12);
+  out += gem(112, 62) + gem(240, 150) + gem(180, 92);
+
+  // The ship, threading between two rocks, with its scoop ring showing.
+  out += '<circle cx="70" cy="98" r="26" fill="none" stroke="rgba(93,242,192,.2)"'
+    + ' stroke-width="2" stroke-dasharray="5 6"/>'
+    + '<ellipse cx="52" cy="98" rx="13" ry="5" fill="#ffd45e"/>'
+    + '<ellipse cx="56" cy="98" rx="7" ry="3" fill="#fff6d8"/>'
+    + '<path d="M88 98 L58 87 L64 98 L58 109 Z" fill="#e8944a" stroke="#8a4d1c" stroke-width="2"/>'
+    + '<circle cx="74" cy="98" r="4" fill="#9fd8ff"/>';
+
+  // The trade, on the card: hull up, thrust down for it.
+  out += '<rect x="14" y="150" width="150" height="40" rx="8" fill="rgba(7,10,18,.88)"'
+    + ' stroke="rgba(226,236,250,.14)" stroke-width="1"/>'
+    + '<text x="24" y="165" font-family="system-ui,sans-serif" font-size="9"'
+    + ' font-weight="700" fill="rgba(226,236,250,.58)">HULL</text>'
+    + bar(58, 158, 44, '#5df2c0')
+    + '<text x="24" y="182" font-family="system-ui,sans-serif" font-size="9"'
+    + ' font-weight="700" fill="rgba(226,236,250,.58)">THRUST</text>'
+    + bar(58, 175, 44, 'rgba(255,107,90,.3)') + bar(58, 175, 20, '#ff6b5a');
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -933,6 +994,7 @@ const ART = {
   'dungeon-dice': dungeonDice,
   'color-heist': colorHeist,
   hangman,
+  'asteroid-salvage': asteroidSalvage,
 };
 
 /**
