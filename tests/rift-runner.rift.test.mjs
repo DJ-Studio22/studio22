@@ -18,9 +18,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  END, GROUND_Y, KIND, REALMS, Run, SOLVER_FINE, SolverBudget, TILE, TUNING,
-  bodyHeight, dashTiles, heightAbove, isClearable, jumpHeightTiles, jumpTiles,
-  physicsAt, realmById, speedAt,
+  END, GROUND_Y, KIND, PIXELS_PER_METRE, REALMS, Run, SOLVER_FINE, SolverBudget,
+  TILE, TUNING, bodyHeight, dashTiles, heightAbove, isClearable, jumpHeightTiles,
+  jumpTiles, physicsAt, realmById, riftAt, speedAt,
 } from '../games/rift-runner/rift.js';
 import {
   Course, GATE_TILES, PATTERNS, patternsFor, tierAt, verifyCoverage, verifyLibrary,
@@ -208,28 +208,95 @@ test('only a dash gets through a rift wall', () => {
 
 // --- The course -----------------------------------------------------------
 
-test('A RIFT GATE IS DEALT, not waited for', () => {
-  // The first version waited for a lull — grounded, nothing within six tiles —
-  // and patterns are dealt four tiles apart, so it never found one. The median
-  // run of both bots entered ZERO rifts, in a game whose whole hook is the
-  // rifts.
+test('THE COURSE BREATHES, and it is dealt rather than waited for', () => {
+  // The original version waited for a lull — grounded, nothing within six
+  // tiles — and patterns are dealt four tiles apart, so it never found one.
+  // The dealer lays the clear stretch instead.
+  //
+  // What is asserted here is the BREATH, not the portal, and separating those
+  // two is the whole point. The clear stretch used to exist only to stand a
+  // rift in, so spacing the rifts out took the breathing away with them.
   withSeed(1, () => {
     const course = new Course();
-    const gates = course.dealt.filter((d) => d.gate);
-    assert.ok(gates.length >= 1, 'no rift gate dealt in the opening stretch');
-    const firstMetres = (gates[0].tile * TILE) / 30;
-    assert.ok(firstMetres < 90,
-      `the first rift is ${firstMetres.toFixed(0)}m in, which most runs never reach`);
+    // The dealer only runs 2400px ahead, so the first breath at 95m is beyond
+    // the opening deal. Walk it forward without playing.
+    for (let i = 0; i < 4000; i++) {
+      if (course.cursorMetres >= TUNING.breathMetres * 2) break;
+      course.run.x += TILE;
+      course.forceDeal();
+    }
+    const breaths = course.dealt.filter((d) => d.breath);
+    assert.ok(breaths.length >= 1, 'the course never stops for breath');
+    assert.equal(breaths[0].tiles, TUNING.breathTiles,
+      'the clear stretch is not the width the tuning says it is');
+    // And the first one arrives roughly on the stated rhythm.
+    const at = (breaths[0].tile * TILE) / PIXELS_PER_METRE;
+    assert.ok(at <= TUNING.breathMetres * 1.6,
+      `the first clear stretch is ${at.toFixed(0)}m in, against a stated rhythm of ${TUNING.breathMetres}m`);
   });
 });
 
-test('and a competent run actually reaches one', () => {
-  const rifts = [];
-  for (let seed = 1; seed <= 40; seed++) {
-    withSeed(seed, () => rifts.push(runOnce('competent').rifts));
+test('A RIFT IS RARE AND GETS RARER — the portals are earned', () => {
+  // Deal the course out far enough to see the schedule, and check it against
+  // the numbers TUNING states rather than against a magic constant here.
+  const marks = [1, 2, 3, 4, 5].map((n) => riftAt(n));
+
+  assert.equal(marks[0], TUNING.firstRiftMetres, 'the first rift moved off its stated mark');
+  assert.ok(marks[1] >= 1800 && marks[1] <= 2200,
+    `the second rift is at ${marks[1]}m; it is meant to be about 2000`);
+
+  // Each gap longer than the last, which is what makes a fourth realm
+  // somebody's best run rather than something handed out on the way past.
+  for (let i = 2; i < marks.length; i++) {
+    const previous = marks[i - 1] - marks[i - 2];
+    const gap = marks[i] - marks[i - 1];
+    assert.ok(gap > previous,
+      `rift ${i + 1} came ${gap.toFixed(0)}m after the last, no further than the ${previous.toFixed(0)}m before it`);
   }
-  assert.ok(summarise(rifts).median >= 1,
-    `the median competent run enters ${summarise(rifts).median} rifts — the hook is unreachable`);
+
+  // And the course actually deals them there, rather than the schedule being a
+  // function nothing reads.
+  withSeed(1, () => {
+    const course = new Course();
+    // Walk the RUNNER forward by hand rather than playing: the schedule is a
+    // property of dealing and a bot dying at 300m would never reach the mark.
+    // Bounded, because a loop waiting on a dealer that has stopped is a hang.
+    for (let i = 0; i < 4000; i++) {
+      if (course.cursorMetres >= TUNING.firstRiftMetres + TUNING.breathMetres * 2) break;
+      course.run.x += TILE;
+      course.forceDeal();
+    }
+    const gate = course.dealt.find((d) => d.gate);
+    assert.ok(gate, 'no rift dealt by the time the dealer passed the first mark');
+    const at = (gate.tile * TILE) / PIXELS_PER_METRE;
+    assert.ok(Math.abs(at - TUNING.firstRiftMetres) < TUNING.breathMetres * 1.5,
+      `the first rift was dealt at ${at.toFixed(0)}m, not near ${TUNING.firstRiftMetres}m`);
+  });
+});
+
+test('a rift no longer hands out free distance', () => {
+  // It used to, and nothing said so. #crossGate deleted every obstacle dealt
+  // ahead — up to sixty tiles of them — and then left the cursor where it was,
+  // so the gap was never re-dealt. Every rift was quietly gifting about
+  // seventy-two metres of empty course, and the shipped medians of 350m and
+  // 655m were mostly that gift rather than running.
+  withSeed(3, () => {
+    const course = new Course();
+    for (let i = 0; i < 60 * 200 && course.running; i++) {
+      course.step(1 / 60, { jump: course.run.grounded, jumpHeld: true, dash: true, slide: false });
+      if (!course.justShifted) continue;
+
+      // Immediately after a shift there must be obstacles dealt close ahead,
+      // not a void stretching to wherever the dealer had got to.
+      const ahead = course.run.obstacles
+        .filter((o) => o.tile * TILE > course.run.x)
+        .map((o) => (o.tile * TILE - course.run.x) / PIXELS_PER_METRE);
+      assert.ok(ahead.length > 0, 'nothing at all was dealt after the rift');
+      assert.ok(Math.min(...ahead) < 40,
+        `the nearest obstacle after the rift is ${Math.min(...ahead).toFixed(0)}m away — the gift is back`);
+      return;
+    }
+  });
 });
 
 test('a realm change never lands mid-jump', () => {
