@@ -1,7 +1,7 @@
 # Studio 22
 
 A browser-based arcade of original games. Cinematic landing page, an arcade
-hub, and eleven games playable on phone, tablet, desktop or a controller on
+hub, and thirteen games playable on phone, tablet, desktop or a controller on
 the TV. Deployed as a static site to Cloudflare Pages.
 
 No accounts. No ads. Nothing collected. Nothing survives the tab.
@@ -76,10 +76,17 @@ npm test
 
 A game whose difficulty is a claim gets its simulation extracted into a
 DOM-free rules module, so it can be measured headlessly rather than argued
-about. Five games have done this and it has repeatedly found things that were
+about. Seven games have done this and it has repeatedly found things that were
 invisible on screen — a hook refusing most of the anchors it could reach, four
 swings in five committed to hitting a roof, a runner passing through solid
-tiles at speed, and an ordinal that rendered "21th".
+tiles at speed, a gorge that became arithmetically impossible past 25 km, a
+stacking twist that turned out to be pure decoration, and an ordinal that
+rendered "21th".
+
+It also has one blind spot, and it is written down: **a bot is already playing
+on frame one and a person is not.** Ember shipped with a balloon that reached
+the rock in 0.53 seconds from a standing start, and every bot flew it happily.
+A human plays the first thirty seconds cold before a game is called done.
 
 The convention, and why each part of it exists, is in
 [`tests/README.md`](tests/README.md).
@@ -93,4 +100,5 @@ file (`site.config.json`) and two generators; the registrar and Cloudflare
 steps are written up in [`DEPLOY.md`](DEPLOY.md).
 
 `PROGRESS.md` is the build log and the record of decisions already settled.
-`BACKLOG.md` is what is left.
+`BACKLOG.md` is what is left — currently nothing: every entry in `games.json`
+is `live` and the arcade has no placeholder cards.

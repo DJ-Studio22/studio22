@@ -136,11 +136,47 @@ is a parameter nothing is reading.
 The bots now take a fixed think time over each crate before hard-dropping it,
 the same for both so it is never the variable under test.
 
-## 7. A bot is not a player, and the difference has shipped a bug
+## 7. A bot is not a player — the known limit of everything above
 
-Ember's balloon reached the rock in 0.53 seconds from a standing start. Every
-bot missed it, because every bot was already flying on frame one. Nobody would
-have found that except by opening the game and looking at it.
+This is the one blind spot the harness has by construction, and it has now
+cost two faults that nothing else in this directory would ever have caught.
 
-The harness is for claims about numbers. It is not a substitute for playing
-the thing, and neither is a substitute for the other.
+**A bot is already playing on frame one. A player is not.**
+
+Every bot here is handed a fully-formed world and starts acting immediately:
+reading the gap, scoring the placement, pressing the button. It has no
+first run. It never spends a second working out which way is up, where its
+character is, or what the button does. So it cannot feel an opening, and
+anything that is only wrong during the opening is invisible to it.
+
+Ember shipped exactly that. From a standing start the balloon reached the
+rock in **0.53 seconds** — a run was over before a player had finished
+reading the screen. Every bot flew it happily and the seeded numbers looked
+healthy at both skill levels, because by the time a bot has lost half a
+second it has already made three decisions. It was found by opening the game
+and looking at it, and by nothing else.
+
+Ballast shipped the mirror of it. Its bots slammed every crate the instant it
+spawned, so a seventy-crate voyage took 1.3 seconds of simulated time and the
+per-second water rule never fired at all (see convention 6). Both faults are
+the same shape: the harness disagreed with a human about **how long things
+take**, and the harness is not the one that gets to be right about that.
+
+### So: a human first-thirty-seconds pass, always
+
+Before a game is called done, somebody opens it and plays the first thirty
+seconds cold. Not a full playthrough — the opening specifically, because that
+is the part the bots structurally cannot see:
+
+- Does anything happen before the player has read the screen?
+- Is the first input the game asks for one they could have known to make?
+- How long is a first run, in seconds, for somebody who has never seen it?
+- Does the game start moving before the player does?
+
+This is required **however good the seeded numbers look**, and the numbers
+looking good is not evidence against it. Ember's did.
+
+The harness is for claims about arithmetic. It is very good at those and it
+is the only thing that can check them. It is not a substitute for playing the
+game, and playing the game is not a substitute for it either — neither one
+found what the other did.

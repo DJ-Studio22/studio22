@@ -38,7 +38,7 @@ Deployed as a static site to Cloudflare Pages.
 
 ## Game palettes
 Each game defines its own palette. Games are artwork, not chrome, and pushing
-twelve games through one set of tokens would make them all look like the same
+thirteen games through one set of tokens would make them all look like the same
 picture. A game's colours are local to that game.
 
 The convention, which every game follows the same way:
@@ -62,7 +62,7 @@ enough colours that one flat object turns unwieldy, group by subject
 ### What stays consistent
 The shell draws on top of every game, and it keeps site tokens regardless of
 what the game underneath looks like. Pause menu, game over, title screen, and
-HUD must be instantly recognisable in all twelve games — a player who pauses
+HUD must be instantly recognisable in all thirteen games — a player who pauses
 should know they are in Studio 22, not in whatever world the game just built
 around them. Games never restyle the shell.
 
@@ -75,11 +75,11 @@ a claim splits in two:
 - `game.js` keeps canvas, input, audio, camera and shell wiring.
 - A **rules module** holds the simulation, free of the DOM, importable from
   Node — `driving.js`, `problems.js`, `board.js`, `swing.js`, `rooms.js`,
-  `motion.js`.
+  `motion.js`, `gorge.js`, `hold.js`.
 
 Then a bot in `tests/` plays it thousands of times a second.
 
-Three rules, all of them learned the hard way:
+Four rules, all of them learned the hard way:
 
 - **A test imports the real module, or it is not a test.** Never restate a
   constant. The flip-budget check once restated Gravity Flip's physics instead
@@ -92,6 +92,14 @@ Three rules, all of them learned the hard way:
   player is forgiveness; one that helps both equally is an easier game; one
   that closes the gap has flattened the ceiling. One bot cannot tell those
   apart.
+
+- **A bot is not a player, and the harness cannot see the opening.** Every
+  bot starts acting on frame one; a person spends the first seconds working
+  out what they are looking at. So anything only wrong during the opening is
+  invisible to the harness however good the seeded numbers are. Ember shipped
+  a balloon that reached the rock in 0.53s from a standing start and every bot
+  flew it happily. **A human plays the first thirty seconds cold before a game
+  is done** — that is not optional and good numbers are not a substitute.
 
 `npm test` runs the lot. The convention is written up in `tests/README.md`.
 

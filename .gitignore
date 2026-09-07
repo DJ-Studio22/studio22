@@ -1,7 +1,28 @@
 node_modules
 dist
+
+# Environment files. Vite loads .env, .env.local, .env.[mode] and
+# .env.[mode].local, so the glob has to cover all four shapes — listing only
+# the first two leaves .env.production tracked, which is the one most likely
+# to hold something real.
 .env
-.env.local
+.env.*
+!.env.example
+
+# Credential material. This project has no backend and needs none of it, and
+# that is exactly why an accidental key here would go unnoticed.
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+.npmrc
+.netrc
+
+# Cloudflare / Wrangler local state, if anyone ever runs it against this repo.
+.wrangler
+.dev.vars
+
 npm-debug.log*
 .DS_Store
 Thumbs.db

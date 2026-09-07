@@ -216,3 +216,39 @@ sliding cargo. Plus a harness bug — bots that slam instantly make a
 seventy-crate run take 1.3 seconds, and a rule charged per second never fires.
 
 ---
+
+## 12. Security and cross-browser pass — [x] DONE
+
+Verification rather than assurances. Full write-up in PROGRESS.md Phase 12.
+
+**Checked, nothing found**
+- Injection: three innerHTML sites in shipped code, all traced to source
+  files in this repo. All three user-typed inputs — Keystroke's paste,
+  tournament names, and the arcade search that was not on the list — reach
+  only `textContent`, `setAttribute` or `ctx.fillText`. No dynamic
+  `RegExp` anywhere. Names never enter a URL.
+- Credentials: every blob in the history (51 commits, 284 blobs) scanned
+  against seventeen patterns. One hit, a false positive on a CSS custom
+  property named `token`.
+- Headers: every header in `public/_headers` confirmed served on four live
+  paths.
+- External requests: 91 requests across nine deployed pages, all to our own
+  origin, none anywhere else.
+
+**Fixed**
+- `vite` 5.4.21 to 7.3.6, clearing both npm audit findings (dev-server-only,
+  zero production dependencies either way). Same 48-file output, shared chunk
+  1.4 KB smaller, 208 tests and all 13 games verified after.
+- HSTS was missing. Added at a year, without `preload`.
+- Cloudflare Pages was returning **200 and the landing page for every unknown
+  path**. `public/404.html` gives a real 404.
+- `.gitignore` did not cover `.env.production` or key material.
+- `score.innerHTML` with a literal became `textContent`.
+
+**Known gaps, deliberately left**
+- Real Safari on macOS/iOS is untested; Safari cannot run on Windows. WebKit
+  26.6 was tested instead, which is faithful for layout and rendering and not
+  for audio policy.
+- No physical gamepad was connected in Firefox or WebKit.
+
+---

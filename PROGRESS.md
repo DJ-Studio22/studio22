@@ -14,6 +14,10 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 12: security and cross-browser pass. Injection surface audited end to
+  end, full git history scanned for credentials, zero external requests proved
+  on the deployed site, headers confirmed live, and the site tested in Gecko
+  and WebKit for the first time. Four fixes, none of them a vulnerability
 - Phase 11: Ballast and Ember built — the last two `coming-soon` placeholders.
   THIRTEEN games live and nothing left in the manifest that is not playable.
   Both have a rules module and a bot harness; both had a design fault the bots
@@ -658,3 +662,173 @@ checking the list comes back MONOTONICALLY at every step.
   failed a test about search. It states the property directly now — every game
   is findable by its own title whatever its status — which holds on any
   catalogue including an all-live one.
+
+## Phase 12 — the security and cross-browser pass
+
+Asked for verification rather than assurances. Most of it came back clean; the
+things that did not were hygiene rather than holes. Nothing found was
+exploitable.
+
+### Injection surface — clean, one sink tidied
+
+There are exactly **three** places in shipped code that write HTML, and all
+three were traced to their source:
+
+| Where | What it writes | Verdict |
+|---|---|---|
+| `index.html`, `arcade.html` | `media.innerHTML = thumbnailFor(id)` | SVG from `thumbnails.js`, keyed by an id from `games.json`. Both are source files in this repo. No user input can reach it. |
+| `games/keystroke/game.js` | the paste dialog's markup | A **static template with no interpolation**. User text arrives via `textarea.value` and leaves via `textarea.value`, which is never parsed as HTML. |
+
+There are three inputs a person can type into, not two:
+
+- **Keystroke's pasted text** — `textarea.value` to `prepareCustomText()`
+  (pure string work) to an array of lines, drawn one character at a time
+  through `UI.text()`, which is one `ctx.fillText`. `engine/ui.js` touches the
+  DOM exactly once in the whole file, to read tokens with `getComputedStyle`.
+- **Tournament player names** — every name reaches the page through `el()` or
+  `navButton()`, and both assign `textContent`. The two attribute writes use
+  `setAttribute('aria-label', ...)`, which takes a string. Names are also
+  whitelisted at the source: the physical-keyboard handler accepts
+  `/[a-z0-9 ]/i` only and caps the length. And they never enter a URL —
+  `urlForTurn()` builds `${game.path}?tournament=1` and nothing else, so names
+  stay in sessionStorage exactly as the privacy note claims.
+- **The arcade search box** — which was not on the list and should have been.
+  The query is lowercased and used with `String.includes()`. It builds no
+  regex, no selector, and is never echoed back to the page; the result is a
+  Set of ids used to toggle `card.hidden`.
+
+`new RegExp` appears nowhere in shipped code, so there is no dynamic-pattern
+surface at all.
+
+**Changed:** `score.innerHTML = 'Best this visit'` became `textContent`. It was
+a string literal and perfectly safe, which is exactly how an innerHTML sink
+survives long enough for somebody in a hurry to hand it a variable. The two
+thumbnail sinks now carry a comment saying why they are allowed.
+
+### Credentials — nothing, in 51 commits and 284 blobs
+
+Every blob in the entire history was extracted and scanned against seventeen
+patterns: AWS, GitHub (classic and fine-grained), Slack, Google, Stripe,
+Anthropic, OpenAI, npm, JWTs, private-key blocks, bearer literals, basic-auth
+URLs, dotenv-shaped lines, and generic secret assignments.
+
+**One hit, and it is a false positive:** `token: '--color-player-1'`, a CSS
+custom property name in the tournament colour table.
+
+No env file, PEM, key, npmrc or wrangler config has ever been committed.
+
+**Changed:** `.gitignore` covered `.env` and `.env.local` only. Vite also loads
+`.env.[mode]` and `.env.[mode].local`, so `.env.production` — the one most
+likely to hold something real — was tracked. It is `.env.*` now, plus key
+material and Wrangler local state.
+
+### npm audit — was two, now zero
+
+Both findings were the same thing: `esbuild <=0.24.2` via `vite@5.4.21`,
+letting any website talk to the **dev server**. It cannot touch the deployed
+site: there is no server, esbuild is not shipped, and `npm ls --omit=dev`
+prints `(empty)` — this project has **zero production dependencies** and twelve
+packages installed in total.
+
+No fix existed inside vite 5.x; 5.4.21 is the last of that line and still ships
+the affected esbuild. Upgraded to **vite 7.3.6**, and verified rather than
+assumed:
+
+- `npm audit`: 0 vulnerabilities.
+- Build output: the **same 48 files**, same names once hashes are normalised.
+- The shared `util` chunk got *smaller* — 12.46 KB to 11.04 KB gzipped, from
+  the newer esbuild's minifier.
+- 208 tests pass; all 13 games boot, paint and log nothing from the new build.
+
+### Zero external requests — proved, not asserted
+
+The landing page promises nothing is collected. Measured on the **deployed**
+site with a cold profile and the cache disabled, capturing every request
+including WebSockets, across nine pages:
+
+**91 requests, 91 to `studio22-anw.pages.dev`, 0 to anywhere else.**
+
+The CSP already forbids it, but the CSP is a rule and this is the behaviour.
+
+### Headers — all present and correct on the live site
+
+Every header in `public/_headers` was confirmed on four live paths (root, a DOM
+page, a game page, a hashed asset): the full CSP, `nosniff`, `no-referrer`, the
+Permissions-Policy denials, COOP, CORP and `X-Frame-Options: DENY`.
+
+**Two gaps found and fixed:**
+
+- **No HSTS.** Added at one year with `includeSubDomains` and deliberately
+  without `preload` — preload is the one directive here that cannot be taken
+  back, and a year gets essentially all the protection while staying reversible
+  if the site ever moves to a custom domain.
+- **A soft 404.** Cloudflare Pages was answering **HTTP 200 with the full
+  landing page for every unknown path** — `/this-does-not-exist-xyz` returned
+  200 and the front page. That is a crawler indexing unlimited duplicates and a
+  mistyped link that looks like it worked. `public/404.html` fixes it; Pages
+  serves it with a real 404 status. It is self-contained with an inline style
+  block because a file in `public/` cannot reference Vite's hashed CSS, and a
+  404 page that fails to load is a poor joke.
+
+Incidentally confirmed: `reference/` is **not** deployed. It only appeared to
+be, because every unknown path was returning 200.
+
+### Cross-browser — first test outside Chromium
+
+Everything before this had been Chrome. Run against the **deployed** site in
+three engines, at a desktop and a phone viewport.
+
+**Be clear about one limit: Safari cannot run on Windows.** What was tested is
+**WebKit 26.6**, the engine Safari is built on, via Playwright. That covers
+layout, CSS, canvas and JS faithfully. It does **not** model Safari's
+autoplay/audio-unlock policy, and real Safari on macOS and iOS remains
+untested. Playwright and its engines were installed outside the repo — nothing
+was added to `package.json`.
+
+| | Chromium 153 | Firefox 155 | WebKit 26.6 |
+|---|---|---|---|
+| `animation-timeline: scroll()` | yes | **no** | yes |
+| parallax path taken | scroll-timeline | **rAF fallback** | scroll-timeline |
+| parallax actually moved | -90 to -40.9 | **0 to -40.2** | -90 to -40.2 |
+| pin sticky + progress | yes, 0.563 | yes, 0.599 | yes, 0.600 |
+| stage fits one screen | yes | yes | yes |
+| sound toggle | works | works | works |
+| canvas aspect held | 1.761 = 1.761 | 1.761 = 1.761 | 1.761 = 1.761 |
+| audio before gesture | running | **suspended** | n/a, see below |
+| audio after gesture | running | **running** | n/a |
+| console | clean | clean | clean |
+
+**All 13 games x 3 engines x 2 viewports = 78 loads, every one clean:** module
+graph parsed, boot fallback removed, canvas letterboxed to the correct aspect,
+inside the viewport, and painted.
+
+Three things worth recording:
+
+**Firefox is the first real proof of the rAF fallback.** Gecko does not support
+scroll-driven animations, so it took the fallback path for real rather than the
+emulation used in Phase 10 — and it works: `animation-name: none`, `--scroll-y`
+written at -0.447, transform moved. The two paths land within 0.7px of each
+other at the same scroll position.
+
+**Firefox is also the only engine that suspends audio until a gesture**, which
+is the case `engine/audio.js` was written for. It went suspended to running
+after one keypress. Chromium's headless profile reports running immediately, so
+it never exercises that path — the unlock had never actually been tested until
+now on anything but an iPhone by hand.
+
+**WebKit-on-Windows has neither `AudioContext` nor `navigator.getGamepads`** —
+a limitation of that Playwright build, *not* of Safari, which has had both for
+over a decade. Reporting it as a Safari finding would be wrong. But it
+accidentally ran a test worth having: the whole site loaded, every game painted
+and the console stayed clean **with no Web Audio and no Gamepad API at all**.
+Both guards turn out to be deliberate — `audio.js` does
+`const Ctor = window.AudioContext || window.webkitAudioContext; if (!Ctor) return null;`
+and `input.js` wraps `navigator.getGamepads` in a `#safeGetGamepads()` that
+try/catches and returns an empty array. They work.
+
+### What was NOT verified
+
+- **Real Safari, on macOS or iOS.** Not possible on this machine. WebKit is a
+  good proxy for layout and rendering and a poor one for audio policy.
+- **A physical gamepad in Firefox or WebKit.** The API's presence was checked;
+  no pad was connected to test button mapping against.

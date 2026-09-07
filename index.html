@@ -481,6 +481,10 @@
       // Inline SVG rather than an <img>. The art is markup, so the page
       // still makes no image requests at all -- the <img> this replaces
       // pointed at a PNG that has never existed and 404ed once per card.
+      // The one innerHTML on this page, and the reason it is allowed: the
+      // string comes from thumbnails.js, a source file in this repo, looked
+      // up by a game id from games.json, another source file in this repo.
+      // No user input can reach it. Nothing else here uses innerHTML.
       const art = thumbnailFor(game.id);
       if (art) {
         media.innerHTML = art;

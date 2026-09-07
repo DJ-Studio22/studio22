@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Not found — Studio 22</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#0a0908" />
+
+  <!--
+    Cloudflare Pages serves this file, with a real 404 status, for any path
+    that does not exist. Without it Pages answers 200 with the landing page
+    for EVERY unknown URL, which is a soft 404: a crawler indexes unlimited
+    duplicates of the front page, and a mistyped link looks like it worked.
+    Measured before adding this — /this-does-not-exist-xyz returned 200 and
+    the full landing page.
+
+    It lives in public/ so Pages finds it at the output root, which means it
+    cannot reference the hashed CSS Vite emits. Hence the inline block: it is
+    a handful of rules, it has no dependencies, and a 404 page that itself
+    fails to load is a poor joke. The values are copied from tokens.css and
+    are the one place in the site that is allowed to do that.
+  -->
+  <style>
+    :root {
+      --bg: #0a0908;
+      --ink: #f5f0e8;
+      --quiet: #948b7f;
+      --accent: #ffa22b;
+    }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+    main { max-width: 30rem; }
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.6875rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 var(--gap, 18px);
+    }
+    h1 {
+      font-size: clamp(2rem, 8vw, 3.25rem);
+      line-height: 1.04;
+      letter-spacing: -0.03em;
+      margin: 0 0 16px;
+    }
+    p { color: var(--quiet); margin: 0 0 28px; }
+    .links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    a {
+      display: inline-block;
+      padding: 12px 22px;
+      border-radius: 999px;
+      text-decoration: none;
+      font-weight: 600;
+      border: 1px solid #2a2724;
+      color: var(--ink);
+    }
+    a.primary { background: var(--accent); color: #1a1207; border-color: transparent; }
+    a:hover, a:focus-visible { border-color: var(--accent); }
+    a.primary:hover, a.primary:focus-visible { filter: brightness(1.08); }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="code">404 &mdash; Not found</p>
+    <h1>That page isn&rsquo;t here.</h1>
+    <p>The games are all in one place, and none of them need installing.</p>
+    <div class="links">
+      <a class="primary" href="/arcade.html">Go to the Arcade</a>
+      <a href="/">Back to the start</a>
+    </div>
+  </main>
+</body>
+</html>
