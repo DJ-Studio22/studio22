@@ -338,5 +338,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 180,
     "status": "live"
+  },
+  {
+    "id": "winter",
+    "title": "Winter Base Building",
+    "tagline": "Wood burns. Wood builds. There is never enough.",
+    "description": "Endless survival in a winter forest. Three actions a day — gather wood, hunt for meat, or raise the wall — and every night the fire wants feeding and so do you, both of them wanting more as the weeks go on. Wood does two jobs and there is never enough for both, so a camp that funds the fire meets the pack behind a wall that will not hold, and a camp that funds the wall freezes before it gets there. Every seventh night the wolves come and hit whatever you built. Bears are the risk of going out; wolves are the risk of the deadline. Weeks survived is the score.",
+    "category": "strategy",
+    "path": "/games/winter/index.html",
+    "difficulty": "hard",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "survival",
+      "strategy",
+      "resource-management",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 300,
+    "status": "live"
   }
 ]
