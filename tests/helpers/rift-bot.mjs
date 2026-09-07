@@ -62,13 +62,30 @@ const WRONG_VERB = {
   [KIND.RIFT]: KIND.SPIKE,    // tried to jump a wall
 };
 
-/** The next obstacle the runner has not already passed. */
-function ahead(run, fromX) {
+/**
+ * The next obstacle the runner has not already passed.
+ *
+ * "Passed" means the BODY is clear, not that the centre point is. blocks()
+ * tests `state.x ± bodyW / 2` against the obstacle, and this used a bare x —
+ * so an obstacle was dropped from consideration while the runner's trailing
+ * half, thirteen pixels of it, was still inside it.
+ *
+ * Under a bar that is fatal and it was invisible in the aggregate: the bot
+ * slides the whole length of the bar, the bar leaves the list on the frame the
+ * centre clears the far edge, the bot stands up, and the back half of its head
+ * is still under the bar. It killed the good bot on 31 runs in 60 and looked
+ * like the bar being too hard.
+ *
+ * The near edge had already been fixed once, for the same reason and with the
+ * same symptom. The far edge is the other half of it.
+ */
+function ahead(run, fromX, tuning = TUNING) {
+  const trailing = fromX - tuning.bodyW / 2;
   let best = null;
   for (const o of run.obstacles) {
     const left = o.tile * TILE;
     const right = left + o.tiles * TILE;
-    if (right < fromX) continue;
+    if (right < trailing) continue;
     if (!best || left < best.left) best = { o, left, right };
   }
   return best;
@@ -85,6 +102,112 @@ function ceilingOver(run, x) {
   return Infinity;
 }
 
+/**
+ * What this bot does on the frame it is thinking.
+ *
+ * Exported so a trace can drive the REAL bot rather than a copy of it. The
+ * copy is how the flip-budget check ended up measuring a reimplementation of
+ * Gravity Flip instead of Gravity Flip; a bot's decision rule is exactly the
+ * sort of thing that gets quietly duplicated into a diagnostic and then drifts.
+ */
+export function decide(course, s, tuning = TUNING, memory = {}) {
+  const run = course.run;
+  const read = s.readTiles * TILE;
+  const next = ahead(run, run.x, tuning);
+
+  const decision = { jump: false, jumpHeld: false, slide: false, dash: false };
+
+  if (next) {
+    const distance = next.left - run.x;
+    const feet = heightAbove(run, run.realm);
+
+    // Note the absence of a "have I passed it" clause on the LEFT edge. There
+    // was one, and it was wrong: it stopped the bot acting once it was one
+    // tile past the near edge of the obstacle, so on a three-tile bar it stood
+    // up 80px before it was out — and died, every time, on every run that
+    // opened with a bar. ahead() already drops obstacles whose far edge is
+    // behind the runner, which is the real test.
+    if (distance < read) {
+      // Which obstacle the bot THINKS it is looking at. A competent player
+      // reaches for the wrong verb under pressure; the kind that reads
+      // correctly is what makes a good one good.
+      //
+      // Read ONCE PER OBSTACLE and then committed, which is what a person
+      // does. It used to be re-rolled on every decision tick, and that is not
+      // a 5% misread rate — an obstacle is in view for about six ticks, so it
+      // compounds to roughly 26%, and it compounds WORST for whatever the
+      // runner spends longest next to. A bar takes the longest, so the bot
+      // would slide correctly under one for half a second and then, on the
+      // sixth roll, decide it was a spike and jump into it.
+      //
+      // The constant says five percent. It should mean five percent.
+      if (memory.tile !== next.o.tile) {
+        memory.tile = next.o.tile;
+        memory.kind = (s.misreadChance && Math.random() < s.misreadChance)
+          ? WRONG_VERB[next.o.kind] ?? next.o.kind
+          : next.o.kind;
+      }
+      const kind = memory.kind;
+      switch (kind) {
+        case KIND.SPIKE:
+        case KIND.GAP: {
+          // Where the arc has to START for the landing to be past the far
+          // edge. Anything earlier lands inside.
+          const reach = jumpTiles(run.realm, tuning) * TILE;
+          const latestSafe = next.left - TILE * 0.3;
+          const earliestSafe = next.right - reach + TILE * 0.6;
+          const ready = s.timesTakeoff
+            ? run.x >= earliestSafe && run.x <= latestSafe
+            : true;
+          if (run.grounded && ready) decision.jump = true;
+          decision.jumpHeld = true;
+          if (s.cutJumps) {
+            const roof = ceilingOver(run, next.left);
+            if (roof < Infinity && feet + tuning.bodyH > roof - TILE) {
+              decision.jumpHeld = false;
+            }
+          }
+          break;
+        }
+        case KIND.BAR:
+          // Held, so there is no window to miss — get down before it and
+          // stay down until it is behind you.
+          decision.slide = true;
+          break;
+        case KIND.RIFT: {
+          // And so does the phase.
+          const p = physicsAt(run.speed, run.realm, tuning);
+          const cover = p.dashTime * run.speed * tuning.dashSpeedBonus;
+          // The weak bot dashes as soon as the wall is within reach of the
+          // phase, rather than at a fixed sixty pixels.
+          //
+          // Sixty was narrower than this bot's own stride between decisions —
+          // 165ms is 56px — and the decision is sticky, so a tick landing at
+          // 70px produced no dash and the next tick came after the wall. It
+          // simply ran into rift walls with the dash off cooldown and nothing
+          // in its way, on three of the first seven seeds.
+          //
+          // This was tried once before and made things WORSE, because the
+          // phase only covered 92px then and dashing early ended it before the
+          // wall. At 207px there is room to be early. Widening a trigger is
+          // only safe once the thing it triggers is generous.
+          const ready = s.timesTakeoff
+            ? run.x >= next.right - cover && run.x <= next.left - TILE * 0.2
+            : run.x >= next.right - cover * 0.9;
+          if (ready) decision.dash = true;
+          break;
+        }
+        default:
+          break;
+      }
+    } else if (!run.grounded && s.cutJumps) {
+      // Nothing to clear: come down rather than float.
+      decision.jumpHeld = false;
+    }
+  }
+  return decision;
+}
+
 /** One run. Returns metres and why it ended. */
 export function runOnce(skill, tuning = TUNING) {
   const s = SKILLS[skill];
@@ -94,79 +217,16 @@ export function runOnce(skill, tuning = TUNING) {
   let decision = { jump: false, jumpHeld: false, slide: false, dash: false };
   let sinceDecision = 0;
   const every = s.reactionMs / 1000;
+  // What this bot currently believes the obstacle in front of it is. Owned by
+  // the run, so one run's misread cannot leak into the next.
+  const memory = {};
 
   // A cap, so a bot that has solved the game cannot hang the suite.
   for (let i = 0; i < 60 * 300 && course.running; i++) {
     sinceDecision += dt;
     if (sinceDecision >= every) {
       sinceDecision = 0;
-      const run = course.run;
-      const read = s.readTiles * TILE;
-      const next = ahead(run, run.x);
-
-      decision = { jump: false, jumpHeld: false, slide: false, dash: false };
-
-      if (next) {
-        const distance = next.left - run.x;
-        const feet = heightAbove(run, run.realm);
-
-        // Note the absence of a "have I passed it" clause on the LEFT edge.
-        // There was one, and it was wrong: it stopped the bot acting once it
-        // was one tile past the near edge of the obstacle, so on a three-tile
-        // bar it stood up 80px before it was out — and died, every time, on
-        // every run that opened with a bar. ahead() already drops obstacles
-        // whose far edge is behind the runner, which is the real test.
-        if (distance < read) {
-          // Which obstacle the bot THINKS it is looking at. A competent
-          // player reaches for the wrong verb under pressure; the kind that
-          // reads correctly is what makes a good one good.
-          const kind = (s.misreadChance && Math.random() < s.misreadChance)
-            ? WRONG_VERB[next.o.kind] ?? next.o.kind
-            : next.o.kind;
-          switch (kind) {
-            case KIND.SPIKE:
-            case KIND.GAP: {
-              // Where the arc has to START for the landing to be past the far
-              // edge. Anything earlier lands inside.
-              const reach = jumpTiles(run.realm, tuning) * TILE;
-              const latestSafe = next.left - TILE * 0.3;
-              const earliestSafe = next.right - reach + TILE * 0.6;
-              const ready = s.timesTakeoff
-                ? run.x >= earliestSafe && run.x <= latestSafe
-                : true;
-              if (run.grounded && ready) decision.jump = true;
-              decision.jumpHeld = true;
-              if (s.cutJumps) {
-                const roof = ceilingOver(run, next.left);
-                if (roof < Infinity && feet + tuning.bodyH > roof - TILE) {
-                  decision.jumpHeld = false;
-                }
-              }
-              break;
-            }
-            case KIND.BAR:
-              // Held, so there is no window to miss — get down before it and
-              // stay down until it is behind you.
-              decision.slide = true;
-              break;
-            case KIND.RIFT: {
-              // And so does the phase.
-              const p = physicsAt(run.speed, run.realm, tuning);
-              const cover = p.dashTime * run.speed * tuning.dashSpeedBonus;
-              const ready = s.timesTakeoff
-                ? run.x >= next.right - cover && run.x <= next.left - TILE * 0.2
-                : distance < TILE * 1.5;
-              if (ready) decision.dash = true;
-              break;
-            }
-            default:
-              break;
-          }
-        } else if (!run.grounded && s.cutJumps) {
-          // Nothing to clear: come down rather than float.
-          decision.jumpHeld = false;
-        }
-      }
+      decision = decide(course, s, tuning, memory);
     }
     course.step(dt, decision);
   }

@@ -94,11 +94,25 @@ export const PATTERNS = [
   },
   {
     // Not legal in Drift: a floaty jump covers 8.2 tiles, so there is no hop
-    // short enough to come down in a two-tile window between spikes. The
-    // solver said so; the realm list says so now.
-    id: 'spike-stutter', tier: 1, tiles: 11,
+    // short enough to come down between spikes. The solver said so; the realm
+    // list says so now.
+    //
+    // FIVE TILES APART, not three, and that is the slide fault for the third
+    // time in this game. At three, a full jump covers 5.1 tiles and lands on
+    // the next spike, so the phrase demanded a cut jump landing in a two-tile
+    // window — and the hold had to be released inside 0.01 SECONDS, one frame
+    // at 60fps, with only 2 of 19 approach positions working at all. In Forge,
+    // where gravity is heavy and the jump is short, the same phrase gave 0.51s.
+    // So it was frame-perfect in three realms out of four and comfortable in
+    // the fourth, which is not difficulty, it is a coin toss.
+    //
+    // At five the window is 0.59s everywhere. The phrase is still three jumps
+    // in a rhythm — the skill is sustaining it, not releasing on one frame.
+    // This was the single thing capping a GOOD run: it killed the strong bot
+    // 34 times in 60, and the weak bot barely reached it.
+    id: 'spike-stutter', tier: 1, tiles: 17,
     realms: ['surface', 'forge', 'surge', 'inverse'],
-    obstacles: [spike(3), spike(6), spike(9)],
+    obstacles: [spike(3), spike(8), spike(13)],
   },
   {
     id: 'wide-gap', tier: 1, tiles: 9, realms: ['surface', 'drift', 'surge', 'inverse'],
