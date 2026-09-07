@@ -1068,6 +1068,58 @@ function pixelPaintball() {
   return out + '</svg>';
 }
 
+/**
+ * Gravity Well -- the craft, the gate, and the line that bends round a body.
+ *
+ * The card has one job, and it is the same job the game has: show that the path
+ * is CURVED and that something drew it. So the dotted line swings round the
+ * planet's field rather than pointing at the gate, and the second, red line
+ * shows the choice that ends in the planet.
+ */
+function gravityWell() {
+  const star = (x, y, r) => '<circle cx="' + x + '" cy="' + y + '" r="' + r
+    + '" fill="rgba(190,210,255,.55)"/>';
+
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="gw-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#05060f"/><stop offset="1" stop-color="#0d1122"/>'
+    + '</linearGradient>'
+    + '<radialGradient id="gw-body" cx="38%" cy="34%">'
+    + '<stop offset="0" stop-color="#f3c78a"/><stop offset="0.55" stop-color="#c98b4b"/>'
+    + '<stop offset="1" stop-color="#5c3b1c"/></radialGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#gw-sky)"/>';
+
+  for (const [x, y, r] of [[28,26,1.4],[74,52,1],[132,18,1.6],[212,38,1.2],[288,24,1.4],
+    [46,150,1.2],[112,178,1],[268,158,1.5],[300,110,1.1],[180,120,1]]) out += star(x, y, r);
+
+  // The body and the reach of its pull.
+  out += '<circle cx="168" cy="104" r="62" fill="rgba(201,139,75,.11)"'
+    + ' stroke="rgba(201,139,75,.20)" stroke-width="2"/>'
+    + '<circle cx="168" cy="104" r="26" fill="url(#gw-body)"/>';
+
+  // The gate.
+  out += '<circle cx="278" cy="72" r="17" fill="rgba(93,242,192,.16)"'
+    + ' stroke="#5df2c0" stroke-width="3"/>'
+    + '<circle cx="278" cy="72" r="25" fill="none" stroke="rgba(93,242,192,.30)" stroke-width="2"/>';
+
+  // The honest line: a swing round the body and out to the gate.
+  out += '<path d="M44 150 C 96 150, 118 128, 128 100 S 176 44, 226 56 S 268 68, 276 71"'
+    + ' fill="none" stroke="rgba(160,200,255,.85)" stroke-width="3"'
+    + ' stroke-dasharray="7 8" stroke-linecap="round"/>';
+
+  // And the one that does not make it.
+  out += '<path d="M44 150 C 92 146, 130 132, 152 118"'
+    + ' fill="none" stroke="#ff6b5a" stroke-width="3" stroke-dasharray="7 8"'
+    + ' stroke-linecap="round"/>'
+    + '<path d="M146 112 L162 126 M162 112 L146 126" stroke="#ff6b5a" stroke-width="3"/>';
+
+  // The craft, at the start of both.
+  out += '<g transform="translate(44 150) rotate(-18)">'
+    + '<path d="M13 0 L-8 8 L-5 0 L-8 -8 Z" fill="#e8f1ff" stroke="#6d86b8" stroke-width="2"/>'
+    + '<path d="M-9 -4 L-22 0 L-9 4 Z" fill="#ffb347"/></g>';
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -1093,6 +1145,7 @@ const ART = {
   hangman,
   'beat-blocker': beatBlocker,
   'pixel-paintball': pixelPaintball,
+  'gravity-well': gravityWell,
   'asteroid-salvage': asteroidSalvage,
 };
 

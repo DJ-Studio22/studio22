@@ -2451,3 +2451,95 @@ Contrast sampling: the three colours on the floor are the only three there, at
 485 / 411 / 363 apart on the weighted scale.
 
 18 assertions; suite 451 → 469.
+
+## Phase 30 — Gravity Well, and a line that cannot lie
+
+Reach the gate, slowly enough to stop there, across a field of bodies whose
+pull near them is stronger than the engine. Burning is a decision; falling is
+free. Each gate refills the tank and hands you a harder field.
+
+### The claim
+
+> The predicted path IS the path. Not an approximation of it, not a second
+> model kept in agreement by discipline — the same arithmetic, run twice.
+
+There is one integrator, `advance()`. The craft flies by calling it once a
+frame; the drawn line calls it a few hundred times against a copy of the same
+state, with the control being held *this frame*. They cannot disagree, because
+there is nothing to disagree with. The line also stops where the flight would
+stop, so a path into a planet ends at the planet rather than promising a clear
+route through it.
+
+That matters more here than anywhere else in the arcade. The whole skill is
+reading a trajectory before committing to it, so a line that lied would make
+every hour of practice practice at something the game does not do.
+
+**And the test that lets the other tests fail.** Two paths agreeing proves
+nothing if they are the same piece of *wrong* arithmetic — convention 12, an
+assertion pinning an accident. So one test predicts under one gravity and flies
+under another, and asserts they come apart. Without it, the agreement tests
+would pass just as happily on a broken simulation.
+
+### Foresight, measured
+
+The thing the game claims to reward, checked rather than asserted. Same pilot,
+same levels, same seeds; the only difference is how far ahead it looks before
+choosing.
+
+| lookahead | first levels cleared (of 60) |
+|---|---|
+| 7.5s | 43 |
+| 11s | 50 |
+| 15s | **55** |
+
+Which does two jobs at once: it says foresight is worth something, and it says
+the levels the pilot could not fly were the pilot's limit rather than the
+generator's — a difference that would otherwise be invisible. The game hands
+the player 9.5 seconds of line on the strength of it.
+
+And the null hypothesis, a pilot identical in fuel, thrust, turn rate and greed
+that points at the gate and burns:
+
+| pilot | gates reached, best of 40 runs |
+|---|---|
+| planner | 5 |
+| chaser | **0** |
+
+Not one gate, ever. If it had kept up, the line would be decoration.
+
+### Two faults the numbers found
+
+**Gravity was one fortieth of the thrust.** A stray `/100` left the strongest
+pull in the game at about 0.8 against a thrust of 34 — every level was "point
+at it and hold the trigger" with the bodies as scenery. There is a standing
+test now that the pull near a body beats the engine and the pull far from one
+does not.
+
+**An empty tank ended runs that were going fine.** `#hopeless()` asked "does
+this path end badly?" before "does it reach the gate?" — and a coasting craft
+leaves the field eventually by definition, so every empty tank was hopeless,
+including one falling through the gate two seconds later. Order matters.
+
+### What the hand-play found
+
+**Five seconds of touching nothing ended the first run CRASHED, with no fuel
+burned.** The craft starts at rest and the nearest body was 22 units away,
+which is about a second and a half of falling. Two fixes, both numbers somebody
+chose: the start now keeps 52 units of clearance from every body, and **nothing
+moves until the player touches a control** — the same trick Colour Heist uses to
+start its clock. There is no timer behind it; it waits as long as you do, and
+the screen says so.
+
+That second one turned out to be the best thing in the game. Before you have
+touched anything, the red dotted line and its ✗ are already showing you that
+doing nothing means falling into the planet. The whole game is legible in one
+still frame.
+
+Contrast sampling: the predicted line, the gate and a body measure 566, 554 and
+427 from the space behind them.
+
+22 assertions; suite 469 → 491.
+
+**The second batch of five is complete**: Colour Heist, Asteroid Salvage, Beat
+Blocker, Pixel Paintball and Gravity Well, plus Hangman and the revisions to
+Tank Tactics and Dungeon Dice. Twenty-four live games.
