@@ -2623,3 +2623,99 @@ The phases above that describe building and then re-cutting it are left as they
 were. They are a record of what happened rather than a description of what
 ships, and rewriting them would make this file less useful, not more. **The game
 is gone; the account of it stays.**
+
+## Phase 33 — Bigger Fish, and a claim that did not survive its own measurement
+
+Pixel Paintball out, an agar-shaped game in. A pond much larger than the
+screen, pellets to grow on, other fish who want them, and one trade underneath
+everything:
+
+> **Mass is speed, spent.** Growing makes you stronger and slower, turns spikes
+> from scenery into terrain, and makes the only way to catch anything —
+> splitting — the thing that leaves you edible.
+
+Split throws half of you forward and will not merge back for ten seconds or
+more. Eject shoots a small piece of mass, for baiting, for shedding weight, and
+for feeding a spike until it spits another one out along the line you fed it —
+which is how a spike gets pushed at somebody too big to attack directly. Spikes
+are harmless below a threshold and take two fifths of anything above it.
+
+### What was asked for, and what the numbers said
+
+The brief was to prove that bigger is genuinely riskier as well as stronger, so
+that **a purely greedy strategy loses to a selective one** — and to prove it the
+way the ink was proved, by zeroing the penalty and watching greed win.
+
+**It does not hold, and I could not make it hold honestly.** The record, because
+each failure taught the next attempt something:
+
+| attempt | result |
+|---|---|
+| greedy also ignores threats, bait and split maths | counterfactual meaningless — removing the trade made BOTH worse, because fleeing pays whatever your size |
+| selective stops growing when big | greedy 503 to 214, and rightly: the score is peak mass, so declining to grow is forfeiting |
+| selective declines only *dangerous* growth | greedy 496 to 322 — the risks were not biting |
+| bots hunt the fattest, not the nearest; arrivals scale to the leader; spikes cost 40% | greedy 455, selective 637 at twelve seeds — the claim, apparently |
+| **the same comparison at sixty seeds** | **405 to 416. Noise.** |
+
+The twelve-seed result was a lucky sample and I nearly shipped it as the
+headline. At sixty seeds of eight minutes, greed and judgement come out level;
+at four minutes greed is ahead (309 to 280). So the honest statement is:
+
+**Being big in this pond is genuinely dangerous — ten to twelve of every twelve
+runs end with the player eaten, spikes take two fifths of a big cell, and speed
+falls to a third — but a selective player does not out-score a greedy one.**
+
+### What IS proven, and is asserted
+
+**Splitting pays.** Two policies identical but for whether they ever divide to
+catch something faster: 320 against 263, and 322 against 249, across two
+disjoint blocks of twenty-four seeds. The mechanic is not decoration.
+
+**The skill ladder is real, and it is judgement rather than reflexes.** Every
+level shares the movement code, the sight range and the decision clock; what
+differs is whether a bot checks that a split will land, whether it notices
+something that could eat the halves, whether it treats spikes as terrain, and
+whether it can be baited. The same player policy against each:
+
+| bots | player's median peak |
+|---|---|
+| careless | **2616** |
+| steady | 306 |
+| ruthless | 247 |
+
+A careless shoal splits at anything in front of it and feeds the player its
+halves — exactly the mistake it is designed to make.
+
+**And the cleanest result of the three.** Both policies want the same things;
+they differ only in two judgements that exist *because* size is dangerous. Take
+the danger away — no speed penalty, no spikes — and **23 of 24 runs come out
+bit-identical**: same seeds, same moves, same final mass, because neither
+policy ever found a reason to decide differently. In the real pond, 1 of 12.
+
+That test previously asserted ALL the flat runs matched. It passed for a while
+and then broke on a seed where the punish check did matter — convention 12 in
+its purest form, an assertion pinning an accident. It asserts a share now.
+
+### On the score
+
+Held mass was tried as the score, on the strength of the twelve-seed result
+(selective 637 to greedy 455 on mass held for ten seconds). At sixty seeds that
+became 416 to 405, so the justification evaporated and the score is peak mass,
+as asked. What you held is still computed and reported.
+
+### What the hand-play found
+
+**Five seconds of touching nothing ended the first run EATEN**, at the starting
+mass, having done nothing. Three causes, three numbers: bots could start half
+again the player's size, they all hunt the fattest thing they can eat from
+frame one, and one could spawn on top of you. Now nobody starts big enough to
+eat you, nobody starts within 420 units of you, and nobody hunts you at all for
+the first six seconds. Twenty idle runs against the ruthless shoal: no deaths.
+
+Contrast sampling on the three readings a player makes constantly: you against
+prey 276, prey against threat 354, and the tightest pair — prey against an
+evenly-matched cell — 165. Each is reinforced by the ring as well as the fill.
+
+19 assertions; suite 456 → 475. This file takes 100 seconds of the suite's run,
+which is most of it: the two measured claims are long-run bot comparisons and
+there is no cheap version of them.

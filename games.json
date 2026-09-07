@@ -480,29 +480,6 @@
     "status": "live"
   },
   {
-    "id": "pixel-paintball",
-    "title": "Pixel Paintball",
-    "tagline": "The ground is the scoreboard.",
-    "description": "An arena shooter where kills are worth nothing and floor is worth everything. You paint the ground you walk over and the ground your shots land on; splattering a bot scores you not a single point, it takes that bot out for three seconds, which is long enough to paint the patch it was defending. When the whistle goes you stay in only if you are holding better than a third of the arena, and the next wave is bigger, faster and shoots straighter. What makes it a decision rather than a shooting gallery is ink: one tank pays for every cell that changes hands and for every shot, and it refills six times faster when the ground around you is already yours — so attacking empties you and your own territory is where you reload. Swept from never-shoot to only-shoot, the best score is in the middle and both extremes fail in different ways.",
-    "category": "arcade",
-    "path": "/games/pixel-paintball/index.html",
-    "difficulty": "medium",
-    "ageRange": "all",
-    "inputRequirement": "universal",
-    "tags": [
-      "shooter",
-      "territory",
-      "arena",
-      "endless",
-      "single-player",
-      "high-score"
-    ],
-    "featured": false,
-    "tournamentReady": true,
-    "estimatedRunTime": 180,
-    "status": "live"
-  },
-  {
     "id": "gravity-well",
     "title": "Gravity Well",
     "tagline": "Burning is a decision. Falling is free.",
@@ -523,6 +500,29 @@
     "featured": false,
     "tournamentReady": true,
     "estimatedRunTime": 180,
+    "status": "live"
+  },
+  {
+    "id": "bigger-fish",
+    "title": "Bigger Fish",
+    "tagline": "Mass is speed, spent.",
+    "description": "A pond far larger than the screen, scattered with pellets and with other fish who want the same ones. Eat to grow, eat anything meaningfully smaller than you, and find out that growing is the thing that makes you catchable: speed falls with mass, so prey outruns you exactly when you most want it, and spikes that a small fish swims straight under take two fifths of a big one and scatter what is left. Splitting is the only way to close on something faster than you, and it is a commitment -- half your mass thrown forward, both halves small enough to be eaten by things that could not touch you a second earlier. Eject mass to bait, to shed weight for speed, or to feed a spike until it spits another one out at somebody. New arrivals turn up in your own weight class, so outgrowing the pond never happens. Choose how well the other fish play before you dive in: they all move and think at the same speed as each other, and what changes is how well they choose.",
+    "category": "arcade",
+    "path": "/games/bigger-fish/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "arena",
+      "growth",
+      "strategy",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 240,
     "status": "live"
   }
 ]
