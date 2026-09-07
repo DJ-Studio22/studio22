@@ -408,5 +408,29 @@
     "tournamentReady": true,
     "estimatedRunTime": 300,
     "status": "live"
+  },
+  {
+    "id": "color-heist",
+    "title": "Colour Heist",
+    "tagline": "The doors only open for what you are wearing.",
+    "description": "Steal gems from a vault of coloured doors. A door only lets you through while you are its colour, and changing colour means standing still for half a second you cannot spare — so the game is routing under a constraint that decides what you can pass through. Gems always sit off the fastest route, which makes taking one a decision rather than a pickup. Every floor is proved crossable by an exact search before it is dealt, and the clock is set from that proof: par plus a margin that shrinks every floor, forever. Gems stolen is the score.",
+    "category": "puzzle",
+    "path": "/games/color-heist/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "maze",
+      "routing",
+      "puzzle",
+      "stealth",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 240,
+    "status": "live"
   }
 ]
