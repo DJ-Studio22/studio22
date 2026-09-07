@@ -299,6 +299,109 @@ test('a rift no longer hands out free distance', () => {
   });
 });
 
+// --- Is it AIMABLE, not just possible ------------------------------------
+//
+// isClearable() proves a route exists. It says nothing about how much room
+// there is to be wrong, and this game has now shipped THREE phrases where the
+// route existed inside a window no person could aim at:
+//
+//   the slide     a 0.42s dash covering 143px against a 120px bar — 23px
+//   the dash      92px of phasing against a 40px wall — 52px, 0.15s
+//   spike-stutter three spikes three tiles apart — a 0.01s hold, ONE FRAME
+//
+// Each time the solver was perfectly happy and each time the bots died and
+// were right to. So possibility and fairness are measured separately now.
+//
+// The instrument is a fan of simple, human-shaped policies: "react when the
+// next obstacle is T pixels away, hold the verb for H seconds". If a phrase is
+// cleared only by a hair's breadth of that fan, it is a coin toss dressed as a
+// skill, however clearable it is.
+
+/** Plays one policy against one pattern in one realm. */
+function playPolicy(pattern, realm, trigger, hold, tuning = TUNING) {
+  const run = new Run(tuning);
+  run.realm = realm;
+  run.y = realm.flipped ? TILE * 2 : GROUND_Y;
+  run.obstacles = pattern.obstacles;
+  run.x = -tuning.restTiles * TILE - 6 * TILE;
+  const endX = (pattern.tiles + 4) * TILE;
+  let holdLeft = 0;
+  for (let i = 0; i < 240 * 30 && run.running; i++) {
+    let near = null;
+    for (const o of run.obstacles) {
+      const left = o.tile * TILE;
+      if (left + o.tiles * TILE < run.x - tuning.bodyW / 2) continue;
+      if (!near || left < near.left) near = { o, left };
+    }
+    const input = { jump: false, jumpHeld: false, slide: false, dash: false };
+    if (near && near.left - run.x <= trigger) {
+      if (near.o.kind === KIND.BAR) input.slide = true;
+      else if (near.o.kind === KIND.RIFT) input.dash = true;
+      else if (run.grounded) { input.jump = true; holdLeft = hold; }
+    }
+    if (holdLeft > 0) { input.jumpHeld = true; holdLeft -= 1 / 240; }
+    run.step(1 / 240, input);
+    if (run.x > endX) return true;
+  }
+  return false;
+}
+
+/**
+ * The widest run of hold times that clears the phrase, at its best trigger.
+ *
+ * Stops as soon as it has found a window at least `enough` wide, because the
+ * question is "is there room to be wrong", not "exactly how much". Without the
+ * early exit this is a few hundred thousand physics steps and nine seconds of
+ * the suite, nearly all of it spent confirming that fine phrases are fine.
+ */
+function holdWindow(pattern, realm, enough = Infinity, tuning = TUNING) {
+  const STEP = 0.02;
+  let widest = 0;
+  for (let trigger = 8; trigger <= 80; trigger += 8) {
+    let count = 0;
+    for (let hold = 0.02; hold <= 0.70; hold += STEP) {
+      if (playPolicy(pattern, realm, trigger, hold, tuning)) count++;
+    }
+    widest = Math.max(widest, count * STEP);
+    if (widest >= enough) return widest;
+  }
+  return widest;
+}
+
+test('NO OPENING PHRASE IS FRAME-PERFECT — the aimability floor', () => {
+  // Every tier 0 and tier 1 phrase, in every realm it is legal in, must leave
+  // a hold window a person could actually aim at. A tenth of a second is about
+  // the limit of deliberate timing; the floor is set a little under it so this
+  // catches coin tosses rather than bickering about tuning.
+  //
+  // spike-stutter failed this at 0.01s — one frame at 60fps — in three of its
+  // four realms, while giving 0.51s in the fourth. It was the single thing
+  // capping a good run.
+  const FLOOR = 0.08;
+  const offenders = [];
+  for (const pattern of PATTERNS.filter((p) => p.tier <= 1)) {
+    for (const realm of REALMS) {
+      if (!pattern.realms.includes(realm.id)) continue;
+      const window = holdWindow(pattern, realm, FLOOR);
+      if (window < FLOOR) offenders.push(`${pattern.id}/${realm.id} ${window.toFixed(2)}s`);
+    }
+  }
+  assert.deepEqual(offenders, [],
+    'phrases a player cannot aim at, however clearable the solver says they are');
+});
+
+test('and the phrase that taught us this stays fixed', () => {
+  // Named separately because the fix is a SPACING, and a spacing is exactly
+  // the sort of thing that gets nudged back for looking tidier.
+  const stutter = PATTERNS.find((p) => p.id === 'spike-stutter');
+  const tiles = stutter.obstacles.map((o) => o.tile);
+  for (let i = 1; i < tiles.length; i++) {
+    assert.ok(tiles[i] - tiles[i - 1] >= 5,
+      `spikes ${tiles[i - 1]} and ${tiles[i]} are ${tiles[i] - tiles[i - 1]} tiles apart; `
+      + 'under five the hold window collapses to a single frame');
+  }
+});
+
 test('a realm change never lands mid-jump', () => {
   // Changing gravity while somebody is in the air is a cheat, not a twist.
   withSeed(4, () => {

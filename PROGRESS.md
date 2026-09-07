@@ -1494,3 +1494,105 @@ the same one twice running, the same dedup the pattern dealer uses.
   the cup.
 
 No rule changed and no test changed; the suite stays at 334.
+
+## Phase 19 — Rift Runner: the opening, and the third frame-perfect window
+
+The brief was a difficulty pass on the tier-0 patterns so the rift schedule
+could stay where it is. The tier-0 patterns turned out to be innocent.
+
+### First, they were measured
+
+Two instruments, because "is it possible" and "is it fair" are different
+questions and only the first had ever been asked here.
+
+**Lead time** — the latest point from which you can start the verb and still
+get through. Every tier-0 phrase needs at most **0.12 seconds** of warning, in
+every realm. They are not tight. Nothing to fix.
+
+**Hold window** — how precisely the button must be released, swept over a fan
+of simple human-shaped policies: react when the obstacle is T pixels away, hold
+for H seconds. This is where it was hiding, and not in tier 0 at all:
+
+| spike-stutter | surface | drift | forge | surge | inverse |
+|---|---:|---:|---:|---:|---:|
+| three tiles apart (was) | **0.01s** | – | 0.51s | **0.01s** | **0.01s** |
+| five tiles apart (now) | 0.49s | – | 0.49s | 0.52s | 0.49s |
+
+**One hundredth of a second.** One frame at 60fps, in three realms out of four,
+and comfortable in the fourth — so it read as difficulty rather than as a
+defect. Three spikes three tiles apart against a 5.1-tile jump demands a cut
+jump landing in a two-tile window, three times running. Only 2 of 19 approach
+positions worked at all.
+
+That is **the slide fault for the third time**: the solver proves a route
+exists and says nothing about how much room there is to be wrong.
+
+- the slide: a 0.42s dash covering 143px against a 120px bar — 23px
+- the dash: 92px of phasing against a 40px wall — 52px, 0.15s
+- spike-stutter: 0.01s
+
+Spikes are five tiles apart now. The phrase is still three jumps in a rhythm;
+the skill is sustaining it, not releasing on one frame.
+
+### And two faults in the harness itself
+
+Both were making the game look harder than it is, and both were invisible in
+aggregate.
+
+**`ahead()` dropped an obstacle while the runner was still inside it.**
+`blocks()` tests `x ± bodyW / 2`; the bot used a bare `x`. So the bar left the
+bot's list on the frame its centre cleared the far edge — with thirteen pixels
+of trailing body still under it. The bot slid the whole length of the bar,
+stood up, and died on the last inch. It killed the good bot 31 times in 60 and
+looked exactly like the bar being unfair. The near edge had been fixed once
+before, for the same reason; this was the other half of it.
+
+**The misread was re-rolled every decision tick.** `misreadChance: 0.05` is
+meant to be "a competent player reaches for the wrong verb". An obstacle is in
+view for about six ticks, so it compounded to roughly 26% — and worst for
+whatever the runner spends longest beside, which is a bar. The bot would slide
+correctly for half a second and then decide it was a spike and jump into it.
+Read once per obstacle and committed now, which is what a person does.
+
+**And the weak bot's dash trigger was narrower than its own stride.** Sixty
+pixels, decided every 165ms, which is 56px — so a tick at 70px produced no
+dash and the next came after the wall. It ran into rift walls with the dash off
+cooldown and nothing in its way on three of the first seven seeds. It now
+dashes as soon as the wall is within reach of the phase. (This exact change was
+tried last phase and made things worse, because the phase only covered 92px
+then. Widening a trigger is only safe once the thing it triggers is generous.)
+
+### Where it lands
+
+| | before this phase | after |
+|---|---:|---:|
+| competent median | 154m | **348m** |
+| competent p90 | 196m | 446m |
+| good median | 345m | **762m** |
+| good p90 | 533m | 1295m |
+| skill gap | 2.24x | **2.19x** |
+| good runs reaching rift 1 | 10% | **95%** |
+| competent runs reaching rift 1 | 0% | 3% |
+
+The gap held at 2.2x while both bots more than doubled, which is the whole
+point: this was fairness, not forgiveness. Every change that lifted only the
+weak run was rejected — moving `first-rift` off tier 0 took the competent
+median from 178m to 343m and the good median from 451m to 453m, collapsing the
+gap to 1.3x, and was not made.
+
+**A good run now reaches the first rift 95% of the time. A competent one
+reaches it 3% of the time**, which is short of "sometimes" and is the one part
+of the brief not met — see below.
+
+### The aimability floor, as a standing test
+
+The measurement is a test now, because this fault has shipped three times and
+finding it a fourth time by hand is not a plan. Every tier 0 and tier 1 phrase,
+in every realm it is legal in, must leave a hold window of at least 0.08s.
+Verified against the old spacing: it fails and names the three realms.
+
+`isClearable()` proves a route exists. That was never the same question as
+whether a person can aim at it, and the two are asserted separately now.
+
+336 assertions, up from 334: the floor itself plus one guarding the spacing itself — a
+spacing is exactly the sort of thing that gets nudged back for looking tidier.
