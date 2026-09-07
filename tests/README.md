@@ -239,3 +239,65 @@ One trap worth knowing, because it cost time: menu input is **not** handled by
 `shell.update()`. That returns false the moment a screen is open and does
 nothing else; overlays run on the shell's own frame loop, because the game loop
 is suspended while one is up. Driving a menu in a test means pumping the clock.
+
+---
+
+## 9. Two things the harness cannot see
+
+Both of these have caught real faults in shipped games, and neither is
+something `npm test` will ever tell you.
+
+### The standing start
+
+Every bot in this directory acts on frame one. A person does not: they spend
+the first seconds working out what they are looking at, where their character
+is, and which button does what. So **anything that is only wrong during the
+opening is invisible here**, however healthy the medians look.
+
+It has shipped twice now:
+
+| Game | The fault | What the bots said |
+|---|---|---|
+| Ember | the balloon reached the rock in **0.53s** from rest | fine, at both skill levels |
+| Rift Runner | first obstacle **1.06s** after the title cleared | fine, at both skill levels |
+
+Two games out of two that were checked this way. It is a class, not a
+coincidence.
+
+**So a human plays the first thirty seconds cold, from a genuine standing
+start — doing nothing at all for the first couple of seconds — before a game
+is called done.** What to watch for:
+
+- Does anything happen before the player has read the screen?
+- How long is the run-up before the first real threat, in seconds?
+- Is the first input the game asks for one they could have known to make?
+
+And the run-up itself should be **a number somebody chose**: a named constant
+in the tuning that can be pointed at and argued with, not whatever the spawn
+logic happened to produce. Rift Runner's is `OPENING_TILES`.
+
+### Sampling the canvas for contrast
+
+A hazard, a gap or a target that does not read against its background is a
+bug, and it is invisible to everything else here: the tests do not draw, the
+build does not care, and a still screenshot can look perfectly good until you
+try to play it.
+
+Rift Runner shipped gaps that were **almost impossible to see**. The sky
+gradient showed through a hole in the floor, and at the bottom of the screen
+that gradient is within a few percent of the ground colour. The picture looked
+fine. The game was unplayable in a way nothing would have reported.
+
+Reading one row of pixels off the rendered canvas and counting distinct
+colours settles it in a line:
+
+```js
+const d = ctx.getImageData(0, groundRowY, canvas.width, 1).data;
+const seen = new Set();
+for (let x = 0; x < canvas.width; x += 8) seen.add(`${d[x*4]},${d[x*4+1]},${d[x*4+2]}`);
+// a hole in the floor should mean more than one colour on this row
+```
+
+Before the fix that row had one colour. After, two, and far apart: `39,50,79`
+against `4,6,13`. Worth doing for anything the player has to **spot** rather
+than read.

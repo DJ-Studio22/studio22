@@ -99,10 +99,30 @@ Four rules, all of them learned the hard way:
 - **A bot is not a player, and the harness cannot see the opening.** Every
   bot starts acting on frame one; a person spends the first seconds working
   out what they are looking at. So anything only wrong during the opening is
-  invisible to the harness however good the seeded numbers are. Ember shipped
-  a balloon that reached the rock in 0.53s from a standing start and every bot
-  flew it happily. **A human plays the first thirty seconds cold before a game
-  is done** — that is not optional and good numbers are not a substitute.
+  invisible to the harness however good the seeded numbers are.
+
+  This has now shipped TWICE. Ember reached the rock in 0.53s from a standing
+  start; Rift Runner put its first obstacle 1.06s after the title cleared and
+  died at 11 metres doing nothing. Both passed every bot. It is a class of
+  fault, not two coincidences.
+
+  So: **a human plays the first thirty seconds cold, from a genuine standing
+  start, before a game is done.** Not optional, and good seeded numbers are
+  not a substitute. And the RUN-UP before the first real threat is a number
+  somebody chose and can point at — `OPENING_TILES`, a start delay, a first
+  wave timer — never whatever the spawn logic happened to produce.
+
+- **Sample the canvas to check things are actually distinguishable.** A
+  hazard, a gap or a target that does not read against its background at a
+  glance is a bug, and it is invisible to every other check in this project:
+  the tests do not draw, the build does not care, and a screenshot looks fine
+  until you try to play it. Rift Runner's gaps were within a few percent of
+  the ground colour — the void showing through a hole and the floor beside it
+  were the same to the eye.
+
+  Reading a row or column of pixels off the rendered canvas and counting
+  distinct colours costs almost nothing and answers it outright. Worth doing
+  for anything the player has to spot rather than read.
 
 `npm test` runs the lot. The convention is written up in `tests/README.md`.
 
