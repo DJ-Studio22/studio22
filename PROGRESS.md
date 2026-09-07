@@ -2609,3 +2609,17 @@ the right shape for a fix that changed what the player can see rather than what
 the chart asks.
 
 20 assertions in the file; suite 491 → 493.
+
+## Phase 32 — Dungeon Dice removed
+
+Deleted at the owner's request: `games/dungeon-dice/`, its manifest entry, its
+thumbnail card, `tests/dungeon-dice.dice.test.mjs` and
+`tests/helpers/dice-bot.mjs`.
+Nothing imported from it -- checked across every js, mjs, json, html and css
+file in the repo -- and the build verifies 23 live games with every required
+file present. Suite 493 -> 474.
+
+The phases above that describe building and then re-cutting it are left as they
+were. They are a record of what happened rather than a description of what
+ships, and rewriting them would make this file less useful, not more. **The game
+is gone; the account of it stays.**

@@ -751,57 +751,6 @@ function tankTactics() {
     + '</svg>';
 }
 
-/**
- * Dungeon Dice -- a bad roll, mid-rescue.
- *
- * The card has to say what the game IS, and it is not "dice": it is the moment
- * you decide the roll is not good enough. So four dice sit there and the fifth
- * is caught being bent -- arrows above and below it, a blank turning into a
- * bolt -- with the charges that paid for it burning along the top.
- */
-function dungeonDice() {
-  const die = (x, y, size, marked) => '<rect x="' + (x - size / 2) + '" y="' + (y - size / 2)
-    + '" width="' + size + '" height="' + size + '" rx="9" fill="' + (marked ? '#f5c25a' : '#efe6d6')
-    + '" stroke="' + (marked ? '#a8792a' : '#8d7f68') + '" stroke-width="3"/>';
-  const sword = (x, y, s) => '<g fill="#d8534f" stroke="#d8534f" stroke-width="' + (s * 0.24)
-    + '" stroke-linecap="round"><path d="M' + x + ' ' + (y - s * 1.05) + ' L' + (x + s * 0.3) + ' '
-    + (y - s * 0.55) + ' L' + (x + s * 0.2) + ' ' + (y + s * 0.28) + ' L' + (x - s * 0.2) + ' '
-    + (y + s * 0.28) + ' L' + (x - s * 0.3) + ' ' + (y - s * 0.55) + ' Z"/>'
-    + '<path d="M' + (x - s * 0.62) + ' ' + (y + s * 0.34) + ' L' + (x + s * 0.62) + ' '
-    + (y + s * 0.34) + ' M' + x + ' ' + (y + s * 0.34) + ' L' + x + ' ' + (y + s * 0.95) + '"/></g>';
-  const shield = (x, y, s) => '<path d="M' + x + ' ' + (y - s) + ' L' + (x + s * 0.78) + ' '
-    + (y - s * 0.5) + ' L' + (x + s * 0.62) + ' ' + (y + s * 0.55) + ' L' + x + ' ' + (y + s)
-    + ' L' + (x - s * 0.62) + ' ' + (y + s * 0.55) + ' L' + (x - s * 0.78) + ' ' + (y - s * 0.5)
-    + ' Z" fill="#5aa88c"/>';
-  const bolt = (x, y, s) => '<path d="M' + (x + s * 0.34) + ' ' + (y - s) + ' L' + (x - s * 0.42)
-    + ' ' + (y + s * 0.1) + ' L' + (x + s * 0.04) + ' ' + (y + s * 0.1) + ' L' + (x - s * 0.28)
-    + ' ' + (y + s) + ' L' + (x + s * 0.5) + ' ' + (y - s * 0.14) + ' L' + (x + s * 0.02) + ' '
-    + (y - s * 0.14) + ' Z" fill="#7fd2ff"/>';
-  return '<svg ' + VIEW + '>'
-    + '<defs><linearGradient id="dd-room" x1="0" y1="0" x2="0" y2="1">'
-    + '<stop offset="0" stop-color="#171219"/><stop offset="1" stop-color="#2e2331"/>'
-    + '</linearGradient></defs>'
-    + '<rect width="320" height="200" fill="url(#dd-room)"/>'
-    // The charges that paid for the nudge.
-    + '<g fill="#7fd2ff"><circle cx="242" cy="26" r="6"/><circle cx="260" cy="26" r="6"/></g>'
-    + '<g fill="none" stroke="rgba(127,210,255,.38)" stroke-width="2">'
-    + '<circle cx="278" cy="26" r="6"/><circle cx="296" cy="26" r="6"/></g>'
-    // The enemy, winding up.
-    + '<ellipse cx="60" cy="52" rx="26" ry="30" fill="#7b4a6e" stroke="#ff8a5a" stroke-width="4"/>'
-    + '<g fill="#ffd45e"><circle cx="52" cy="46" r="4"/><circle cx="70" cy="46" r="4"/></g>'
-    + '<text x="60" y="102" text-anchor="middle" fill="#ff8a5a"'
-    + ' font-family="system-ui,sans-serif" font-size="15" font-weight="800">3 NOW</text>'
-    // Four dice, and the fifth being bent.
-    + die(46, 150, 46) + sword(46, 150, 11)
-    + die(100, 150, 46) + sword(100, 150, 11)
-    + die(154, 150, 46) + shield(154, 150, 11)
-    + die(208, 150, 46, true) + '<circle cx="208" cy="150" r="8" fill="none" stroke="#6f6659" stroke-width="4"/>'
-    + die(272, 150, 54) + bolt(272, 150, 14)
-    // Caught mid-nudge: arrows above and below the one being changed.
-    + '<g fill="#7fd2ff"><path d="M272 108 l9 13 l-18 0 Z"/><path d="M272 192 l9 -13 l-18 0 Z"/></g>'
-    + '<rect x="243" y="121" width="58" height="58" rx="11" fill="none" stroke="#7fd2ff" stroke-width="3"/>'
-    + '</svg>';
-}
 
 /**
  * Colour Heist -- one door open, two shut, and the thief wearing the reason.
@@ -1140,7 +1089,6 @@ const ART = {
   'mini-golf': miniGolf,
   winter,
   'tank-tactics': tankTactics,
-  'dungeon-dice': dungeonDice,
   'color-heist': colorHeist,
   hangman,
   'beat-blocker': beatBlocker,
