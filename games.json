@@ -524,5 +524,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 180,
     "status": "live"
+  },
+  {
+    "id": "gravity-well",
+    "title": "Gravity Well",
+    "tagline": "Burning is a decision. Falling is free.",
+    "description": "Fly a craft to the gate across a field of bodies whose pull is stronger than your engine anywhere near them, and arrive slowly enough to stop there — diving at it is not arriving. You have a small tank of fuel and no clock worth worrying about, so the game is not reflexes: it is reading where you are going before you commit to it. The dotted line ahead of the craft is drawn by calling the same function the craft flies with, over a copy of the same state, at the same fixed step, and it stops where the flight would stop — so a line that runs into a planet ends at the planet rather than promising a clear route through. A pilot that chooses its burns by flying them first reaches gate after gate; an identical pilot that points at the gate and burns has never reached one. Each gate refills the tank and hands you a harder field.",
+    "category": "arcade",
+    "path": "/games/gravity-well/index.html",
+    "difficulty": "hard",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "space",
+      "physics",
+      "precision",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 180,
+    "status": "live"
   }
 ]
