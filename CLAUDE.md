@@ -20,6 +20,9 @@ Deployed as a static site to Cloudflare Pages.
   tears down memory that a score was just written into.
 - NO data collection of any kind. No names stored, no analytics, no tracking.
 - NO online multiplayer. Local hot-seat and pass-and-play only.
+- NEVER commit on `main`. It is protected and direct pushes are refused:
+  branch, push, open a PR, wait for both CI checks, merge. See the git
+  workflow section below.
 
 ## Architecture rules
 - Games import FROM engine/. Nothing in engine/ ever imports FROM games/.
@@ -128,6 +131,51 @@ player, before they tap into something they cannot play.
 ## Performance targets
 60fps on a mid-range phone. Object-pool anything spawned in a loop.
 Never animate CSS layout properties — transform and opacity only.
+
+## Git workflow — branches and pull requests, always
+
+`main` is protected by a ruleset: a pull request is required, and both CI
+checks must pass before it can merge. No approvals are needed. **Direct pushes
+to `main` are refused**, so there is no version of this that starts with
+committing on `main`.
+
+Every piece of work:
+
+```bash
+git checkout -b thing-im-doing
+# ... work ...
+npm run ci                         # the identical sequence CI runs
+git add -A && git commit
+git push -u origin thing-im-doing
+gh pr create --fill
+gh pr checks --watch               # both checks green before merging
+gh pr merge --squash --delete-branch
+git checkout main && git pull
+```
+
+- **Never commit on `main`.** Branch first, before the first edit. Noticing
+  afterwards means a cherry-pick or a reset, and both are avoidable.
+- **Run `npm run ci` before pushing.** It is exactly what the workflow runs —
+  `npm test`, `npm run build`, then the two build checks — so a green local run
+  means a green remote one and finding out costs seconds instead of a round
+  trip.
+- **One branch per piece of work.** A branch carrying two unrelated changes
+  cannot be reverted without taking both.
+- **Wait for the checks.** Opening the PR is not finishing; a PR with a red
+  check is unfinished work, and "it passed locally" is not a reason to merge
+  past one.
+- **A red check is fixed on the branch**, with another commit and another
+  push. Never worked around.
+
+Branch names are short, lowercase and hyphenated, named for the work rather
+than the process: `ember-difficulty`, `fix-touch-deadzone`, `engine-coverage`.
+A `fix/`, `docs/` or `game/` prefix is welcome where it clarifies and never
+required.
+
+Without `gh`, the PR can be opened and merged in the browser — GitHub prints a
+"Compare & pull request" link the first time a branch is pushed. The full
+write-up, including what CI actually checks and why the build is verified
+twice, is in `DEPLOY.md`.
 
 ## Working style
 - Do the simplest thing that satisfies the request.

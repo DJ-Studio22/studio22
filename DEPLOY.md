@@ -144,32 +144,66 @@ descriptions, for a link preview most visitors never see.
 
 ---
 
-## Continuous integration, and making it block
+## Continuous integration, and the branch workflow
 
 `.github/workflows/ci.yml` runs `npm ci`, `npm test`, `npm run build` and the
-two post-build checks on every push to `main` and every pull request, on Node
+two post-build checks on every pull request and every push to `main`, on Node
 22 and 24. Locally, `npm run ci` is the same sequence.
 
-### The one manual step
+**`main` is protected.** A ruleset requires a pull request, and both CI checks
+must pass before it can merge. No approvals are required — this is a
+single-maintainer project and a self-approval is theatre — but the checks are
+not optional and direct pushes to `main` are refused.
 
-**Cloudflare Pages builds independently of GitHub Actions.** A red check does
-not, by itself, stop a deploy — Pages has already started its own build from
-the same commit. What a red check can stop is a *merge*, and that needs branch
-protection, which is a repository setting and cannot be made from a commit.
+That is the gate. Cloudflare Pages still builds independently of GitHub
+Actions, so a red check has never been able to stop a *deploy* on its own; what
+it stops is the merge that would cause one. Nothing broken reaches `main`, so
+nothing broken reaches Pages.
 
-In GitHub: **Settings → Branches → Add branch ruleset** (or *Add rule*) for
-`main`, then enable:
+### The workflow, every time
 
-- **Require a pull request before merging** — otherwise a direct push to
-  `main` bypasses checks entirely, which is the case this is meant to catch.
-- **Require status checks to pass before merging**, and select the
-  `test and build (node 22)` and `test and build (node 24)` checks. They only
-  appear in that list after the workflow has run at least once, so push the
-  workflow first and come back.
-- **Do not allow bypassing the above settings**, unless you want an override.
+```bash
+git checkout -b thing-im-doing     # never commit on main
+# ... work ...
+npm run ci                         # test + build + verify, the same as CI
+git add -A && git commit
+git push -u origin thing-im-doing
+gh pr create --fill                # or open it in the browser
+gh pr checks --watch               # wait for both checks to go green
+gh pr merge --squash --delete-branch
+git checkout main && git pull
+```
 
-Until that is switched on, CI is an alarm rather than a gate: it will tell you
-main is broken, promptly and visibly, but it will not prevent it.
+Run `npm run ci` **before** pushing. It is the identical sequence, so a green
+local run means a green remote one, and finding out locally costs seconds
+rather than a round trip.
+
+### Branch names
+
+Short, lowercase, hyphenated, and named for the work rather than the process:
+`ember-difficulty`, `fix-touch-deadzone`, `engine-coverage`. A prefix is
+welcome when it clarifies (`fix/`, `docs/`, `game/`) and never required.
+
+One branch per piece of work. A branch carrying two unrelated changes cannot
+be reverted without taking both, which is the entire reason the history is
+worth keeping tidy.
+
+### When the checks fail
+
+Fix it on the branch and push again — the PR re-runs automatically. Do not
+merge around a red check; the ruleset will not let you anyway, and the one
+time it would have been justified is the time it would have been wrong.
+
+If a check fails on CI but passes locally, the difference is almost always one
+of two things: `npm ci` installs exactly what `package-lock.json` pins and
+fails on drift where `npm install` would quietly resolve it, or the failure is
+specific to Node 22 while local is 24. Both are real failures worth having.
+
+### If you do not have `gh`
+
+The PR can be opened and merged in the browser; the CLI just saves the trip.
+GitHub prints a "Compare & pull request" link the first time a branch is
+pushed. Installing it is `winget install GitHub.cli`, then `gh auth login`.
 
 ### Why the build is checked twice
 
