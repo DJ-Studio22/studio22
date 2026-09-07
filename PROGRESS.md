@@ -2793,3 +2793,25 @@ run vary, and that spread is the game.
 
 21 assertions; suite 475 → 474 (the level-based tests went, the corridor ones
 arrived).
+
+## Phase 35 — Beat Blocker: the ceiling, said out loud
+
+The escalation has an honest end. The tempo caps, the subdivision goes to
+sixteenths and stops, the movement dials reach their limits, and past that the
+reachability floors are the binding constraint -- packing in more only gets it
+spaced out again. **Phrase 96 is the hardest the chart ever gets**, and every
+phrase after it is the same phrase.
+
+That is the right place to stop: a chart faster than a hand is not a harder
+game, it is an unplayable one. But an endless game that quietly stops
+escalating reads as one that ran out of ideas, so the player is told rather
+than left to wonder.
+
+ computes it from the same dials the chart is built from --
+not a number typed into the HUD -- and a test pins that everything really is
+capped there and that nothing about the chart moves five hundred phrases later.
+The title screen says where it is before you start, arriving announces it, and
+the HUD carries it as a badge from then on: from here it is not about surviving
+something worse, it is about how long you can hold the hardest it gets.
+
+Suite 474 -> 475.

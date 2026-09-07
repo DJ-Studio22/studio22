@@ -21,8 +21,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  END, JUDGE, Session, TUNING, beatSeconds, bpmAt, breaches, buildPhrase,
-  densityFor, judge, movementFor, reachMs, subdivisionFor, tightestGaps,
+  END, JUDGE, Session, TUNING, atCeiling, beatSeconds, bpmAt, breaches,
+  buildPhrase, ceilingPhrase, densityFor, judge, movementFor, reachMs,
+  subdivisionFor, tightestGaps,
 } from '../games/beat-blocker/chart.js';
 import { SKILLS, runOnce } from './helpers/beat-bot.mjs';
 import { summarise, withSeed } from './helpers/seeded.mjs';
@@ -252,6 +253,34 @@ test('and MOVEMENT is what escalates after the tempo has run out', () => {
     'the late game asks for no more moving about than the first phrase does');
   assert.ok(movementFor(80).cross > movementFor(1).cross);
   assert.ok(movementFor(80).far > movementFor(1).far);
+});
+
+test('THE CEILING IS A REAL PLACE, AND THE GAME SAYS SO', () => {
+  // The escalation has an honest end: the tempo caps, the subdivision caps, and
+  // past that the reachability floors are the binding constraint, so packing in
+  // more only gets it spaced out again. Every phrase after that one is the same
+  // phrase.
+  //
+  // That is the right place for it to stop -- a chart faster than a hand is not
+  // a harder game, it is an unplayable one -- but an endless game that quietly
+  // stops escalating reads as one that ran out of ideas. So the phrase is
+  // computed in one place, game.js prints it on the title screen and announces
+  // it when you arrive, and this pins that it is a real ceiling rather than a
+  // number somebody typed.
+  const n = ceilingPhrase();
+  assert.ok(Number.isFinite(n) && n > 40, `the ceiling is at phrase ${n}`);
+  assert.equal(atCeiling(n), true);
+  assert.equal(atCeiling(n - 1), false);
+
+  // Everything really is capped there, and nothing about the chart moves after.
+  assert.equal(bpmAt(n), TUNING.bpmMax);
+  assert.equal(subdivisionFor(n), subdivisionFor(n + 500));
+  assert.equal(densityFor(n), densityFor(n + 500));
+  assert.equal(movementFor(n).cross, movementFor(n + 500).cross);
+  assert.equal(movementFor(n).far, movementFor(n + 500).far);
+
+  // And it is not reached early: the climb is most of a run, not a formality.
+  assert.ok(!atCeiling(20), 'the chart stops getting harder in the first minutes');
 });
 
 test('a fast phrase is not a phrase of impossible taps', () => {

@@ -44,7 +44,7 @@ import { Session as Scores } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticlePresets, ParticleSystem, clamp } from '../../engine/util.js';
 
-import { JUDGE, Session, TUNING, bpmAt } from './chart.js';
+import { JUDGE, Session, TUNING, atCeiling, bpmAt, ceilingPhrase } from './chart.js';
 
 const GAME_ID = 'beat-blocker';
 
@@ -186,6 +186,7 @@ function finish() {
   audio.play('over');
   shell.showGameOver(session.score, {
     phrasesSurvived: session.phrase - 1,
+    reachedTheCeiling: atCeiling(session.phrase) ? 'yes' : `no (at ${ceilingPhrase()})`,
     attacksBlocked: session.blocked,
     perfect: session.perfects,
     bestStreak: session.bestStreak,
@@ -231,9 +232,11 @@ function update(dt) {
     // A new phrase, with a beat of its own. Nothing is discarded: the chart is
     // one list on one clock, and the attacks of the phrase after this one have
     // already been dealt and are already falling.
+    const reachedCeiling = !atCeiling(lastPhrase) && atCeiling(session.phrase);
     lastPhrase = session.phrase;
     lastBeatIndex = -1;
     audio.play('phrase');
+    if (reachedCeiling) say('TOP OF THE CHART — NOW HOW LONG?', ART.hud.perfect);
   }
 
   // SOUNDING THE PHRASE. Everything below reads the same numbers the
@@ -402,6 +405,21 @@ function drawHud() {
   ctx.fillStyle = ART.hud.dim;
   ctx.fillText(`PHRASE ${session.phrase}  ·  ${Math.round(session.bpm)} BPM`, 26, 68);
 
+  // THE CEILING, SAID OUT LOUD.
+  //
+  // The chart stops getting harder at a stated phrase -- the tempo caps, the
+  // subdivision caps, and past that the reachability floors are the binding
+  // constraint, so every further phrase is the same phrase. That is the honest
+  // end of the escalation, but an endless game that quietly stops escalating
+  // reads as one that has run out of ideas. So it is announced, once, and then
+  // stays on the HUD as a badge: from here it is not about surviving something
+  // worse, it is about how long you can hold the hardest it gets.
+  if (atCeiling(session.phrase)) {
+    ctx.fillStyle = ART.hud.perfect;
+    ctx.font = '800 13px system-ui, sans-serif';
+    ctx.fillText('TOP OF THE CHART — IT GETS NO HARDER FROM HERE', 26, 88);
+  }
+
   // Hearts.
   for (let i = 0; i < TUNING.hearts; i++) {
     ctx.fillStyle = i < session.hearts ? ART.hud.heart : ART.hud.heartGone;
@@ -495,5 +513,6 @@ loop.start();
 
 shell.showTitle({
   name: 'Beat Blocker',
-  tagline: `Three lanes, one shield, and a tempo that starts at ${bpmAt(1)}.`,
+  tagline: `Three lanes, one shield, and a tempo that starts at ${bpmAt(1)} `
+    + `and stops climbing at phrase ${ceilingPhrase()}.`,
 });
