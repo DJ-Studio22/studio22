@@ -803,6 +803,54 @@ function dungeonDice() {
     + '</svg>';
 }
 
+/**
+ * Colour Heist -- one door open, two shut, and the thief wearing the reason.
+ *
+ * The card has to say what the CONSTRAINT is in one picture: the amber door
+ * ahead is open because the thief is amber, and the cyan and magenta ones are
+ * not. Everything else is vault.
+ */
+function colorHeist() {
+  const cell = 44;
+  const ox = 34;
+  const oy = 16;
+  const floor = (cx, cy) => '<rect x="' + (ox + cx * cell) + '" y="' + (oy + cy * cell)
+    + '" width="' + cell + '" height="' + cell + '" fill="'
+    + ((cx + cy) % 2 ? '#1b2030' : '#171c2a') + '"/>';
+  const wall = (x, y, w, h) => '<rect x="' + x + '" y="' + y + '" width="' + w
+    + '" height="' + h + '" fill="#39415c"/>';
+  const door = (x, y, w, h, c) => '<rect x="' + x + '" y="' + y + '" width="' + w
+    + '" height="' + h + '" fill="' + c + '"/>';
+  let out = '<svg ' + VIEW + '><rect width="320" height="200" fill="#0d0f16"/>';
+  for (let cy = 0; cy < 4; cy++) for (let cx = 0; cx < 6; cx++) out += floor(cx, cy);
+  // Walls.
+  out += wall(ox, oy + cell * 2 - 3, cell * 2, 6)
+    + wall(ox + cell * 3 - 3, oy + cell, 6, cell * 2)
+    + wall(ox + cell * 4, oy + cell * 3 - 3, cell * 2, 6);
+  // The open amber door, drawn with the gap that says you can walk it.
+  out += door(ox + cell * 2 - 4, oy + cell, 8, cell, '#ffb03a')
+    + door(ox + cell * 2 - 4, oy + cell * 1.32, 8, cell * 0.42, '#1b2030');
+  // Two shut doors, dimmer but plainly doors.
+  out += door(ox + cell * 4 - 4, oy, 8, cell, '#1a93a8')
+    + door(ox + cell, oy + cell * 3 - 4, cell, 8, '#a8288f');
+  // A gem, off the direct line.
+  out += '<g transform="translate(' + (ox + cell * 4.5) + ',' + (oy + cell * 1.5) + ')">'
+    + '<path d="M0 -13 L11 0 L0 13 L-11 0 Z" fill="#7bf5b0" stroke="#1d7d4e" stroke-width="3"/>'
+    + '<rect x="-4" y="-6" width="3" height="7" fill="#e8fff3"/></g>';
+  // The way out, top right.
+  out += '<g transform="translate(' + (ox + cell * 5.5) + ',' + (oy + cell * 0.5) + ')">'
+    + '<circle r="26" fill="rgba(244,241,234,.16)"/>'
+    + '<rect x="-13" y="-15" width="26" height="30" fill="none" stroke="#f4f1ea" stroke-width="3"/>'
+    + '<path d="M0 -7 L8 3 L-8 3 Z" fill="#7bf5b0"/></g>';
+  // The thief, amber, which is why the amber door is open.
+  out += '<g transform="translate(' + (ox + cell * 1.5) + ',' + (oy + cell * 2.5) + ')">'
+    + '<circle r="20" fill="#ffb03a" opacity=".3"/>'
+    + '<circle r="16" fill="none" stroke="#ffb03a" stroke-width="3"/>'
+    + '<rect x="-8" y="-10" width="16" height="20" rx="5" fill="#f4f1ea" stroke="#0d0f16" stroke-width="2"/>'
+    + '<rect x="-5" y="-6" width="10" height="4" fill="#0d0f16"/></g>';
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -824,6 +872,7 @@ const ART = {
   winter,
   'tank-tactics': tankTactics,
   'dungeon-dice': dungeonDice,
+  'color-heist': colorHeist,
 };
 
 /**

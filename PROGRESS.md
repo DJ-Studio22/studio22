@@ -1893,3 +1893,103 @@ central claim measured rather than asserted, and in three of the five the first
 measurement said the claim was false — the rift gates were gifting distance,
 the ricochet was worth nothing, and the dice were robbing a quarter of runs.
 None of those would have been found by playing.
+
+## Phase 23 — Colour Heist, and a clock derived from a proof
+
+Game one of the second batch. `games/color-heist/`, two files: `maze.js` (the
+whole simulation and the search that proves a floor, DOM-free) and `game.js`.
+Nineteen games live.
+
+### The constraint has to cost something
+
+A door only opens while you are wearing its colour, and changing colour means
+standing still for **0.55 seconds — three and a half steps you are not taking.**
+If switching were free the doors would be scenery and the maze a corridor.
+
+Measured as the gap between two bots that differ in one field:
+
+| | gems (median) | still alive after 420s |
+|---|---:|---:|
+| dasher — plans in steps, notices a door when it is standing in one | 36 | **0/10** |
+| router — plans over (cell, colour) with the real cost model | 78 | **10/10** |
+
+The first version of that test asserted the wrong thing and passed the wrong
+way. Over a short window the two earn at nearly the same RATE — 24 gems against
+28 — because neither is struggling yet. **The difference is not speed, it is
+survival:** the margin tightens every floor, and a bot that walks into doors it
+did not plan for runs out of clock while one that priced them keeps going. The
+test asserts who is alive, and the gems follow.
+
+### The clock is derived from the proof, not from a table
+
+Every floor is generated and then proved by a Dijkstra over (cell, colour). The
+state space is small, so unlike the mini golf beam or the Rift Runner solver
+**this search is complete** — a rejection is a fact rather than a doubt, and
+the generator can reject rather than merely doubt.
+
+Then the same search sets the clock: **par plus a margin, and the margin
+shrinks every floor forever** — 140% on floor one, decaying toward a floor of
+16%. Three things fall out of that:
+
+- the floor is fair by construction, because the time given comes from a route
+  that provably exists
+- it is genuinely endless, with no point where the maze stops growing and the
+  clock stops falling
+- the game stops being "can you get there" and becomes "how close to the best
+  route can you get"
+
+A fixed time per floor with a minimum was the first attempt, and it was not
+endless at all: past floor ten nothing changed, and the planning bot cleared
+**102 floors** and was still going when the harness stopped it.
+
+### Two things the generator refuses to deal
+
+- **A vault crossable without a single switch.** The doors would be scenery.
+  Rejected and redealt; `parSwitches >= 1` on every floor.
+- **A gem on the fastest route.** That is a pickup, not a decision. Every gem
+  is placed so going via it costs real time, and dropped if the detour will not
+  fit in the clock — a gem you cannot reach is a taunt.
+
+### The oracle problem, stated rather than hidden
+
+The router **cannot lose.** It holds a complete solver and the whole map, and
+the clock is derived from that same solver's answer — so it stops only when the
+harness cap says so, 22 runs in 24. Its number is not "how hard the game is";
+it is an upper bound the reactive bot is measured against. Convention 7 with
+the volume turned up: a bot is not a player, and this one is not even
+pretending.
+
+### The slowest thing in the project, and the fix
+
+Gem placement called the search twice for **every candidate cell** — six
+hundred Dijkstras on a large floor. A bot good enough to reach deep floors
+could not finish a run inside the harness at all; the first attempt to measure
+the router simply never returned. The graph is symmetric, so two searches
+answer the whole question: one out from the start, one back from the exit.
+`distancesFrom()` does that, and a test asserts it agrees with the single-target
+search it replaced.
+
+### What the hand-play found — and it was the sharpest one yet
+
+Floor one has a par of about three and a half seconds, so the clock is under
+eight. **Four seconds spent reading the screen had already lost the run.**
+Played cold the game was over in eight seconds with four steps taken, having
+never explained what the colours meant.
+
+**The alarm does not start until you move.** Arming on the first input costs a
+player who knows the game nothing and gives a new one the whole opening to
+read — every floor, not just the first, because every floor is a fresh map.
+`marginBase` also went from 1.15 to 1.4.
+
+### Contrast
+
+| pair | before | after |
+|---|---:|---:|
+| **a shut cyan door vs the wall it sits in** | **125** | 215 |
+| a shut magenta door vs a wall | 140 | 187 |
+
+That is the one distinction the whole game turns on — "locked for now, switch
+and pass" against "never, go round" — and at 125 the two looked the same. Shut
+doors are brighter now while staying clearly dimmer than the same door open.
+
+20 assertions; suite 377 → 397.
