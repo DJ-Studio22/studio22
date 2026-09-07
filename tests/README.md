@@ -397,3 +397,54 @@ spacing and correctly named all three realms.
 **Possible and fair are different questions, and only the first one gets asked
 by default.** Any game with a timed verb — a jump, a slide, a dash, a swing, a
 parry, a stroke budget — needs both.
+
+## 12. An assertion can pin an accident instead of a property
+
+```js
+assert.equal(direct.bankHits, 0, 'the direct bot landed one somehow');
+```
+
+That line was true for months and it was never testing what it said. The
+intent was "the bot that does not bank does not get the benefit of banking".
+What it actually asserted was "a shell never bounces into an enemy by
+accident" — which held only because every tank charged the player and died in
+a heap near the middle of the arena, so there was rarely anybody standing
+where a stray ricochet could find them.
+
+Change the enemies to hold position and spread out, and one accidental
+ricochet turns up on the first seed. The test went red, and the game was fine.
+
+**This is the same shape as the windows-too-tight class in section 11**, seen
+from the other side. There, a check passed because it measured possibility and
+not aimability. Here, a check passed because an incidental condition happened
+to make a stricter statement true than the one that mattered. Both are a test
+agreeing with itself about the wrong thing.
+
+The tell is an assertion on an **exact extreme** — zero, always, never, all —
+about something the code does not actually guarantee. `bankHits === 0` is not
+a rule of the game; nothing in `arena.js` prevents a bounced shell from
+hitting somebody. It was a statistic that happened to be zero.
+
+So:
+
+- **Ask what the assertion would have to survive.** If the answer is "the
+  enemies continuing to behave exactly as they do today", it is pinned to an
+  accident. Assert the property instead — here, that the deliberate count
+  dwarfs the accidental one:
+
+  ```js
+  assert.ok(direct.bankHits * 20 < bank.bankHits,
+    'that is not an accident, it is banking');
+  ```
+
+- **Be suspicious of exact zeroes and exact equalities in bot outcomes.** A
+  distribution is the right shape for a claim about behaviour. An exact figure
+  is the right shape for a claim about a rule, and only when the rule really
+  says so — `canHurt(sniper, { bounces: 0 }) === false` is exact because the
+  code makes it exact.
+
+- **When a test goes red after a change that was not about it, read it before
+  fixing it.** The question is not "how do I get this green" but "was this
+  measuring what it claimed". Half the time the change exposed a bad
+  assertion, and half the time it broke something real; those need opposite
+  responses and they look identical at the point of failure.
