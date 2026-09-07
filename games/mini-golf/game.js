@@ -37,7 +37,7 @@ import { GameShell } from '../../engine/shell.js';
 import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
-import { ParticleSystem } from '../../engine/util.js';
+import { ParticlePresets, ParticleSystem } from '../../engine/util.js';
 
 import { Course } from './holes.js';
 import { RAMP_PUSH, T, TILE, TUNING, isRamp } from './green.js';
@@ -97,6 +97,17 @@ const ART = {
     par: '#ffd45e',
   },
   spark: ['#ffffff', '#7fe07f', '#ffd45e'],
+  // The held moment when a putt drops. Warm and bright against the green,
+  // because this is the one time the game is pleased with you.
+  celebrate: {
+    scrim: 'rgba(8,20,14,.92)',
+    ace: '#ffd45e',
+    good: '#7fe07f',
+    level: '#ffffff',
+  },
+  // Confetti, deliberately not the spark palette: a sink already flashes
+  // white, and more white on white is not a celebration, it is a smear.
+  confetti: ['#ffd45e', '#7fe07f', '#ff8fa3', '#6fc7ff', '#ffffff'],
 };
 
 // --- Engine wiring -------------------------------------------------------
@@ -140,6 +151,54 @@ let ballDraw = { x: 0, y: 0 };
 let sinkFlash = 0;
 let bankFlash = 0;
 
+// Sinking it is the only moment of reward this game has, and it used to last
+// one frame: Course.play() advances to the next hole the instant the ball
+// drops, so the board under the celebrating ball was already the NEXT hole and
+// the player was hurried past the thing they had just earned.
+//
+// So the sink is HELD. The finished hole stays on screen with the ball in the
+// cup, confetti comes out of it, and a line of congratulation sits over it
+// until the hold expires or the player presses on. Nothing about the rules
+// moves during it — Course has already resolved everything, and this is the
+// view catching up, the same arrangement Winter uses for its piles.
+const CELEBRATION_SECONDS = 3;
+let celebration = null;   // { hole, cup, life, line, strokes, par, gained }
+
+// Twenty-two of them, because a canned phrase stops reading as praise about
+// the fourth time you see it. Grouped by how good the putt actually was, so
+// the game is not calling a scrappy triple-bogey escape a masterpiece.
+const PRAISE = {
+  ace: ['Hole in one.', 'ACE.', 'First time. Every time.', 'Straight in.'],
+  under: [
+    'Under par.', 'That is the shot.', 'Bank it.', 'Clean.',
+    'Read it perfectly.', 'Textbook.', 'Never in doubt.', 'Lovely.',
+  ],
+  level: [
+    'Par.', 'Job done.', 'Level.', 'Nothing lost.',
+    'Steady.', 'That will do.',
+  ],
+  over: [
+    'Got there.', 'The hard way.', 'It counts.', 'Scrappy, but in.',
+    'Take it and move on.', 'Not pretty.', 'Sunk, eventually.',
+  ],
+};
+
+/** A line to suit the putt that was just made, never the same one twice running. */
+let lastPraise = null;
+function praiseFor(strokes, par) {
+  const bucket = strokes === 1 ? PRAISE.ace
+    : strokes < par ? PRAISE.under
+      : strokes === par ? PRAISE.level
+        : PRAISE.over;
+  let deck = bucket;
+  if (bucket.length > 1 && lastPraise) {
+    const without = bucket.filter((line) => line !== lastPraise);
+    if (without.length) deck = without;
+  }
+  lastPraise = deck[Math.floor(Math.random() * deck.length)];
+  return lastPraise;
+}
+
 function reset() {
   course = new Course();
   running = true;
@@ -151,6 +210,8 @@ function reset() {
   ballDraw = { ...course.ball };
   sinkFlash = 0;
   bankFlash = 0;
+  celebration = null;
+  lastPraise = null;
   particles.clear();
 }
 
@@ -238,12 +299,43 @@ function update(dt) {
       if (p.sunk) {
         audio.play('sink');
         sinkFlash = 1;
-        particles.explosion(p.x, p.y, { count: 20, colors: ART.spark, speed: 150 });
+        particles.explosion(p.x, p.y, { count: 20, colors: ART.spark, speed: [90, 210] });
       }
     }
     if (rolling.index >= rolling.path.length) {
       rolling = null;
+      // While a celebration is up the ball belongs in the cup it just went
+      // into, NOT at the tee of the hole Course has already dealt.
+      ballDraw = celebration ? { ...celebration.cup } : { ...course.ball };
+      if (!course.running && !celebration) finish();
+    }
+    return;
+  }
+
+  // The held moment. The rules are already resolved; this is the view catching
+  // up, and the player can cut it short.
+  if (celebration) {
+    celebration.life -= dt;
+    // Confetti out of the cup for the first second, so it arrives with the
+    // ball rather than raining on an empty board.
+    if (celebration.life > CELEBRATION_SECONDS - 1 && Math.random() < 0.55) {
+      particles.emit(celebration.cup.x, celebration.cup.y, {
+        ...ParticlePresets.sparkle,
+        count: 3,
+        colors: ART.confetti,
+        speed: [40, 170],
+        life: [0.7, 1.5],
+        size: [2, 4.5],
+        gravity: -30,
+        shape: 'square',
+      });
+    }
+    const pressed = Input.pressed('a') || Input.pressed('b') || Input.pressed('start');
+    if (celebration.life <= 0 || pressed) {
+      celebration = null;
       ballDraw = { ...course.ball };
+      // Point the aim at the new cup, so the next hole starts readable.
+      aim = Math.atan2(course.hole.cup.y - course.ball.y, course.hole.cup.x - course.ball.x);
       if (!course.running) finish();
     }
     return;
@@ -269,14 +361,27 @@ function update(dt) {
     charging = false;
     const from = { ...course.ball };
     const before = course.completed;
+    const bankBefore = course.bank;
+    // Captured BEFORE the stroke, because Course advances the moment it drops
+    // and the celebration is about the hole that was just finished.
+    const playedHole = course.hole;
+    const playedStrokes = course.strokes;
     audio.play('hit', { pitch: 0.8 + power * 0.6 });
     beginRoll(from, aim, power);
     course.play(aim, power);
     if (course.completed > before) {
       bankFlash = 1;
       audio.play('bank');
-      // Point the aim at the new cup, so the next hole starts readable.
-      aim = Math.atan2(course.hole.cup.y - course.ball.y, course.hole.cup.x - course.ball.x);
+      const strokes = playedStrokes + 1;
+      celebration = {
+        hole: playedHole,
+        cup: { ...playedHole.cup },
+        life: CELEBRATION_SECONDS,
+        line: praiseFor(strokes, playedHole.par),
+        strokes,
+        par: playedHole.par,
+        gained: course.bank - bankBefore,
+      };
     }
     power = 0;
   }
@@ -431,7 +536,13 @@ function drawBall() {
 }
 
 function drawHud() {
-  const hole = course.hole;
+  // During the held moment the HUD shows the hole just FINISHED. It read
+  // "HOLE 3 — 0 / par 3" over a picture of hole 2 with the ball still in its
+  // cup, which is the same fault as cutting straight to the next hole, just
+  // spelled out in the corner instead.
+  const hole = shownHole();
+  const number = celebration ? course.holeNumber - 1 : course.holeNumber;
+  const strokes = celebration ? celebration.strokes : course.strokes;
 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
@@ -446,10 +557,10 @@ function drawHud() {
   ctx.textAlign = 'center';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText(`HOLE ${course.holeNumber}`, W / 2, 12);
+  ctx.fillText(`HOLE ${number}`, W / 2, 12);
   ctx.fillStyle = ART.hud.par;
   ctx.font = '700 16px system-ui, sans-serif';
-  ctx.fillText(`${course.strokes} / par ${hole.par}`, W / 2, 26);
+  ctx.fillText(`${strokes} / par ${hole.par}`, W / 2, 26);
 
   // The bank — the only thing standing between the player and the end, so it
   // gets the clearest readout on the screen.
@@ -482,8 +593,19 @@ function drawHud() {
   }
 }
 
+/**
+ * The hole the SCREEN is showing.
+ *
+ * During a celebration that is the hole just finished, not the one Course has
+ * already dealt. Everything that draws goes through here, so there is one
+ * answer to "which board is on screen" rather than one per function.
+ */
+function shownHole() {
+  return celebration ? celebration.hole : course.hole;
+}
+
 function render() {
-  const hole = course.hole;
+  const hole = shownHole();
   const view = viewOf(hole);
 
   ctx.fillStyle = ART.table;
@@ -495,7 +617,7 @@ function render() {
   ctx.translate(view.x, view.y);
   ctx.scale(view.scale, view.scale);
   drawHole(hole);
-  drawAim();
+  if (!celebration) drawAim();
   drawBall();
   particles.draw(ctx);
   ctx.restore();
@@ -508,6 +630,53 @@ function render() {
   }
 
   drawHud();
+  drawCelebration();
+}
+
+/** The held moment: the line, what it was worth, and how to skip it. */
+function drawCelebration() {
+  if (!celebration) return;
+  const c = celebration;
+  // Eases in fast and holds; only the last third fades, so the words are
+  // readable for effectively the whole three seconds.
+  const t = 1 - c.life / CELEBRATION_SECONDS;
+  const alpha = Math.min(1, t * 8, c.life / (CELEBRATION_SECONDS * 0.3));
+
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Put the panel on the opposite half of the screen from the cup. Fixed high
+  // up, it landed squarely on top of the ball and the confetti about half the
+  // time — covering the thing it is congratulating you for.
+  const view = viewOf(c.hole);
+  const cupScreenY = view.y + c.cup.y * view.scale;
+  const y = cupScreenY < H * 0.5 ? H * 0.74 : H * 0.28;
+
+  ctx.fillStyle = ART.celebrate.scrim;
+  ctx.beginPath();
+  ctx.roundRect(W / 2 - 190, y - 46, 380, 92, 12);
+  ctx.fill();
+
+  ctx.fillStyle = c.strokes === 1 ? ART.celebrate.ace
+    : c.gained > 0 ? ART.celebrate.good : ART.celebrate.level;
+  ctx.font = '800 30px system-ui, sans-serif';
+  ctx.fillText(c.line, W / 2, y - 14);
+
+  ctx.fillStyle = ART.hud.label;
+  ctx.font = '700 13px system-ui, sans-serif';
+  const score = c.strokes === 1 ? 'Hole in one'
+    : `${c.strokes} strokes against par ${c.par}`;
+  const banked = c.gained > 0 ? `  ·  +${c.gained} to the bank`
+    : c.gained < 0 ? `  ·  ${c.gained} from the bank` : '  ·  bank unchanged';
+  ctx.fillText(score + banked, W / 2, y + 16);
+
+  ctx.globalAlpha = alpha * 0.7;
+  ctx.fillStyle = ART.hud.label;
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.fillText('Any button for the next hole', W / 2, y + 38);
+  ctx.globalAlpha = 1;
+  ctx.textBaseline = 'top';
 }
 
 // --- Boot ----------------------------------------------------------------

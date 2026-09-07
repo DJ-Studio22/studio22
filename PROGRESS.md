@@ -1446,3 +1446,51 @@ is a call about the game, not about the code.
 334 assertions, up from 333. Three tests rewritten: they asserted the old
 intent — that the first rift lands inside 90m and the median competent run
 enters at least one — which is precisely what this phase set out to change.
+
+## Phase 18 — Endless Mini Golf: holding the only moment of reward
+
+Sinking a putt is the one thing this game congratulates you for, and it used to
+last a single frame.
+
+`Course.play()` advances to the next hole the instant the ball drops — correctly,
+because the rules have no reason to wait — so by the time the roll animation
+reached the cup, the board underneath it was already the NEXT hole. The player
+was hurried past the thing they had just earned, and a good hole and a scrappy
+one looked identical on the way past.
+
+### The sink is held
+
+Three seconds, or until a button is pressed. The finished hole stays on screen
+with the ball sitting in its cup, confetti comes out of the cup for the first
+second so it arrives WITH the ball rather than raining on an empty board, and a
+line of congratulation sits over it with what the putt was actually worth:
+
+> **ACE.**
+> Hole in one · +2 to the bank
+
+Nothing about the rules moves during it. `Course` has already resolved
+everything; this is the view catching up, which is the same arrangement Winter
+uses for its piles and for the same reason — the simulation must never wait on
+an animation, or the bots stop playing what a player plays. `shownHole()` is
+the one place that answers "which board is on screen", so nothing can disagree.
+
+### Twenty-two lines, in four buckets
+
+A canned phrase stops reading as praise about the fourth time you see it, and
+one phrase for every outcome would have the game calling a scrappy triple-bogey
+escape a masterpiece. So they are grouped by how good the putt actually was —
+four for an ace, eight for under par, six for level, seven for over — and never
+the same one twice running, the same dedup the pattern dealer uses.
+
+### Two faults the screenshots found
+
+- **The HUD had already moved on.** It read "HOLE 3 — 0 / par 3" over a picture
+  of hole 2 with the ball still in its cup. That is the same fault as cutting
+  straight to the next hole, spelled out in the corner instead. The HUD now
+  shows the finished hole for as long as the board does.
+- **The panel landed on the ball.** Fixed high on the screen it covered the cup
+  and the confetti about half the time — covering the very thing it was
+  congratulating you for. It now sits on the opposite half of the screen from
+  the cup.
+
+No rule changed and no test changed; the suite stays at 334.
