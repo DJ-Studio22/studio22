@@ -89,9 +89,23 @@ export const TUNING = {
   // first, because every floor is a fresh map.
   armOnFirstMove: true,
 
-  marginBase: 1.4,       // floor 1: par plus 140%
-  marginDecay: 0.955,    // multiplied per floor
-  marginFloor: 0.16,     // and never tighter than par plus 16%
+  // The shape of the squeeze, and it has been widened once already.
+  //
+  // At 1.4 / 0.955 / 0.16 the game was unforgiving from the first floor: par
+  // plus 140% sounds generous until you notice par is three and a half
+  // seconds, and the margin was under double par by floor ten. There was never
+  // a stretch where a player had room to look at the map and think.
+  //
+  //   floor    1     5    10    15    20    30    45    60
+  //   was   1.40  1.16  0.93  0.73  0.58  0.37  0.18  0.16
+  //   now   2.60  2.25  1.89  1.58  1.32  0.93  0.54  0.32
+  //
+  // Triple par for the first stretch, still comfortably over double at floor
+  // fifteen, and the real pressure arrives in the thirties rather than the
+  // tens. It never stops tightening, which is what keeps it endless.
+  marginBase: 2.6,       // floor 1: par plus 260%
+  marginDecay: 0.965,    // multiplied per floor
+  marginFloor: 0.25,     // and never tighter than par plus 25%
 
   gemsBase: 3,
   gemsPerFloor: 0.35,

@@ -157,9 +157,17 @@ export function decide(heist, s) {
  * made a thirty-seed table take longer than the rest of the suite put
  * together. The bot is not smarter for thinking again before it has moved.
  */
-export function runOnce(skill, tuning = TUNING, maxSeconds = 900) {
+export function runOnce(skill, tuning = TUNING, maxSeconds = 900, startFloor = 1) {
   const s = SKILLS[skill];
   const heist = new Heist(tuning);
+  // Dropping in deep on purpose. The margin is generous for the first twenty
+  // floors, so a short run there measures almost nothing — both bots coast.
+  // The skill gap lives where the squeeze is, and starting there measures it
+  // in seconds rather than in ten minutes of simulated coasting.
+  if (startFloor > 1) {
+    heist.floor = startFloor;
+    heist.enterFloor();
+  }
   const dt = 1 / 60;
 
   // A cap, and it does real work rather than being a safety net: the planning
