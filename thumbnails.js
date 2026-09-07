@@ -662,6 +662,52 @@ function miniGolf() {
     + '<circle cx="72" cy="152" r="6" fill="#ffffff" stroke="#9aa6a0" stroke-width="1.5"/>'
     + '</svg>';
 }
+/**
+ * Winter Base Building -- the wall, the fire, and the pack outside it.
+ *
+ * The card has to say what the CHOICE is, so all three are in one picture at
+ * once: a wall that stops short, a fire that is only alive because wood went
+ * on it instead of into that gap, and the eyes already waiting in the trees.
+ */
+function winter() {
+  const tree = (x, y, h) => '<path d="M' + x + ' ' + y + ' L' + (x - h * 0.3) + ' ' + (y + h)
+    + ' L' + (x + h * 0.3) + ' ' + (y + h) + ' Z" fill="#1b2c3f"/>';
+  const stone = (x) => '<g><rect x="' + x + '" y="112" width="26" height="42" fill="#8fa3b8"/>'
+    + '<rect x="' + x + '" y="112" width="26" height="5" fill="#5c6f84"/></g>';
+  const eyes = (x, y) => '<g fill="#ffd34d"><circle cx="' + x + '" cy="' + y + '" r="2.6"/>'
+    + '<circle cx="' + (x + 11) + '" cy="' + y + '" r="2.6"/></g>';
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="wt-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#0e1626"/><stop offset="1" stop-color="#3b3350"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#wt-sky)"/>'
+    // The forest the wolves come out of.
+    + tree(26, 44, 78) + tree(64, 58, 62) + tree(102, 40, 84) + tree(136, 62, 58)
+    // Snow.
+    + '<path d="M0 150 Q160 138 320 152 L320 200 L0 200 Z" fill="#dfe9f2"/>'
+    + '<rect y="178" width="320" height="5" fill="#b9c9dc"/>'
+    // The wall, and where it stops.
+    + stone(14) + stone(44) + stone(74)
+    // The shelter.
+    + '<rect x="212" y="106" width="76" height="50" fill="#6b4a2f"/>'
+    + '<path d="M204 108 L250 78 L296 108 Z" fill="#8a5f3a"/>'
+    + '<rect x="204" y="103" width="92" height="6" fill="#eef4fa"/>'
+    + '<rect x="238" y="128" width="20" height="28" fill="#2a1c10"/>'
+    // The fire, the only warm thing in the picture.
+    + '<circle cx="176" cy="156" r="30" fill="rgba(255,150,60,.20)"/>'
+    + '<ellipse cx="176" cy="148" rx="13" ry="19" fill="#ff6a2b"/>'
+    + '<ellipse cx="176" cy="152" rx="8" ry="13" fill="#ffb340"/>'
+    + '<ellipse cx="176" cy="156" rx="4" ry="7" fill="#fff2c4"/>'
+    // Watching, from where the wall is not.
+    + eyes(112, 96) + eyes(146, 106)
+    // Falling snow.
+    + '<g fill="rgba(240,248,255,.72)"><circle cx="40" cy="30" r="2"/>'
+    + '<circle cx="188" cy="22" r="1.6"/><circle cx="264" cy="46" r="2.2"/>'
+    + '<circle cx="92" cy="70" r="1.6"/><circle cx="300" cy="20" r="1.8"/>'
+    + '<circle cx="12" cy="96" r="1.8"/></g>'
+    + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -680,6 +726,7 @@ const ART = {
   ember,
   'rift-runner': riftRunner,
   'mini-golf': miniGolf,
+  winter,
 };
 
 /**

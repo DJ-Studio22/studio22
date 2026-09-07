@@ -1212,3 +1212,136 @@ the wrong way to test that the tuning is live. That test now checks the Course
 reads the bank it is given and that tripling the friction shortens a putt.
 
 24.1 KB gzipped. 22 assertions; suite 293 → 315.
+
+## Phase 16 — Winter Base Building, and proving a choice exists
+
+Game three of five. `games/winter/`, two files: `camp.js` (the whole
+simulation, DOM-free) and `game.js` (an isometric camp and nothing else).
+Sixteen games live.
+
+### The claim, and why it needed four bots rather than two
+
+Every other game in this project asks the harness "how good is the player".
+This one asks something more basic:
+
+> **Wood is dual-purpose and genuinely scarce**, so burning it and building
+> with it compete, and a player can be caught having chosen wrong.
+
+If that is false the game is a chore list — gather enough and everything is
+fine — and no amount of snow on the canvas would rescue it. The way to check it
+is not a good bot and a bad one. It is two bots each good at ONE of the two
+things, and a demonstration that they fail in OPPOSITE ways.
+
+| strategy | weeks (median) | p90 | how it died |
+|---|---:|---:|---|
+| fortify — builds whenever it can | 3 | 5 | Froze 42/60, bear 18/60 |
+| warm — never builds at all | 2 | 3 | **Wolves 52/60**, bear 8/60 |
+| hoarder — leaves the wall to the last night | 4 | 4 | Wolves 53/60, bear 7/60 |
+| balanced — fire first, wall with what is left | **5** | 5 | Wolves 44/60, froze 12/60 |
+
+The wall-first camp freezes and the fire-first camp is eaten. That is the whole
+design in one table, and "I didn't gather enough" — starvation — is 1 run in
+240.
+
+### Three rules the harness forced
+
+- **`maxBuildsPerDay: 1`.** Without it, wall decay makes building LATE strictly
+  better: hoard all week, raise the whole wall on day seven, commit to nothing.
+  The hoarding bot outlasted the careful one, which is the tension not existing.
+  Capped, wood committed on day two cannot be burnt on day five, and that
+  commitment is the choice the game is about.
+- **`healPerGoodNight: 7`.** Without it every strategy died at roughly the same
+  depth, because damage only ever accumulated and nothing done well could undo
+  any of it. A warm fed night has to be worth more than merely avoiding harm.
+- **`bearDamage: 14`, down from 22.** At 22 a bear ended a quarter of all runs,
+  which made hunting the story instead of the wall. The risk of going out
+  should cost a day and some blood, not the run.
+
+### The week cannot pay for itself — but not immediately
+
+`weekBudget()` prices a week honestly: eating comes out of the action budget
+first, then the wall that week's pack needs including what rots meanwhile, and
+only what is left can gather.
+
+| week | 1 | 2 | 3 | 5 | 8 | 12 |
+|---|---:|---:|---:|---:|---:|---:|
+| slack | +45 | +18 | −17 | −85 | −189 | −263 |
+
+Weeks one and two show a surplus, and that is the deliberate run-up: the
+stretch where a player is still learning which action does what and can afford
+to spend one badly. From week three it is never solvent again. Median survival
+is five weeks, so the squeeze lands in the middle of a run rather than at the
+end of one — the player is spending a stockpile built while it was easy, and
+the stockpile is finite.
+
+### Why wolves, and why bears as well
+
+A blizzard was the obvious seventh-night threat and it is the wrong one: a fuel
+drain collapses straight back into "did you stockpile enough wood". Wolves
+attack the STRUCTURE, so wood has to be spent on walls as well as burnt, and
+the two uses compete for one pile.
+
+Bears are kept as a separate animal on purpose. Bears are the risk of GOING
+OUT; wolves are the risk of the DEADLINE. One animal doing both would be a
+single pressure felt twice and the week would have no shape.
+
+### The camp is a place, not a menu
+
+The first version of `game.js` drew four bars and a list of three options, and
+the game read as a spreadsheet with snow on it. It is now an isometric camp
+where every number the simulation holds has a physical counterpart:
+
+- **wood** is a stack of logs that grows in rows and shrinks
+- **meat** is a drying rack that fills and empties
+- **wall** is posts that rise one at a time from the front — the side the pack
+  comes at — and are knocked out into rubble when it breaks
+- **the fire** is big and yellow when it is fed and guttering embers when it is
+  not, which is the single most important thing on the screen
+- **the pack** is wolves gathering past the treeline over the three nights
+  before the deadline, so the readiness readout has something to point at
+- **the week** is the forest visibly thinning, which is `gatherYield` falling
+
+And the character walks. "Gather wood" sends them out to a tree and they swing
+at it; "hunt" takes them off into the deep woods where a bear may be waiting;
+"build" walks them to the gap in the wall and they heave a post upright there.
+
+**The rules resolve the instant you confirm** — `camp.js` never waits on an
+animation, which is what keeps the bots playing exactly what a player plays.
+What is delayed is the PILES: they do not move until the axe lands. Without
+that gap, four numbers jump before the character has taken a step and the point
+of walking there is lost.
+
+Depth is `x + y`, so the deep woods are up the screen and the wall is near the
+camera, large, and impossible to misread.
+
+### What the hand-play and the contrast check found
+
+Per the two conventions. Thirty seconds cold from a genuine standing start
+found nothing that could kill you — a turn-based day has no standing-start
+fault to have — but it found three presentation faults that no test could:
+
+- **The four resource bars were strung across the sky** and the tracks vanished
+  against it, so the readings ran together into one long meaningless line. They
+  are a panel now.
+- **The worn paths read as planks laid on the snow.** Too bright, too wide, and
+  one ran clean out of the compound.
+- **A wall of nothing was invisible.** With `wall: 0` there was no compound to
+  see at all. The whole unbuilt perimeter is now a faint outline with the next
+  slot picked out, so the wall you have not built is as legible as the wall you
+  have.
+
+The contrast check flagged two pairs and both mattered:
+
+| pair | before | after |
+|---|---:|---:|
+| wolf body vs the dark beyond the treeline | 110 | 253 |
+| the coat vs the log stack | 117 | 175 |
+
+The wolves are the deadline made visible, and at 110 they registered as a pair
+of yellow eyes and nothing else. Everything else was clear: hung meat 468 from
+snow, the person 488, rubble 454, log ends 385.
+
+The strategy bots were re-run against the finished game and the table above is
+unchanged to the run. The rework was presentation and the numbers prove it.
+
+25 KB gzipped 9.1. 18 assertions; suite 315 → 333.
