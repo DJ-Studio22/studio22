@@ -1596,3 +1596,89 @@ whether a person can aim at it, and the two are asserted separately now.
 
 336 assertions, up from 334: the floor itself plus one guarding the spacing itself — a
 spacing is exactly the sort of thing that gets nudged back for looking tidier.
+
+## Phase 20 — the real-time Winter, prototyped and rejected
+
+A design was proposed to replace or accompany the turn-based Winter: a
+directly-controlled character in real time, walking to trees and bears, hauling
+logs and meat back to base. Before building it, the load-bearing claim was
+prototyped on its own — travel time, carrying capacity, a day clock and the
+night settlement lifted from `camp.js`. No art, no NPCs, no upgrades, no money.
+
+**It does not hold up, and the reasons are arithmetic rather than tuning.**
+The prototype is not in the repo; what is worth keeping is why.
+
+### The question
+
+The turn-based game works because ACTIONS are scarce and both uses of wood cost
+the same one: an action to gather, an action to build. That symmetry is the
+whole tension. In real time, actions stop being scarce and TIME becomes scarce
+instead, which is a different pressure — and the risk was that it collapses
+into "gather as fast as possible".
+
+Two things had to be true. A greedy near-gatherer and a deep-forest hauler had
+to fail in different ways; and the zero-waste, perfectly-routed bot had to
+still face a choice, because a tension only bad players feel is not a tension.
+
+### Finding 1 — under a fixed carry capacity, distance is pure cost
+
+Ranging further can never pay for a bulk resource. The rate of a trip is
+`capacity / tripTime`, and `tripTime` rises with distance, so the nearest tree
+is always the best tree. Making distant trees bigger does not help, because the
+load is capped before the tree size matters:
+
+| logs per second of a full trip | d=15 | 40 | 80 | 120 | 220 | 300 |
+|---|---:|---:|---:|---:|---:|---:|
+| deep trees the same size | 0.581 | 0.315 | 0.182 | 0.128 | 0.073 | 0.055 |
+| deep trees 4x bigger | 0.696 | 0.346 | 0.203 | 0.138 | 0.077 | 0.057 |
+| deep trees **20x** bigger | 0.867 | 0.384 | 0.203 | 0.138 | 0.077 | 0.057 |
+
+Twenty times bigger changes nothing past 80 metres. So there is no ranging
+DECISION for wood — only a forced march outward as the near band empties. The
+first run of the bots said so before the analysis did: the near-gatherer and
+the deep-hauler died the same way, of cold, because they were doing the same
+thing.
+
+Ranging exists only for a resource that is exclusively deep — meat — and that
+is a fixed toll on the clock, not a choice.
+
+### Finding 2 — build-vs-gather cannot be made to compete
+
+Gathering costs three to eight seconds a log. Building costs well under one.
+Both spend the same daylight, at incompatible exchange rates, so building is
+either nearly free or impossible and there is no tuning in between. Sweeping
+the fire/wall dial for the zero-waste bot, at every tuning tried:
+
+| seconds to build one log | what the dial does |
+|---|---|
+| 0.9 | flat — 17, 17, 17, 18, 18, 18, 17, 15 days |
+| 3 | flat — 20 across the whole range, then a cliff |
+| 8 | **nobody can build at all**; wolves 60/60 at every setting |
+| 16 | same |
+
+Under the most generous tuning found, a policy that never built a wall at all
+(`burner`) and one that split its wood sensibly (`balanced`) both died on day
+13, to wolves, in 78 and 80 runs out of 80. **Not building cost nothing.**
+
+### The verdict
+
+The turn-based Winter stays as the only Winter. The proposed design was going
+to be a walking simulator with a wall meter, and the prototype is what said so
+rather than a hunch — which is the whole reason to build one.
+
+What would actually be needed, if it is ever revisited, is a mechanic rather
+than a number:
+
+- something that makes capacity stop being the binding constraint on a deep
+  trip — a sled you place and fill, logs you roll rather than carry — so that
+  distance can pay and ranging becomes a real decision
+- something that makes the wall compete on an axis other than the same
+  daylight, since it will always lose or always win on that one
+
+And a caveat worth stating: this is a one-dimensional prototype with simple
+policies, and a richer model might express decisions this one cannot. But both
+findings are arithmetic — a capped load makes distance pure cost, and two
+activities with a 5x difference in exchange rate cannot trade against each
+other — and neither would change in two dimensions.
+
+The 1200 lines of the real game did not get written. That is the result.
