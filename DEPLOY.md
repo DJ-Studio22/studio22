@@ -150,15 +150,37 @@ descriptions, for a link preview most visitors never see.
 two post-build checks on every pull request and every push to `main`, on Node
 22 and 24. Locally, `npm run ci` is the same sequence.
 
-**`main` is protected.** A ruleset requires a pull request, and both CI checks
-must pass before it can merge. No approvals are required — this is a
-single-maintainer project and a self-approval is theatre — but the checks are
-not optional and direct pushes to `main` are refused.
+### `main` is NOT protected, and cannot be
 
-That is the gate. Cloudflare Pages still builds independently of GitHub
-Actions, so a red check has never been able to stop a *deploy* on its own; what
-it stops is the merge that would cause one. Nothing broken reaches `main`, so
-nothing broken reaches Pages.
+Worth stating plainly, because the rest of this section reads like it is.
+
+GitHub does not offer branch protection or rulesets on a **private repository
+on the free plan**. Configuring one in the UI does not take effect. Checked
+against the API rather than assumed:
+
+```
+GET /repos/:owner/:repo/branches/main              -> "protected": false
+GET /repos/:owner/:repo/branches/main/protection   -> 403 "Upgrade to GitHub Pro
+GET /repos/:owner/:repo/rulesets                   -> 403  or make this repository
+                                                            public to enable this
+                                                            feature."
+```
+
+(`git push --dry-run` is not a test of this. It reports success because it
+never reaches the server's ruleset check.)
+
+Three ways that changes: make the repository public, which enables rulesets
+for free; pay for GitHub Pro; or leave it. **It is currently left.**
+
+So the pull-request flow below is a *discipline*, not a gate. What it buys is
+still real — every change gets a CI run, a diff worth reading, and a revert
+that undoes one thing — but nothing on the server will stop a direct push to
+`main`, and `gh pr merge` will merge a PR whose checks are red.
+
+Cloudflare Pages also builds independently of GitHub Actions, so a red check
+has never been able to stop a *deploy*. It tells you promptly that `main` is
+broken. It does not prevent it. Both halves of that are worth holding in mind
+when the temptation is to skip the branch "just this once".
 
 ### The workflow, every time
 

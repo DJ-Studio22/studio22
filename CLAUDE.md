@@ -20,9 +20,9 @@ Deployed as a static site to Cloudflare Pages.
   tears down memory that a score was just written into.
 - NO data collection of any kind. No names stored, no analytics, no tracking.
 - NO online multiplayer. Local hot-seat and pass-and-play only.
-- NEVER commit on `main`. It is protected and direct pushes are refused:
-  branch, push, open a PR, wait for both CI checks, merge. See the git
-  workflow section below.
+- NEVER commit on `main`: branch, push, open a PR, wait for both CI checks,
+  merge. Nothing on the server enforces this — see the git workflow section
+  below for why, and follow it regardless.
 
 ## Architecture rules
 - Games import FROM engine/. Nothing in engine/ ever imports FROM games/.
@@ -134,10 +134,16 @@ Never animate CSS layout properties — transform and opacity only.
 
 ## Git workflow — branches and pull requests, always
 
-`main` is protected by a ruleset: a pull request is required, and both CI
-checks must pass before it can merge. No approvals are needed. **Direct pushes
-to `main` are refused**, so there is no version of this that starts with
-committing on `main`.
+**This is a convention, not an enforced rule, and that is worth knowing up
+front.** GitHub does not offer branch protection or rulesets on a private repo
+on the free plan — `"protected": false` is what the API reports for `main`, and
+the protection endpoints answer 403. Nothing on the server will stop a direct
+push.
+
+So the discipline is the whole mechanism. Follow it anyway: CI still runs on
+every pull request and every push, so a break is still caught loudly and fast —
+the difference is that it is caught *after* the merge rather than instead of
+it, and only if somebody is reading.
 
 Every piece of work:
 
@@ -153,8 +159,9 @@ gh pr merge --squash --delete-branch
 git checkout main && git pull
 ```
 
-- **Never commit on `main`.** Branch first, before the first edit. Noticing
-  afterwards means a cherry-pick or a reset, and both are avoidable.
+- **Never commit on `main`.** Branch first, before the first edit. Nothing
+  will refuse the commit, which is exactly why the habit has to be automatic.
+  Noticing afterwards means a cherry-pick or a reset, and both are avoidable.
 - **Run `npm run ci` before pushing.** It is exactly what the workflow runs —
   `npm test`, `npm run build`, then the two build checks — so a green local run
   means a green remote one and finding out costs seconds instead of a round
@@ -163,7 +170,8 @@ git checkout main && git pull
   cannot be reverted without taking both.
 - **Wait for the checks.** Opening the PR is not finishing; a PR with a red
   check is unfinished work, and "it passed locally" is not a reason to merge
-  past one.
+  past one. Nothing enforces this either — `gh pr merge` will happily merge a
+  red PR, so waiting is a decision made every time.
 - **A red check is fixed on the branch**, with another commit and another
   push. Never worked around.
 
