@@ -124,6 +124,31 @@ Four rules, all of them learned the hard way:
   distinct colours costs almost nothing and answers it outright. Worth doing
   for anything the player has to spot rather than read.
 
+- **A check can be right about what it measures and blind to everything
+  else.** Rift Runner's solver proved every pattern clearable and was never
+  wrong about it, while the realm-change code deleted every obstacle ahead and
+  never re-dealt them — so each rift handed out seventy-two metres of empty
+  course and the shipped medians were mostly gift. The quality of the
+  obstacles was verified; their existence was not. Nothing caught it because
+  every test measured distance, which was the quantity being falsified.
+
+  So: ask what a passing check does NOT look at, distrust a metric that is
+  both the headline number and the thing under test, and treat a 5x move in a
+  measurement as a symptom to investigate rather than a result to retune
+  around.
+
+- **A window a person cannot hit is not difficulty.** Three games, four
+  instances: a 23px slide window against a 120px bar, a 52px dash window
+  against a 40px wall, a one-frame landing window between spikes, and a par-2
+  golf hole where two strokes is an ace or a loss. Every one passed the check
+  that existed, because "is there a route" and "how much room is there to be
+  wrong" are different questions and only the first gets asked by default.
+
+  Sweep a fan of simple human-shaped policies — react at T, hold for H — and
+  require that a real share of them get through. See the aimability floor in
+  `tests/rift-runner.rift.test.mjs`. Any timed verb needs it: a jump, a slide,
+  a dash, a swing, a parry, a stroke budget.
+
 `npm test` runs the lot. The convention is written up in `tests/README.md`.
 
 ## Code style

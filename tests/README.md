@@ -301,3 +301,99 @@ for (let x = 0; x < canvas.width; x += 8) seen.add(`${d[x*4]},${d[x*4+1]},${d[x*
 Before the fix that row had one colour. After, two, and far apart: `39,50,79`
 against `4,6,13`. Worth doing for anything the player has to **spot** rather
 than read.
+
+## 10. A check can be right about what it measures and blind to everything else
+
+This one cost more than any other entry here, and it looked like a pacing
+change until it was pulled on.
+
+Rift Runner verifies its pattern library with a solver. Every (pattern, realm)
+pair is proved clearable before it can be dealt, the check is sound, and it has
+never once been wrong about the thing it checks. Meanwhile `#crossGate` — the
+code that swaps realms — threw away every obstacle dealt ahead of the runner,
+correctly, because they were authored for the old physics, and then set
+`cursorTile = Math.max(cursorTile, frontier)`. The dealer runs 2400px ahead, so
+`cursorTile` always won and the gap was never re-dealt.
+
+**Every rift was handing out about fifty-four tiles of completely empty
+course.** Seventy-two metres, four or five times a run. The shipped medians of
+350m and 655m were roughly 84m of running and 270m of gift.
+
+The library check was busy proving the QUALITY of obstacles that were not
+PRESENT. Both statements were true at once:
+
+- every pattern the game deals is clearable — verified, and still true
+- most of the course had no patterns in it at all — never checked by anything
+
+And nothing could have caught it, because **every test measured distance, which
+was the quantity being falsified.** A run that should have died at 84m reported
+350m and every assertion downstream agreed with itself.
+
+So, when a check tells you a property holds:
+
+- **Ask what it does not look at.** A soundness proof about the items in a list
+  says nothing about how long the list is. A fairness check on obstacles says
+  nothing about whether obstacles exist.
+- **Be suspicious of a number that is both the headline metric and the thing
+  under test.** Distance was the score, the difficulty measure, and the
+  quantity the bug inflated. There was no independent witness.
+- **When a change moves a metric by 5x, that is a symptom, not a result.**
+  Spacing the rifts out dropped the competent median from 550m to 97m with no
+  pattern touched. The right response to a number moving that far is to stop
+  and find out why, not to retune around it.
+
+The fix was one line. Finding it took measuring something nothing had measured:
+whether an obstacle exists near the runner after a realm change. That is a test
+now — `a rift no longer hands out free distance`.
+
+## 11. A window a person cannot hit is not difficulty
+
+Three games, the same error, and it is now the most common real fault in this
+project.
+
+| Game | The verb | The window |
+|---|---|---|
+| Rift Runner | slide under a bar | a 0.42s dash covering 143px against a 120px bar — **23px** |
+| Rift Runner | dash through a wall | 92px of phasing against a 40px wall — **52px, 0.15s** |
+| Rift Runner | `spike-stutter` | a two-tile landing window, three times — **0.01s, one frame** |
+| Endless Mini Golf | a par-2 hole | two strokes is an ace or a loss; **no room to be bad once** |
+
+Every one of them passed the check that existed. The mini golf generator proved
+each hole sinkable within par; the Rift Runner solver proved each phrase
+clearable. **Both were right.** A route existed in all four cases. What none of
+them asked is how much room there is to be wrong, and that is the difference
+between a skill and a coin toss.
+
+The tell is a phrase that is comfortable in one configuration and impossible in
+another with no design intent behind the difference. `spike-stutter` gave 0.51s
+in Forge, where gravity is heavy and the jump is short, and 0.01s in the other
+three realms. That is not a difficulty curve, it is an accident that happened
+to be survivable somewhere.
+
+### The check
+
+Sweep a fan of **simple, human-shaped policies** — "react when the target is T
+away, hold the verb for H seconds" — and ask how many get through. Not the
+optimal line; a person does not play the optimal line. If a phrase is cleared
+only by a hair's breadth of that fan, it is a coin toss however clearable it
+is.
+
+```js
+// tests/rift-runner.rift.test.mjs — the aimability floor
+const FLOOR = 0.08;   // a tenth of a second is about the limit of deliberate timing
+for (const pattern of PATTERNS.filter((p) => p.tier <= 1)) {
+  for (const realm of REALMS) {
+    if (!pattern.realms.includes(realm.id)) continue;
+    assert.ok(holdWindow(pattern, realm, FLOOR) >= FLOOR, `${pattern.id}/${realm.id}`);
+  }
+}
+```
+
+Set the floor a little under the human limit so it catches coin tosses rather
+than starting arguments about tuning. Verify it against the broken version
+before trusting it — the aimability floor was checked against the three-tile
+spacing and correctly named all three realms.
+
+**Possible and fair are different questions, and only the first one gets asked
+by default.** Any game with a timed verb — a jump, a slide, a dash, a swing, a
+parry, a stroke budget — needs both.
