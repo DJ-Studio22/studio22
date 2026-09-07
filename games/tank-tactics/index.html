@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Tank Tactics — Studio 22</title>
+  <meta name="description" content="Arena tanks where the wall is the second barrel. Bank a shot off the wall to hit twice as hard, and to get through plate no straight shot can touch." />
+
+    <!-- Mirrors --color-bg-0. A meta tag cannot read a custom property. -->
+  <meta name="theme-color" content="#0a0908" />
+
+  <!-- tokens.css is required, not decorative: engine/ui.js resolves the
+       palette from the document to draw the shell's pause and game over
+       screens. Without it those fall back to a plain degraded palette. -->
+  <link rel="stylesheet" href="/styles/tokens.css" />
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--color-bg-0);
+      overflow: hidden;
+      /* The game owns every touch on the page. */
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+
+    #boot-fallback {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      align-content: center;
+      gap: 8px;
+      text-align: center;
+      padding: 24px;
+      color: #f5f0e8;
+      font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    #boot-fallback h1 { font-size: 1.4rem; margin: 0 0 12px; color: #ffa22b; }
+    #boot-fallback p { margin: 0 0 8px; max-width: 32rem; }
+    #boot-fallback a { color: #948b7f; }
+
+  </style>
+</head>
+<body>
+  <!-- Shown until the game boots, and NOT removed by script that could itself
+       be the thing that failed: engine/canvas.js deletes it when it builds the
+       canvas. If the module never parses — which is exactly what took every
+       game to a black screen once — this stays on screen and says so. -->
+  <div id="boot-fallback">
+    <h1>Loading&hellip;</h1>
+    <p>If this message stays, the game failed to start. Reloading usually fixes it.</p>
+    <p><a href="/arcade.html">Back to the arcade</a></p>
+  </div>
+  <!-- GameCanvas builds its own letterboxed container inside <body>. -->
+  <script type="module" src="./game.js"></script>
+</body>
+</html>
