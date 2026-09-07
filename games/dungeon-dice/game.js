@@ -34,7 +34,7 @@ import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticlePresets, ParticleSystem, clamp, randRange } from '../../engine/util.js';
 
-import { FACE, Run, TUNING } from './dice.js';
+import { FACE, NUDGE_RING, Run, TUNING, nudged } from './dice.js';
 
 const GAME_ID = 'dungeon-dice';
 
@@ -294,10 +294,58 @@ function pickTarget() {
 
 // --- Drawing -------------------------------------------------------------
 
+// EVERY ROW ON THE SCREEN, IN ONE PLACE.
+//
+// The legibility pass added four new rows — the ledger sentence, the ring, the
+// effect labels, the tool bar — and the first attempt scattered their y values
+// through the drawing code. Three of them landed on top of each other and the
+// screen was less readable than before it was fixed. One table, and the gaps
+// between rows are visible as arithmetic rather than as luck.
+const ROW = {
+  enemy: 148,        // centre of the enemy row
+  telegraph: 222,    // "hits for 3 NOW", under each enemy
+  ledger: 256,       // what the roll is worth
+  banner: 284,       // the one sentence that matters
+  ringLabel: 316,
+  ring: 342,
+  preview: 374,      // what bending the selected die would make it
+  dice: 414,         // centre of the dice row
+  effect: 470,       // what each die is worth
+  tools: 492,
+  hint: 552,
+};
+
 const DIE = 74;
 const DIE_GAP = 18;
 const dieX = (i) => W / 2 - ((run.shown.length * (DIE + DIE_GAP)) - DIE_GAP) / 2 + i * (DIE + DIE_GAP) + DIE / 2;
-const dieY = () => 372;
+const dieY = () => ROW.dice;
+
+/**
+ * What a face DOES, in the fewest words that are still true.
+ *
+ * The single biggest legibility fix in the game. A player could see five icons
+ * and had no way to know a sword was worth three and a heart two, or that a
+ * bolt was not a weapon at all — those numbers lived in the tuning and the
+ * tally and appeared nowhere on screen. Every die now says what it is worth
+ * underneath it, AT THIS RUN'S RATES, so sharpening visibly changes the dice
+ * rather than a hidden multiplier.
+ */
+function faceEffect(face) {
+  const r = run.rates;
+  switch (face) {
+    case FACE.SWORD: return { text: r.damagePerSword + ' damage', colour: ART.face.sword };
+    case FACE.SHIELD: return { text: r.blockPerShield + ' block', colour: ART.face.shield };
+    case FACE.HEART: return { text: r.healPerHeart + ' heal', colour: ART.face.heart };
+    case FACE.BOLT: return { text: '+1 charge', colour: ART.face.bolt };
+    default: return { text: 'nothing', colour: ART.face.blank };
+  }
+}
+
+/** The name of a face, for the nudge preview. */
+const FACE_NAME = {
+  [FACE.SWORD]: 'sword', [FACE.SHIELD]: 'shield', [FACE.HEART]: 'heart',
+  [FACE.BOLT]: 'bolt', [FACE.BLANK]: 'blank',
+};
 
 function drawRoom() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -412,15 +460,143 @@ function drawTable() {
       ctx.fillText('↻', x + DIE / 2 - 13, y - DIE / 2 + 20);
     }
 
-    // The cursor carries the nudge hint, because the nudge is the tool a new
-    // player will not think to look for.
-    if (on && run.charges >= TUNING.nudgeCost) {
-      ctx.fillStyle = ART.face.bolt;
-      ctx.font = '700 13px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('▲', x, y - DIE / 2 - 8);
-      ctx.fillText('▼', x, y + DIE / 2 + 20);
+    // WHAT IT IS WORTH, under every die, always.
+    const effect = faceEffect(run.shown[i]);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = effect.colour;
+    ctx.font = '700 12px system-ui, sans-serif';
+    ctx.fillText(effect.text, x, ROW.effect);
+
+    // The cursor carries the nudge PREVIEW: not "you may nudge" but "bending
+    // this one makes it a shield". The nudge is the tool a new player will
+    // never think to look for, and a bare arrow does not teach it.
+    if (on) {
+      const afford = run.charges >= TUNING.nudgeCost;
+      ctx.font = '700 12px system-ui, sans-serif';
+      ctx.fillStyle = afford ? ART.face.bolt : ART.hud.label;
+      ctx.fillText(
+        '\u25b2 ' + FACE_NAME[nudged(run.shown[i], 1)]
+        + '   \u25bc ' + FACE_NAME[nudged(run.shown[i], -1)],
+        x, ROW.preview,
+      );
     }
+  }
+}
+
+/**
+ * The ring, drawn.
+ *
+ * "A blank is one nudge from a bolt" is the escape hatch the whole design
+ * leans on, and it was invisible: a player could use the nudge for a hundred
+ * turns without noticing the order was a loop, let alone that the worst face
+ * is adjacent to the currency that buys another change. It is a strip above
+ * the table now, with the selected die's face lit.
+ */
+function drawRing() {
+  if (run.pendingUpgrades || !running) return;
+  const here = run.shown[cursor];
+  const step = 74;
+  const y = ROW.ring;
+  const startX = W / 2 - ((NUDGE_RING.length - 1) * step) / 2;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = ART.hud.label;
+  ctx.font = '600 10px system-ui, sans-serif';
+  ctx.fillText('BENDING A DIE MOVES IT ONE STEP ROUND THIS RING', W / 2, ROW.ringLabel);
+
+  NUDGE_RING.forEach((face, i) => {
+    const x = startX + i * step;
+    if (i > 0) {
+      ctx.strokeStyle = ART.hud.panelEdge;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - step + 17, y);
+      ctx.lineTo(x - 17, y);
+      ctx.stroke();
+    }
+    if (face === here) {
+      ctx.fillStyle = ART.hud.selectedFill;
+      ctx.beginPath(); ctx.arc(x, y, 17, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = ART.hud.selected;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    drawFace(face, x, y, 9);
+  });
+
+  // The wrap, drawn as an arc back to the start, so the loop reads as a loop.
+  ctx.strokeStyle = ART.hud.panelEdge;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(startX + (NUDGE_RING.length - 1) * step, y + 20);
+  ctx.quadraticCurveTo(W / 2, y + 42, startX, y + 20);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+/**
+ * The three tools, their costs, and whether you can afford them right now.
+ *
+ * They were one line of grey text at the bottom of the screen listing keys.
+ * What a player needs is what each one COSTS and whether it is available this
+ * second, because that is the whole of the resource decision.
+ */
+function drawTools() {
+  if (run.pendingUpgrades || !running) return;
+  const y = ROW.tools;
+  const tools = [
+    {
+      key: 'SPACE',
+      name: 'Mark for reroll',
+      cost: picked.size ? picked.size + ' marked' : 'free',
+      ready: true,
+    },
+    {
+      key: 'SHIFT',
+      name: 'Reroll marked',
+      cost: run.rerollsLeft > 0 ? 'free (' + run.rerollsLeft + ' left)' : TUNING.rerollCost + ' charge',
+      ready: picked.size > 0 && (run.rerollsLeft > 0 || run.charges >= TUNING.rerollCost),
+    },
+    {
+      key: 'W / S',
+      name: 'Bend this die',
+      cost: TUNING.nudgeCost + ' charge',
+      ready: run.charges >= TUNING.nudgeCost,
+    },
+    {
+      key: 'Q',
+      name: 'Keep for next turn',
+      cost: TUNING.bankCost + ' charge',
+      ready: run.charges >= TUNING.bankCost && run.banked.length < TUNING.maxBanked,
+    },
+    { key: 'E', name: 'End the turn', cost: '', ready: true },
+  ];
+
+  const wide = 166;
+  let x = W / 2 - (tools.length * wide) / 2;
+  for (const tool of tools) {
+    ctx.globalAlpha = tool.ready ? 1 : 0.32;
+    ctx.fillStyle = ART.hud.panel;
+    ctx.beginPath(); ctx.roundRect(x + 6, y, wide - 12, 48, 8); ctx.fill();
+    ctx.strokeStyle = ART.hud.panelEdge;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = ART.hud.selected;
+    ctx.font = '800 11px system-ui, sans-serif';
+    ctx.fillText(tool.key, x + wide / 2, y + 17);
+    ctx.fillStyle = ART.hud.value;
+    ctx.font = '600 12px system-ui, sans-serif';
+    ctx.fillText(tool.name, x + wide / 2, y + 32);
+    if (tool.cost) {
+      ctx.fillStyle = ART.hud.label;
+      ctx.font = '600 10px system-ui, sans-serif';
+      ctx.fillText(tool.cost, x + wide / 2, y + 44);
+    }
+    ctx.globalAlpha = 1;
+    x += wide;
   }
 }
 
@@ -432,7 +608,7 @@ function drawEnemies() {
 
   list.forEach((e, i) => {
     const x = startX + i * spread;
-    const y = 168 + Math.sin(time * 2 + i) * 4;
+    const y = ROW.enemy + Math.sin(time * 2 + i) * 4;
     const winding = e.wind === 0;
 
     ctx.fillStyle = ART.enemy.body;
@@ -460,18 +636,26 @@ function drawEnemies() {
     // THE TELEGRAPH. What it will do and when, as a number and as a countdown,
     // because a shield you cannot plan is a shield you spend at random.
     ctx.textAlign = 'center';
-    ctx.font = '800 15px system-ui, sans-serif';
+    ctx.font = '800 14px system-ui, sans-serif';
     ctx.fillStyle = winding ? ART.enemy.winding : ART.hud.label;
-    ctx.fillText(winding ? `${e.damage} NOW` : `${e.damage} in ${e.wind}`, x, y + 76);
+    // Plain words, not shorthand. "3 in 2" reads as a score to somebody who
+    // has not been told what it means.
+    ctx.fillText(
+      winding ? 'hits for ' + e.damage + ' NOW'
+        : 'hits for ' + e.damage + ' in ' + e.wind + (e.wind === 1 ? ' turn' : ' turns'),
+      x, ROW.telegraph,
+    );
   });
 }
 
 /**
- * The ledger: what the table is worth and what is about to land.
+ * The ledger: what the table is worth, what is coming, and what happens if you
+ * do nothing about it — in a sentence rather than in three numbers to add up.
  *
  * This is the most important thing on the screen. The whole game is deciding
  * whether the roll in front of you answers the turn, and a player should be
- * able to see that without adding anything up.
+ * able to see that without doing arithmetic. The first version showed three
+ * coloured totals and left the subtraction to the reader.
  */
 function drawLedger() {
   if (run.pendingUpgrades) return;
@@ -479,33 +663,37 @@ function drawLedger() {
   const incoming = run.incoming;
   const net = Math.max(0, incoming - table.block);
   const survive = run.hp + table.heal - net;
+  const y = ROW.ledger;
 
-  const y = 268;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
+  // What the roll is worth, spelled out with what each part is FOR.
   const parts = [
-    [`${table.damage} damage`, ART.face.sword],
-    [`${table.block} block`, ART.face.shield],
-    [`${table.heal} heal`, ART.face.heart],
+    [table.damage + ' damage to them', ART.face.sword],
+    ['blocks ' + table.block, ART.face.shield],
+    ['+' + table.heal + ' health', ART.face.heart],
   ];
-  let x = W / 2 - 150;
-  ctx.font = '700 14px system-ui, sans-serif';
+  let x = W / 2 - 210;
+  ctx.font = '700 13px system-ui, sans-serif';
   for (const [text, colour] of parts) {
     ctx.fillStyle = colour;
     ctx.fillText(text, x, y);
-    x += 150;
+    x += 210;
   }
 
-  // And the one line that matters: does this turn kill you.
-  ctx.font = '800 16px system-ui, sans-serif';
+  // THE ONE LINE THAT MATTERS, and it is a sentence.
+  const banner = survive <= 0
+    ? incoming + ' incoming, ' + net + ' gets through \u2014 THAT KILLS YOU'
+    : incoming === 0
+      ? 'Nothing is landing this turn'
+      : net > 0
+        ? incoming + ' incoming, ' + net + ' gets through \u2014 you end on ' + survive
+        : incoming + ' incoming, all of it blocked';
+
+  ctx.font = '800 17px system-ui, sans-serif';
   ctx.fillStyle = survive <= 0 ? ART.hud.bad : net > 0 ? ART.hud.warn : ART.hud.good;
-  ctx.fillText(
-    survive <= 0 ? `THIS TURN KILLS YOU — ${net} through`
-      : net > 0 ? `${net} gets through, leaving ${survive}`
-        : incoming > 0 ? 'Nothing gets through' : 'Nothing incoming',
-    W / 2, y + 26,
-  );
+  ctx.fillText(banner, W / 2, ROW.banner);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -548,7 +736,7 @@ function drawHud() {
   ctx.textAlign = 'right';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('CHARGES', W - 24, 30);
+  ctx.fillText('CHARGES — THEY KEEP BETWEEN TURNS', W - 24, 30);
   for (let i = 0; i < TUNING.maxCharges; i++) {
     const on = i < run.charges;
     const px = W - 30 - i * 17;
@@ -570,10 +758,17 @@ function drawHud() {
   ctx.font = '600 11px system-ui, sans-serif';
   ctx.fillText(
     run.rerollsLeft > 0
-      ? `${run.rerollsLeft} free reroll${run.rerollsLeft === 1 ? '' : 's'}`
+      ? run.rerollsLeft + ' free reroll' + (run.rerollsLeft === 1 ? '' : 's')
       : 'rerolls cost a charge',
     W - 24, 74,
   );
+  if (run.banked.length) {
+    ctx.fillStyle = ART.die.held;
+    ctx.fillText(
+      run.banked.length + ' die kept for next turn',
+      W - 24, 110,
+    );
+  }
 
   // What the dice are worth this run, because sharpening changes it.
   ctx.fillText(
@@ -614,10 +809,7 @@ function drawControls() {
   ctx.textAlign = 'center';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 11px system-ui, sans-serif';
-  ctx.fillText(
-    'Left/Right choose  ·  Up/Down bend a die  ·  Pick then Reroll  ·  Bank  ·  Go',
-    W / 2, H - 22,
-  );
+  ctx.fillText('A and D choose a die', W / 2, ROW.hint);
 }
 
 function render() {
@@ -626,7 +818,9 @@ function render() {
   drawRoom();
   drawEnemies();
   drawLedger();
+  drawRing();
   drawTable();
+  drawTools();
   particles.draw(ctx);
   ctx.restore();
 

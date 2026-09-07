@@ -2027,3 +2027,28 @@ together — so there is more of it behind cover, which is where banking pays.
 Hand-play set the sight range: at 26 two of the three tanks in the first wave
 had noticed before a new player touched a control, because the spawn sits about
 25 units from the front row. 20 now.
+
+## Phase 25 — Dungeon Dice: readable without reading anything
+
+The mechanics were measured and sound — the manipulator gap and the 5% robbery
+figure are untouched — and none of it was legible. A player saw five icons, a
+row of coloured totals, and a line of grey key names.
+
+- **What each face does**, under every die, always: `3 damage`, `3 block`,
+  `2 heal`, `+1 charge`, `nothing` — at this run's rates, so sharpening
+  visibly changes the dice rather than a hidden multiplier.
+- **What each tool costs**, as five cards that grey out when unaffordable.
+- **The ring, drawn.** "A blank is one nudge from a bolt" is the escape hatch
+  the design leans on and it was invisible. The selected die now shows what
+  bending it would make it — `▲ bolt  ▼ heart` — rather than a bare arrow.
+- **What is coming, in a sentence:** `12 incoming, 6 gets through — you end on
+  9`. The old version printed three totals and left the subtraction to the
+  reader. Enemies say `hits for 3 in 2 turns`, not `3 in 2`.
+
+A `ROW` table owns every vertical position, because the first attempt at all
+this scattered y values through the drawing code and three of the new rows
+landed on top of each other — the screen was **less** readable after the
+legibility fix than before it.
+
+Still learned rather than seen, and now labelled: charges keep between turns,
+and banked dice come back. No tuning changed.
