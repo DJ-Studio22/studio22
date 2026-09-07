@@ -39,7 +39,7 @@ import { AudioManager } from '../../engine/audio.js';
 import { ParticlePresets, ParticleSystem, randRange } from '../../engine/util.js';
 
 import {
-  Battle, KIND, TUNING, bounds, canHurt, tracePath,
+  Battle, KIND, STATE, TUNING, bounds, canHurt, hasLineOfSight, tracePath,
 } from './arena.js';
 
 const GAME_ID = 'tank-tactics';
@@ -96,11 +96,22 @@ const ART = {
     bounce: '#ffd45e',
     blocked: 'rgba(255,107,90,.42)',
   },
+  // The three states a tank can be in about you. This is the most important
+  // information on the screen after your own shell, so it gets its own colours
+  // rather than borrowing the hull's.
+  alert: {
+    asleep: 'rgba(226,238,250,.16)',
+    cone: 'rgba(226,238,250,.075)',
+    coneSeen: 'rgba(255,212,94,.16)',
+    waking: '#ffd45e',
+    awake: '#ff5a7a',
+  },
   hud: {
     label: 'rgba(226,238,250,.60)',
     value: '#f2f7fc',
     good: '#7fd6a6',
     warn: '#ffd45e',
+    bad: '#ff5a7a',
     panel: 'rgba(9,14,22,.82)',
     panelEdge: 'rgba(226,238,250,.14)',
   },
@@ -133,6 +144,7 @@ audio.define({
   hurt: { beep: { freq: 110, duration: 0.22, type: 'sawtooth', volume: 0.20 } },
   shield: { beep: { freq: 520, duration: 0.14, type: 'sine', volume: 0.14 } },
   wave: { beep: { freq: 440, duration: 0.26, type: 'triangle', volume: 0.18 } },
+  spotted: { beep: { freq: 760, duration: 0.09, type: 'square', volume: 0.15 } },
   over: { beep: { freq: 80, duration: 0.7, type: 'triangle', volume: 0.28 } },
 });
 
@@ -149,6 +161,7 @@ let time = 0;
 let lastBounceCount = 0;
 let lastHits = { bank: 0, direct: 0, deflect: 0 };
 let lastHp = TUNING.playerHp;
+let lastSightings = 0;
 
 function reset() {
   battle = new Battle();
@@ -158,6 +171,7 @@ function reset() {
   lastBounceCount = 0;
   lastHits = { bank: 0, direct: 0, deflect: 0 };
   lastHp = TUNING.playerHp;
+  lastSightings = 0;
   particles.clear();
 }
 
@@ -251,6 +265,11 @@ function update(dt) {
     audio.play('wave');
     waveFlash = 1;
   }
+
+  // Being noticed is a thing that happens TO you, so it gets a sound of its
+  // own rather than being something to spot in the corner of the eye.
+  if (battle.sightings > lastSightings) audio.play('spotted', { pitchVariance: 0.1 });
+  lastSightings = battle.sightings;
 
   if (!battle.running) finish();
 }
@@ -427,15 +446,96 @@ function drawTank(x, y, angle, colours, radius, options = {}) {
   ctx.fill();
 }
 
+/**
+ * The sight cone of a tank that has not noticed you.
+ *
+ * Drawn faint, and drawn at all only while the tank is holding — because the
+ * question it answers ("where can I walk without being seen") stops mattering
+ * the moment the answer is "it already saw you". It brightens when the player
+ * is actually inside it, which is the half-second of warning before the tank
+ * wakes.
+ */
+function drawSightCone(e) {
+  if (e.state !== STATE.HOLDING) return;
+  const p = battle.player;
+  const facing = Math.atan2(
+    e.postY + Math.sin(e.patrol) * TUNING.patrolRadius - e.y,
+    e.postX + Math.cos(e.patrol) * TUNING.patrolRadius - e.x,
+  );
+  const inside = hasLineOfSight(e, p, battle.cover)
+    && Math.hypot(p.x - e.x, p.y - e.y) <= TUNING.sightRange;
+
+  ctx.fillStyle = inside ? ART.alert.coneSeen : ART.alert.cone;
+  ctx.beginPath();
+  ctx.moveTo(sx(e.x), sy(e.y));
+  ctx.arc(sx(e.x), sy(e.y), TUNING.sightRange * SCALE, facing - 0.75, facing + 0.75);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function drawEnemies() {
+  for (const e of battle.enemies) drawSightCone(e);
+
   for (const e of battle.enemies) {
     const colours = e.kind === KIND.SNIPER ? ART.sniper
       : e.kind === KIND.BOUNCER ? ART.bouncer : ART.grunt;
-    const facing = Math.atan2(battle.player.y - e.y, battle.player.x - e.x);
+    const holding = e.state === STATE.HOLDING;
+    const facing = holding
+      ? Math.atan2(
+        e.postY + Math.sin(e.patrol) * TUNING.patrolRadius - e.y,
+        e.postX + Math.cos(e.patrol) * TUNING.patrolRadius - e.x,
+      )
+      : Math.atan2(battle.player.y - e.y, battle.player.x - e.x);
+
+    // A sleeping tank is drawn dimmer, so a screen of them reads as a place
+    // rather than as a wave of things already coming for you.
+    ctx.globalAlpha = holding ? 0.62 : 1;
     drawTank(e.x, e.y, facing, colours, TUNING.enemyRadius, {
       plated: !canHurt(e, { bounces: 0 }),
     });
+    ctx.globalAlpha = 1;
+
+    drawAlertMark(e);
   }
+}
+
+/** The moment a tank notices you, and the fact that it has. */
+function drawAlertMark(e) {
+  const x = sx(e.x);
+  const y = sy(e.y) - TUNING.enemyRadius * SCALE - 14;
+
+  if (e.state === STATE.HOLDING) {
+    // A small closed eye. Quiet, but present, so "not looking" is a state you
+    // can see rather than infer.
+    ctx.strokeStyle = ART.alert.asleep;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y + 3, 5, Math.PI * 0.15, Math.PI * 0.85);
+    ctx.stroke();
+    return;
+  }
+
+  if (e.state === STATE.ALERTED) {
+    // THE SIGHTING. A ring closing in over the second it takes to react, and a
+    // bang above it — break the line before the ring shuts and it goes back to
+    // sleep, which is the whole reason the state is a second long.
+    const share = 1 - e.alert / TUNING.alertSeconds;
+    ctx.strokeStyle = ART.alert.waking;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 16 - share * 8, -Math.PI / 2, -Math.PI / 2 + share * Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = ART.alert.waking;
+    ctx.font = '800 17px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('!', x, y + 6);
+    return;
+  }
+
+  ctx.fillStyle = ART.alert.awake;
+  ctx.font = '800 17px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('!', x, y + 6 + Math.sin(time * 9) * 1.5);
 }
 
 function drawPlayer() {
@@ -511,6 +611,17 @@ function drawHud() {
   ctx.fillText(
     p.shield ? 'SHIELD UP' : `SHIELD ${Math.ceil(p.shieldTimer)}s`,
     W - 24, 36,
+  );
+
+  // How much of the wave is awake. The number that says whether you are
+  // picking a room apart or being hunted across it.
+  const awake = battle.enemies.filter((e) => e.state !== STATE.HOLDING).length;
+  ctx.textAlign = 'right';
+  ctx.fillStyle = awake === 0 ? ART.hud.good : awake < battle.enemies.length ? ART.hud.warn : ART.hud.bad;
+  ctx.font = '700 12px system-ui, sans-serif';
+  ctx.fillText(
+    awake === 0 ? 'NOBODY HAS SEEN YOU' : `${awake} of ${battle.enemies.length} HUNTING`,
+    W - 24, 56,
   );
 
   // The one line of teaching this game needs, shown until the player has

@@ -1993,3 +1993,37 @@ and pass" against "never, go round" — and at 125 the two looked the same. Shut
 doors are brighter now while staying clearly dimmer than the same door open.
 
 20 assertions; suite 377 → 397.
+
+## Phase 24 — Tank Tactics: a wave you move through
+
+Every tank spawned and drove straight at the player, so a wave was one
+undifferentiated rush. `enemySpeed` is halved, and a tank now has three states:
+
+- **HOLDING** — has not seen you. Walks a slow circle round the post it
+  spawned on. Drawn dimmer, with a faint sweeping sight cone and a closed eye.
+- **ALERTED** — has just seen you, and takes 0.9s to react. A ring closes over
+  that second with a bang above it and a sound of its own. **Break the
+  sightline before the ring shuts and it goes back to sleep** — which is what
+  makes a sightline something to manage rather than something to discover.
+- **ENGAGED** — hunting, and it stays hunting. A tank that forgets you when you
+  duck is a tank you farm from one corner.
+
+Sight is line of sight plus a range, both of which a player can reason about.
+The HUD says `NOBODY HAS SEEN YOU` or `2 of 3 HUNTING`.
+
+### The ricochet gap widened rather than flattened
+
+| | waves (median) | p90 | best | ricochet hits |
+|---|---:|---:|---:|---:|
+| direct — before | 4 | 4 | 4 | 0 |
+| direct — after | 4 | 4 | 4 | 8 |
+| bank — before | 6 | 8 | 9 | 471 |
+| **bank — after** | **8** | **10** | **12** | **1477** |
+
+The direct bot still walls at exactly 4 where the dug-in tanks start. More of
+the wave is alive at once now, because it no longer rushes in and dies
+together — so there is more of it behind cover, which is where banking pays.
+
+Hand-play set the sight range: at 26 two of the three tanks in the first wave
+had noticed before a new player touched a control, because the spawn sits about
+25 units from the front row. 20 now.
