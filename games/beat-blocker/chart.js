@@ -330,6 +330,15 @@ export function judge(deltaMs, t = TUNING) {
  * { lane, block } — where the shield is and whether the button went down this
  * frame — so a stick, a keyboard and a thumb are all playing the same game.
  */
+/**
+ * How far ahead of itself the chart is dealt, beyond the approach time.
+ *
+ * A phrase is generated before any of its attacks could be on screen, which is
+ * the whole of the fix described in Session below. The extra second is slack so
+ * a slow frame can never eat into it.
+ */
+export const DEAL_AHEAD_MARGIN = 1.0;
+
 export class Session {
   constructor(tuning = TUNING) {
     this.t = tuning;
@@ -337,73 +346,135 @@ export class Session {
   }
 
   reset() {
-    this.phrase = 1;
-    this.time = 0;              // seconds since the phrase began
+    const t = this.t;
     this.score = 0;
     this.blocked = 0;
     this.perfects = 0;
     this.missed = 0;
     this.streak = 0;
     this.bestStreak = 0;
-    this.hearts = this.t.hearts;
-    this.lane = Math.floor(this.t.lanes / 2);
+    this.hearts = t.hearts;
+    this.lane = Math.floor(t.lanes / 2);
     // Where the shield actually IS, in lane units, as opposed to where it has
     // been told to go. Fractional while it is travelling.
     this.shield = this.lane;
     this.running = true;
     this.reason = null;
     this.lastJudge = null;
-    this.events = null;
-    this.bpm = bpmAt(1, this.t);
-    this.beat = beatSeconds(this.bpm);
-    this.#deal(-this.t.leadInBeats * this.beat);
+
+    // ONE CLOCK, RUNNING FROM THE START OF THE RUN, and every attack carries the
+    // absolute time it lands at.
+    //
+    // The first version kept a clock per phrase and dealt each phrase's attacks
+    // at the moment that phrase began. Every rule about the chart was fine --
+    // the reachability floors held, the seam anchoring held -- and the game was
+    // still unfair, because a rule about whether the SHIELD could get there is
+    // not a rule about whether the PLAYER could see it coming. An attack in the
+    // first 1.9 seconds of a phrase had never been on screen: measured over
+    // eight phrases, 18 of 78 attacks appeared with less than their full
+    // approach and the opening attack of most phrases appeared AT the strike
+    // line, warning -0.001s. Unblockable, and every test passed.
+    //
+    // That is convention 10 exactly: a check can be right about what it
+    // measures and blind to everything else. The floors measured travel time.
+    // Nothing measured visibility.
+    //
+    // So phrases are now dealt a full approach-and-a-bit before their first
+    // attack could be drawn, into one list on one timeline. There is no seam to
+    // fall through because there is no seam.
+    this.now = -t.leadInBeats * beatSeconds(bpmAt(1, t));
+    this.phrases = [];
+    this.events = [];
+    this.dealtTo = 0;
+    this.#dealAhead();
   }
 
-  #deal(carry = 0) {
-    this.bpm = bpmAt(this.phrase, this.t);
-    this.beat = beatSeconds(this.bpm);
-    this.length = this.t.beatsPerPhrase * this.beat;
+  // --- Dealing ------------------------------------------------------------
 
-    // What the shield was last asked to cover, expressed as an attack at a
-    // negative time, so the floors apply across the seam as well as inside it.
-    const anchor = this.#seam();
-    this.events = buildPhrase(this.phrase, this.t, anchor).map((e, i) => ({
-      ...e, id: `${this.phrase}:${i}`, done: false,
-    }));
-    this.time = carry;
+  #dealAhead() {
+    const horizon = this.now + this.t.approachSeconds + DEAL_AHEAD_MARGIN;
+    // At least one, always: during the run-up the clock is still negative and
+    // the horizon has not reached zero, so a plain while() would leave the
+    // session with no phrase at all.
+    while (this.phrases.length === 0 || this.dealtTo <= horizon) this.#dealPhrase();
   }
 
-  /** The last attack of the phrase just finished, in the new phrase's clock. */
-  #seam() {
-    if (!this.events || !this.events.length) {
-      // The very first phrase. The run-up is the anchor: the shield starts in
-      // the middle lane and has four beats of music before anything arrives.
-      return { time: -this.t.leadInBeats * this.beat, lane: Math.floor(this.t.lanes / 2) };
+  #dealPhrase() {
+    const t = this.t;
+    const n = this.phrases.length + 1;
+    const bpm = bpmAt(n, t);
+    const beat = beatSeconds(bpm);
+    const length = t.beatsPerPhrase * beat;
+    const start = this.dealtTo;
+
+    // The last attack already dealt, expressed in this phrase's own clock, so
+    // the reachability floors apply across the join as well as inside it.
+    const previous = this.events[this.events.length - 1];
+    const anchor = previous
+      ? { time: previous.time - start, lane: previous.lane }
+      : { time: -t.leadInBeats * beat, lane: Math.floor(t.lanes / 2) };
+
+    for (const [i, event] of buildPhrase(n, t, anchor).entries()) {
+      this.events.push({
+        ...event, time: start + event.time, id: `${n}:${i}`, phrase: n, done: false,
+      });
     }
-    const last = this.events[this.events.length - 1];
-    return { time: last.time - this.length, lane: last.lane };
+
+    this.phrases.push({ n, start, end: start + length, bpm, beat, length });
+    this.dealtTo = start + length;
   }
 
-  /** Beat times for the phrase, which is what the music is built from. */
+  /** The phrase the clock is in right now. Before the run-up ends, the first. */
+  get current() {
+    for (let i = this.phrases.length - 1; i >= 0; i--) {
+      if (this.now >= this.phrases[i].start) return this.phrases[i];
+    }
+    return this.phrases[0];
+  }
+
+  get phrase() { return this.current.n; }
+
+  get bpm() { return this.current.bpm; }
+
+  get beat() { return this.current.beat; }
+
+  get length() { return this.current.length; }
+
+  get phraseStart() { return this.current.start; }
+
+  /** The clock, which every attack's time is measured against. */
+  get time() { return this.now; }
+
+  set time(value) { this.now = value; }
+
+  /** Beat times of the current phrase, absolute. The music is built from these. */
   get beatTimes() {
+    const { start, beat } = this.current;
     const out = [];
-    for (let i = 0; i < this.t.beatsPerPhrase; i++) out.push(i * this.beat);
+    for (let i = 0; i < this.t.beatsPerPhrase; i++) out.push(start + i * beat);
     return out;
   }
 
-  /** Attacks close enough to be on screen. */
+  /**
+   * Attacks close enough to be on screen.
+   *
+   * Every one of these entered at the spawn line and travelled, because the
+   * chart is dealt further ahead than this window is wide.
+   */
   get incoming() {
     return this.events.filter(
-      (e) => !e.done && e.time > this.time - 0.3 && e.time < this.time + this.t.approachSeconds,
+      (e) => !e.done && e.time > this.now - 0.3 && e.time < this.now + this.t.approachSeconds,
     );
   }
+
+  // --- Judging ------------------------------------------------------------
 
   /** The attack a press would be judged against: nearest unjudged, in lane. */
   targetIn(lane) {
     let best = null;
     for (const event of this.events) {
       if (event.done || event.lane !== lane) continue;
-      const delta = Math.abs(event.time - this.time) * 1000;
+      const delta = Math.abs(event.time - this.now) * 1000;
       if (delta > this.t.goodMs) continue;
       if (!best || delta < best.delta) best = { event, delta };
     }
@@ -423,7 +494,7 @@ export class Session {
     if (lane === null) return null;
     const target = this.targetIn(lane);
     if (!target) return null;
-    const verdict = judge((target.event.time - this.time) * 1000, this.t);
+    const verdict = judge((target.event.time - this.now) * 1000, this.t);
     if (!verdict) return null;
 
     target.event.done = true;
@@ -433,7 +504,7 @@ export class Session {
     this.bestStreak = Math.max(this.bestStreak, this.streak);
     if (this.streak % this.t.healStreak === 0 && this.hearts < this.t.hearts) {
       this.hearts++;
-      this.healed = this.time;
+      this.healed = this.now;
     }
     if (verdict === JUDGE.PERFECT) {
       this.perfects++;
@@ -441,7 +512,7 @@ export class Session {
     } else {
       this.score += this.t.goodScore;
     }
-    this.lastJudge = { verdict, at: this.time, lane };
+    this.lastJudge = { verdict, at: this.now, lane };
     return verdict;
   }
 
@@ -451,7 +522,7 @@ export class Session {
     this.missed++;
     this.streak = 0;
     this.hearts--;
-    this.lastJudge = { verdict: JUDGE.MISS, at: this.time, lane: event.lane };
+    this.lastJudge = { verdict: JUDGE.MISS, at: this.now, lane: event.lane };
     if (this.hearts <= 0) {
       this.hearts = 0;
       this.running = false;
@@ -465,7 +536,7 @@ export class Session {
     if (typeof input.lane === 'number') {
       this.lane = Math.max(0, Math.min(this.t.lanes - 1, Math.round(input.lane)));
     }
-    this.time += dt;
+    this.now += dt;
 
     // The shield travels. It does not arrive because you asked it to.
     const travel = dt / (this.t.laneMoveMs / 1000);
@@ -477,17 +548,18 @@ export class Session {
     // Anything now past the late edge of its window is a miss.
     const late = this.t.goodMs / 1000;
     for (const event of this.events) {
-      if (event.done) continue;
-      if (this.time - event.time > late) this.#miss(event);
+      if (event.done || this.now - event.time <= late) continue;
+      this.#miss(event);
       if (!this.running) return;
     }
 
-    if (this.time >= this.length) {
-      const carry = this.time - this.length;
-      this.phrase++;
-      // The overshoot is carried rather than dropped, or the chart would gain
-      // up to a frame of silence per phrase and drift away from the music.
-      this.#deal(carry);
-    }
+    this.#dealAhead();
+    this.#forget();
+  }
+
+  /** Drop attacks that are finished and off the back of the screen. */
+  #forget() {
+    if (this.events.length < 256) return;
+    this.events = this.events.filter((e) => !e.done || e.time > this.now - 2);
   }
 }

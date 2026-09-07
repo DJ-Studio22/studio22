@@ -27,22 +27,41 @@ import {
 import { SKILLS, runOnce } from './helpers/beat-bot.mjs';
 import { summarise, withSeed } from './helpers/seeded.mjs';
 
-/** Every attack a session deals over `phrases` phrases, in one flat list. */
+/**
+ * Every attack a session deals over `phrases` phrases, in one flat list.
+ *
+ * The chart is one list on one clock now, so this is a matter of running the
+ * session and collecting -- there is no per-phrase list to stitch back together
+ * and no seam to get wrong while stitching it.
+ */
 function chartAcross(phrases, tuning = TUNING) {
   const session = new Session(tuning);
-  const all = [];
-  let elapsed = 0;
-  while (session.phrase <= phrases) {
-    const length = session.length;
-    for (const event of session.events) all.push({ ...event, time: event.time + elapsed });
-    elapsed += length;
-    // Drive it over the seam the way step() does, so the anchoring between one
-    // phrase and the next is exercised rather than assumed.
-    session.time = length - 1e-6;
-    session.hearts = TUNING.hearts + 99;
-    session.step(2e-6, {});
+  const seen = new Map();
+  let guard = 0;
+  while (session.phrase <= phrases && guard++ < 4_000_000) {
+    for (const event of session.events) if (!seen.has(event.id)) seen.set(event.id, { ...event });
+    session.hearts = tuning.hearts + 99;      // never end the run; this is about the chart
+    session.step(1 / 30, {});
   }
-  return all;
+  return [...seen.values()].sort((a, b) => a.time - b.time);
+}
+
+/**
+ * How much warning each attack got: the gap between first appearing in the
+ * session's list and having to be blocked.
+ */
+function warnings(phrases, tuning = TUNING) {
+  const session = new Session(tuning);
+  const first = new Map();
+  let guard = 0;
+  while (session.phrase <= phrases && guard++ < 4_000_000) {
+    for (const event of session.events) {
+      if (!first.has(event.id)) first.set(event.id, event.time - session.time);
+    }
+    session.hearts = tuning.hearts + 99;
+    session.step(1 / 120, {});
+  }
+  return [...first.values()];
 }
 
 // --- The window -----------------------------------------------------------
@@ -142,6 +161,45 @@ test('a press only counts in the lane the shield is covering', () => {
 });
 
 // --- The opening ----------------------------------------------------------
+
+test('EVERY ATTACK ENTERS FROM THE SPAWN LINE AND TRAVELS', () => {
+  // The fault this test was written for, and it shipped: the chart used to be
+  // dealt a phrase at a time, at the moment the phrase began, so an attack in
+  // the first approach-second of a phrase had never been on screen. Measured
+  // over eight phrases, 18 of 78 attacks appeared with less than the full
+  // approach and the FIRST attack of most phrases appeared at the strike line
+  // with a warning of -0.001 seconds. Unblockable, and every other test passed.
+  //
+  // The reachability floors were never wrong -- they are about whether the
+  // SHIELD can get there, and it could. Nothing was about whether the player
+  // could see it coming. Convention 10: right about what it measures, blind to
+  // everything else.
+  for (const seed of [1, 3, 7]) {
+    withSeed(seed, () => {
+      const seen = warnings(12);
+      const worst = Math.min(...seen);
+      assert.ok(seen.length > 60, 'not enough attacks to prove anything');
+      assert.ok(worst >= TUNING.approachSeconds - 1e-6,
+        `an attack appeared with ${worst.toFixed(3)}s of warning against an approach `
+        + `of ${TUNING.approachSeconds}s`);
+    });
+  }
+});
+
+test('and the chart is dealt further ahead than the screen is deep', () => {
+  // Which is the mechanism behind the test above rather than a restatement of
+  // it: what is dealt has to cover the whole approach with room for a slow
+  // frame, or attacks would pop in again the moment the machine hiccupped.
+  withSeed(5, () => {
+    const session = new Session();
+    for (let i = 0; i < 2000; i++) {
+      session.hearts = TUNING.hearts + 99;
+      session.step(1 / 60, {});
+      assert.ok(session.dealtTo >= session.time + TUNING.approachSeconds,
+        'the chart ran out in front of the player');
+    }
+  });
+});
 
 test('nothing is thrown at the player before the run-up is over', () => {
   // CLAUDE.md: the run-up before the first real threat is a number somebody

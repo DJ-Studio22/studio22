@@ -161,7 +161,6 @@ let lastPhrase = 1;
 let lastHearts = TUNING.hearts;
 let lastBlocked = 0;
 let lastMissed = 0;
-let sounded = new Set();          // attack ids whose note has been played
 let navLatch = 0;
 
 function reset() {
@@ -177,7 +176,6 @@ function reset() {
   lastHearts = TUNING.hearts;
   lastBlocked = 0;
   lastMissed = 0;
-  sounded = new Set();
   navLatch = 0;
   particles.clear();
 }
@@ -230,10 +228,11 @@ function update(dt) {
   session.step(dt, { lane: wanted, block });
 
   if (session.phrase !== lastPhrase) {
-    // A new phrase, with a fresh set of attack ids and a beat of its own.
+    // A new phrase, with a beat of its own. Nothing is discarded: the chart is
+    // one list on one clock, and the attacks of the phrase after this one have
+    // already been dealt and are already falling.
     lastPhrase = session.phrase;
     lastBeatIndex = -1;
-    sounded = new Set();
     audio.play('phrase');
   }
 
@@ -242,15 +241,18 @@ function update(dt) {
   // it — which is the whole reason the music cannot drift out of time with the
   // game. There is nothing here keeping two clocks in step, because there is
   // only one clock.
-  const beatIndex = Math.floor(session.time / session.beat);
+  const beatIndex = Math.floor((session.time - session.phraseStart) / session.beat);
   if (session.time >= 0 && beatIndex !== lastBeatIndex && beatIndex < TUNING.beatsPerPhrase) {
     lastBeatIndex = beatIndex;
     if (beatIndex % 4 === 0) { audio.play('kick'); barPulse = 1; } else audio.play('tick');
     beatPulse = 1;
   }
   for (const event of session.events) {
-    if (sounded.has(event.id) || event.time > session.time) continue;
-    sounded.add(event.id);
+    if (event.sounded || event.time > session.time) continue;
+    // Marked on the attack rather than kept in a set beside it, because the
+    // chart is now one long list that gets pruned from the front -- a set of
+    // ids would grow for as long as the run does.
+    event.sounded = true;
     audio.play(`note${event.lane % 3}`);
   }
 

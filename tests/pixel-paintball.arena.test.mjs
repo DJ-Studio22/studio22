@@ -56,6 +56,13 @@ test('GROUND IS COVERED BY WALKING OVER IT, not by standing on it', () => {
   // had to change: while shots painted a line as they flew, hunting covered
   // the arena for free and the whole sweep was meaningless.
   const arena = new Arena();
+  // NO BOTS. Without this the test measures the player's coverage minus
+  // whatever the bots happened to repaint while it ran, which is not a
+  // constant -- it went red on CI having passed locally four times, because
+  // the second half asserts an exact figure and the bots were quietly moving
+  // it. Convention 12 again: it was passing on an accident.
+  arena.bots = [];
+  arena.shots = [];
   arena.cells.fill(OWNER.NONE);
   const before = arena.holdings().player;
 
