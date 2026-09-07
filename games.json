@@ -292,5 +292,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 120,
     "status": "live"
+  },
+  {
+    "id": "rift-runner",
+    "title": "Rift Runner",
+    "tagline": "Every portal changes the rules.",
+    "description": "An endless runner with three verbs — jump, slide, and a dash that phases you through solid rift walls. Every so often a portal opens on clear ground, and going through it rewrites the physics: how far you jump, how hard you fall, how fast you run, and in one of them, which way is down. The obstacle patterns are hand-authored phrases rather than random spikes, and every one is provably clearable in every world it can appear in.",
+    "category": "arcade",
+    "path": "/games/rift-runner/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "runner",
+      "endless",
+      "reflex",
+      "portals",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 90,
+    "status": "live"
   }
 ]
