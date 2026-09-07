@@ -971,6 +971,57 @@ function asteroidSalvage() {
   return out + '</svg>';
 }
 
+/**
+ * Beat Blocker -- three lanes, one shield, and the chart falling down them.
+ *
+ * The card has to say rhythm rather than shooter, so the attacks are drawn on
+ * a visible grid of beats: the pulse lines are what make a column of diamonds
+ * read as music instead of as falling rocks. The shield sits under one lane
+ * and the other two are empty, which is the decision the game is made of.
+ */
+function beatBlocker() {
+  const laneX = (i) => 90 + i * 70;
+  const diamond = (x, y, r) => '<path d="M' + x + ' ' + (y - r) + ' L' + (x + r * 0.86) + ' ' + y
+    + ' L' + x + ' ' + (y + r) + ' L' + (x - r * 0.86) + ' ' + y + ' Z"'
+    + ' fill="#ff7b52" stroke="#8f2f18" stroke-width="2"/>'
+    + '<circle cx="' + x + '" cy="' + y + '" r="' + (r * 0.3) + '" fill="#ffd7a1"/>';
+
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="beatblk-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#0b0a16"/><stop offset="1" stop-color="#15122a"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#beatblk-sky)"/>';
+
+  // The lanes.
+  for (let i = 0; i < 3; i++) {
+    out += '<rect x="' + (laneX(i) - 32) + '" y="10" width="64" height="150" rx="6"'
+      + ' fill="rgba(126,116,240,' + (i === 1 ? '.13' : '.055') + ')"'
+      + ' stroke="rgba(150,140,255,.22)" stroke-width="2"/>';
+  }
+
+  // The pulse: four beats of grid, so the card reads as music.
+  for (let b = 0; b < 4; b++) {
+    const y = 32 + b * 32;
+    out += '<line x1="52" y1="' + y + '" x2="268" y2="' + y + '"'
+      + ' stroke="rgba(180,170,255,' + (b === 0 ? '.34' : '.13') + ')" stroke-width="2"/>';
+  }
+
+  out += diamond(laneX(1), 32, 16) + diamond(laneX(0), 64, 16) + diamond(laneX(2), 96, 16);
+
+  // The strike line, and the shield under the middle lane.
+  out += '<line x1="52" y1="146" x2="268" y2="146" stroke="#ffe9a8" stroke-width="4"/>'
+    + '<ellipse cx="' + laneX(1) + '" cy="146" rx="42" ry="13" fill="rgba(84,230,200,.28)"/>'
+    + '<path d="M' + (laneX(1) - 32) + ' 158 L' + (laneX(1) - 22) + ' 134 L'
+    + (laneX(1) + 22) + ' 134 L' + (laneX(1) + 32) + ' 158 Z"'
+    + ' fill="#54e6c8" stroke="#126f5e" stroke-width="2"/>'
+    + '<rect x="' + (laneX(1) - 14) + '" y="139" width="28" height="4" fill="#d8fff5"/>';
+
+  // The verdict, which is the only word the card needs.
+  out += '<text x="160" y="186" text-anchor="middle" font-family="system-ui,sans-serif"'
+    + ' font-size="17" font-weight="800" fill="#ffe9a8">PERFECT</text>';
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -994,6 +1045,7 @@ const ART = {
   'dungeon-dice': dungeonDice,
   'color-heist': colorHeist,
   hangman,
+  'beat-blocker': beatBlocker,
   'asteroid-salvage': asteroidSalvage,
 };
 

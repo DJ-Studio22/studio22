@@ -478,5 +478,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 240,
     "status": "live"
+  },
+  {
+    "id": "beat-blocker",
+    "title": "Beat Blocker",
+    "tagline": "The music is made out of the chart.",
+    "description": "Three lanes, one shield, and a tempo that will not stop climbing. Attacks fall down the lanes; slide the shield across and block them on the beat, where being on the beat is worth triple. There is no soundtrack to follow because there is no soundtrack: the engine synthesises tones, so the chart is the source of truth and the drums and notes are played from the same list of numbers the game judges you against, which is why the two can never drift apart. The judging windows are in milliseconds rather than fractions of a beat, so a faster phrase asks for more and never for more precision — and the shield takes real time to change lane, so a chart is only dealt if the shield could physically get there. Two hundred phrases were walked looking for one that could not be played. Attacks blocked, weighted by timing, is the score.",
+    "category": "arcade",
+    "path": "/games/beat-blocker/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "rhythm",
+      "reflex",
+      "music",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 180,
+    "status": "live"
   }
 ]
