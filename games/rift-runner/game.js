@@ -93,6 +93,7 @@ const ART = {
   runner: {
     body: '#f6f2e8', bodyEdge: '#12161f', visor: '#1b2436',
     trail: 'rgba(246,242,232,.24)',
+    limb: '#f6f2e8', limbEdge: '#12161f', head: '#f6f2e8',
   },
   obstacle: {
     spike: '#ff5a6e', spikeEdge: '#8c1f30',
@@ -153,6 +154,9 @@ let bestMetres = 0;
 const trail = [];
 for (let i = 0; i < 26; i++) trail.push({ x: 0, y: 0, life: 0, sliding: false });
 let trailHead = 0;
+// The stride, advanced by DISTANCE rather than by time, so the legs turn over
+// faster as the run speeds up instead of moon-walking at 900 px/s.
+let stepPhase = 0;
 
 function pushTrail(x, y, sliding) {
   const t = trail[trailHead];
@@ -209,6 +213,11 @@ function update(dt) {
   for (const t of trail) if (t.life > 0) t.life = Math.max(0, t.life - dt * 2.6);
 
   if (!running) return;
+
+  // Two strides per ~110px of ground covered.
+  if (course.run.grounded && !course.run.sliding) {
+    stepPhase += (course.run.speed * dt) / 110 * Math.PI * 2;
+  }
 
   const pad = Input.get();
   const wasGrounded = course.run.grounded;
@@ -417,10 +426,33 @@ function drawObstacles(p) {
   }
 }
 
+/**
+ * The runner, as a stick figure.
+ *
+ * It was a white rectangle with a visor on it, and the four verbs were
+ * indistinguishable: a jump was a rectangle higher up, a slide was a shorter
+ * rectangle, a dash was a rectangle with a glow. The game asks a player to
+ * pick a verb in about a third of a second and gave them no picture of which
+ * verb they had picked.
+ *
+ * A person is legible at a glance where a box is not. Limbs are drawn as
+ * capped lines from a small set of joint positions, one set per verb:
+ *
+ *   run    legs scissor, arms counter-swing, body upright
+ *   jump   legs tucked forward, arms thrown up — a shape only jumping makes
+ *   slide  body low and horizontal, trailing leg out, arm back
+ *   dash   leant hard forward, legs streaming behind, and the glow
+ *
+ * Everything is drawn inside the collision box the rules use, so the picture
+ * never claims more or less room than the runner actually occupies. In the
+ * flipped realm the whole figure is mirrored about the box, which is why 'up'
+ * is a variable here rather than a minus sign.
+ */
 function drawRunner(p) {
   const run = course.run;
   const box = bodyOf(run, course.realm, TUNING);
   const x = RUNNER_X - TUNING.bodyW / 2;
+  const flipped = course.realm.flipped;
 
   // Trail, densest right behind.
   for (const t of trail) {
@@ -428,7 +460,7 @@ function drawRunner(p) {
     ctx.globalAlpha = t.life * 0.3;
     ctx.fillStyle = ART.runner.trail;
     const h = t.sliding ? TUNING.slideHeight : TUNING.bodyH;
-    ctx.fillRect(x, course.realm.flipped ? t.y : t.y - h, TUNING.bodyW, h);
+    ctx.fillRect(x, flipped ? t.y : t.y - h, TUNING.bodyW, h);
   }
   ctx.globalAlpha = 1;
 
@@ -441,16 +473,111 @@ function drawRunner(p) {
     ctx.globalAlpha = 1;
   }
 
-  ctx.fillStyle = ART.runner.body;
-  ctx.fillRect(x, box.y, TUNING.bodyW, box.h);
-  ctx.strokeStyle = ART.runner.bodyEdge;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(x, box.y, TUNING.bodyW, box.h);
+  // Work in a space where +1 is always "toward the runner's head", so the
+  // flipped realm needs no second copy of any of this.
+  const up = flipped ? 1 : -1;
+  const feet = flipped ? box.y : box.y + box.h;
+  const cx = RUNNER_X;
+  const H = box.h;
+  const at = (fx, fh) => [cx + fx, feet + up * fh * H];
 
-  // A visor, so which way is up is never in doubt — which matters in Inverse.
-  ctx.fillStyle = ART.runner.visor;
-  const visorY = course.realm.flipped ? box.y + box.h - 12 : box.y + 6;
-  ctx.fillRect(x + 5, visorY, TUNING.bodyW - 10, 6);
+  const cycle = stepPhase;
+  const swing = Math.sin(cycle);
+  const swing2 = Math.sin(cycle + Math.PI);
+
+  let hip, shoulder, head, legA, legB, kneeA, kneeB, armA, armB, lean;
+
+  if (run.sliding) {
+    // Low and long: the body is nearly along the ground and the trailing leg
+    // is straight out behind, which no other verb looks like.
+    lean = 0;
+    hip = at(-2, 0.34);
+    shoulder = at(-11, 0.52);
+    head = at(-17, 0.72);
+    kneeA = at(8, 0.30); legA = at(15, 0.06);
+    kneeB = at(-9, 0.16); legB = at(-17, 0.05);
+    armA = at(4, 0.30);
+    armB = at(-19, 0.28);
+  } else if (run.phasing) {
+    // Leant hard forward with both legs streaming behind.
+    lean = 0;
+    hip = at(-4, 0.42);
+    shoulder = at(7, 0.72);
+    head = at(13, 0.92);
+    kneeA = at(-14, 0.34); legA = at(-24, 0.18);
+    kneeB = at(-11, 0.46); legB = at(-22, 0.40);
+    armA = at(15, 0.60);
+    armB = at(-8, 0.80);
+  } else if (!run.grounded) {
+    // Airborne. Rising is a tuck with the arms up; falling reaches for the
+    // ground, so the two halves of a jump do not look the same.
+    const rising = run.vy * (flipped ? 1 : -1) > 0;
+    lean = 0;
+    hip = at(-1, 0.44);
+    shoulder = at(-3, 0.74);
+    head = at(-4, 0.94);
+    if (rising) {
+      kneeA = at(9, 0.36); legA = at(13, 0.16);
+      kneeB = at(-6, 0.30); legB = at(-14, 0.16);
+      armA = at(8, 0.92); armB = at(-11, 0.88);
+    } else {
+      kneeA = at(6, 0.26); legA = at(9, 0.02);
+      kneeB = at(-8, 0.28); legB = at(-11, 0.06);
+      armA = at(12, 0.62); armB = at(-13, 0.60);
+    }
+  } else {
+    // Running. The legs scissor and the arms counter-swing, which is the whole
+    // trick to a stick figure reading as a person rather than as a letter.
+    lean = 3;
+    hip = at(lean - 1, 0.44);
+    shoulder = at(lean + 2, 0.74);
+    head = at(lean + 4, 0.94);
+    kneeA = at(lean + swing * 8 + 3, 0.26);
+    legA = at(lean + swing * 13, 0.02 + Math.max(0, swing) * 0.10);
+    kneeB = at(lean + swing2 * 8 + 3, 0.26);
+    legB = at(lean + swing2 * 13, 0.02 + Math.max(0, swing2) * 0.10);
+    armA = at(lean + swing2 * 11, 0.54);
+    armB = at(lean + swing * 11, 0.54);
+  }
+
+  const bone = (a, b, c) => {
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    if (c) ctx.lineTo(b[0], b[1]);
+    ctx.lineTo((c || b)[0], (c || b)[1]);
+    ctx.stroke();
+  };
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  // Drawn twice: a dark stroke under a light one, so the figure holds against
+  // both the pale Surface ground and the near-black void of a gap.
+  for (const pass of [
+    { colour: ART.runner.limbEdge, limb: 7.5, spine: 9.5, head: 8.2 },
+    { colour: ART.runner.limb, limb: 4, spine: 6, head: 5.6 },
+  ]) {
+    ctx.strokeStyle = pass.colour;
+    ctx.fillStyle = pass.colour;
+
+    ctx.lineWidth = pass.limb;
+    bone(hip, kneeB, legB);
+    bone(shoulder, armB);
+
+    ctx.lineWidth = pass.spine;
+    bone(hip, shoulder);
+
+    ctx.lineWidth = pass.limb;
+    bone(hip, kneeA, legA);
+    bone(shoulder, armA);
+
+    ctx.beginPath();
+    ctx.arc(head[0], head[1], pass.head, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
 }
 
 function drawHud(p) {

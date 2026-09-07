@@ -61,7 +61,13 @@ export const TUNING = {
   // Run speed. Rises without a ceiling — this is the only thing that makes an
   // endless run end.
   baseSpeed: 340,
-  speedPerKm: 26,
+  // 26 to begin with, and it ramped faster than the course could be read.
+  // Worth being precise about what this number does and does not do: over a
+  // median run of 650m it only ever contributed 5% of the speed, so the seeded
+  // distributions barely move when it changes. What it changed is the FEEL of a
+  // long run, where the course stops being legible before it stops being
+  // survivable. More than halved.
+  speedPerKm: 10,
 
   // The jump, stated at baseSpeed. Everything else is derived so that this
   // jump always covers the same ground in TILES.
@@ -99,7 +105,17 @@ export const TUNING = {
 
   // The dash. This is the rift-phase: for its duration the runner is between
   // realms and passes through rift walls. Same 1/speed scaling.
-  dashTime: 0.20,
+  //
+  // 0.20 covers 92px of phasing against a 40px wall, which leaves a 52px
+  // window to start the dash in — about 0.15 seconds. That is the SLIDE FAULT
+  // again, exactly: a window smaller than a person can aim at, dressed up as a
+  // skill. It was invisible until the rift gates stopped gifting free ground,
+  // and then the first-rift phrase was killing the competent bot 53 times in 60.
+  //
+  // 0.45 covers 207px, so the window is about 165px and a fifth of a second.
+  // The verb is unchanged and mistiming still kills; it is now possible to
+  // time it without measuring pixels.
+  dashTime: 0.45,
   dashCooldown: 0.85,
   dashSpeedBonus: 1.35,
 
@@ -111,19 +127,84 @@ export const TUNING = {
   // reset and read the next one.
   restTiles: 4,
 
-  // How often a rift opens, in metres.
+  // How often a rift opens, in metres — and this has now been wrong in BOTH
+  // directions.
   //
-  // 220 to begin with, and the bots said that was wrong in the plainest way
-  // available: the median run of BOTH skill levels entered zero rifts. The
-  // portals are the whole hook of the game and nobody was living long enough
-  // to see one. The first is early enough that a first run meets it; after
-  // that they come often enough to keep the rules moving.
-  firstRiftMetres: 45,
-  realmMetres: 95,
+  // 220 to begin with: the median run of both skills entered zero rifts, which
+  // is the whole hook of the game going unseen. Then 45/95, which fixed that
+  // and overcorrected — a competent run passed three portals and a good one
+  // six, and a thing that happens six times in a run is scenery, not an event.
+  //
+  // Now the gaps GROW. The first is at 500m, which a competent run reaches
+  // sometimes and a good one usually; the second at 2000m, which is past the
+  // ninetieth percentile of either. After that each gap is half again as long
+  // as the last, so a fourth realm is somebody's best run rather than
+  // something a run hands out on the way past.
+  //
+  //   rift 1   500m        rift 3  4250m
+  //   rift 2  2000m        rift 4  7625m
+  // How deep into a run the pattern tiers unlock, in metres.
+  //
+  // Tuning data rather than constants in patterns.js because moving the rifts
+  // out to 500m invalidated the numbers that were there: 120/350/700 had been
+  // TIGHTENED against a course that handed out ten tiles of free ground every
+  // 95m at a rift gate. Take the gates away and the same schedule is brutal —
+  // a competent run went from a median of 350m to 97m without a single
+  // pattern changing.
+  tierMetres: [260, 900, 1900],
+
+  firstRiftMetres: 500,
+  riftGapMetres: 1500,
+  riftGapGrowth: 1.5,
+
+  // How often the course BREATHES, in metres — a wide clear stretch with
+  // nothing in it.
+  //
+  // This used to be the same number as the rift spacing, because the clear
+  // stretch existed only to stand a portal in. Separating them was forced by
+  // measurement and it is the most surprising thing the harness has said about
+  // this game: take the clear stretches away and a competent run falls from
+  // 550m to 97m, and a good one from 872m to 126m. The breathing was carrying
+  // the whole course and the portal was riding on it.
+  //
+  // So the breath stays on the old rhythm and only the PORTAL is rare. The
+  // course reads the same; a rift is now an event.
+  breathMetres: 95,
+
+  // And how WIDE the breath is, in tiles.
+  //
+  // This is the number the stale cursor was handing out by accident, made
+  // deliberate — which is the run-up convention applied to the middle of a run
+  // rather than the start of it. A stretch of clear ground the course depends
+  // on is a number somebody chose and can point at, never a side effect of
+  // where the dealer happened to be standing.
+  breathTiles: 30,
 };
 
 /** Metres, for the score. */
 export const PIXELS_PER_METRE = 30;
+
+/**
+ * Where the nth rift falls, in metres. n is 1-based.
+ *
+ * A pure function rather than a counter carried on the Course, so the whole
+ * progression can be read at a glance and asserted without dealing a course:
+ *
+ *   1   500m      3  4250m      5  12875m
+ *   2  2000m      4  7625m
+ *
+ * The gaps grow, which is what makes a fourth realm somebody's best run rather
+ * than something a run hands out on the way past.
+ */
+export function riftAt(n, tuning = TUNING) {
+  let at = tuning.firstRiftMetres;
+  let gap = tuning.riftGapMetres;
+  for (let i = 1; i < n; i++) {
+    at += gap;
+    gap *= tuning.riftGapGrowth;
+  }
+  return at;
+}
 
 // --- The realms -----------------------------------------------------------
 //

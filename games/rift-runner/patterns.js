@@ -36,7 +36,7 @@
 
 import {
   KIND, PIXELS_PER_METRE, REALMS, Run, SOLVER_FINE, TILE, TUNING,
-  isClearable, realmById,
+  isClearable, realmById, riftAt,
 } from './rift.js';
 
 // Shorthand so a pattern reads as a shape rather than as JSON.
@@ -70,6 +70,14 @@ export const PATTERNS = [
     id: 'first-gap', tier: 0, tiles: 7, realms: ALL,
     obstacles: [gap(3, 2)],
   },
+  // Slide and dash STAY at tier 0, and that was measured rather than assumed.
+  //
+  // Moving them to tier 1 is the obvious fix for the opening being harsh, and
+  // it is the wrong one: it took the competent median from 154m to 352m and
+  // the good median from 345m to 389m. That is not a difficulty change, it is
+  // forgiveness — it lifts the weak run and leaves the strong one where it
+  // was, and the skill gap collapses from 2.2x to 1.1x. Timing these two verbs
+  // IS the ceiling, so taking them out of the deck removes the ceiling.
   {
     id: 'first-bar', tier: 0, tiles: 7, realms: ALL,
     obstacles: [bar(3, 3, 1)],
@@ -175,16 +183,23 @@ export function patternsFor(realmId, tier) {
 /**
  * How deep into a run the tiers unlock, in metres.
  *
- * Tightened from 150/450/900 after the bots said the ramp was too slow: a
- * competent run had a median of 450m and spent nearly all of it on tier-0
- * patterns, which are one obstacle each. The rift gates make it worse by
- * handing out ten tiles of free ground every 95m. Escalating sooner is what
- * makes the last third of a run different from the first.
+ * The thresholds live in TUNING.tierMetres, because this schedule has had to
+ * be re-derived every time the course around it changed and a constant buried
+ * here could not be swept.
+ *
+ * 150/450/900 first, then tightened to 120/350/900 when a competent run was
+ * spending nearly all of a 450m median on tier-0 patterns. But that tightening
+ * was measured against a course dealing a rift gate every 95m — ten tiles of
+ * free ground, over and over. Spacing the rifts out to 500m and beyond removed
+ * that relief and the same schedule became brutal: the competent median fell
+ * from 350m to 97m with no pattern touched. Stretched back out to match the
+ * course that now exists.
  */
-export function tierAt(metres) {
-  if (metres < 120) return 0;
-  if (metres < 350) return 1;
-  if (metres < 700) return 2;
+export function tierAt(metres, tuning = TUNING) {
+  const [one, two, three] = tuning.tierMetres;
+  if (metres < one) return 0;
+  if (metres < two) return 1;
+  if (metres < three) return 2;
   return 3;
 }
 
@@ -269,7 +284,10 @@ export class Course {
     this.dealt = [];
     this.lastPatternId = null;
     this.riftsEntered = 0;
-    this.nextRiftMetres = this.t.firstRiftMetres;
+    // Which rift is next, and where riftAt() says it falls.
+    this.riftNumber = 1;
+    this.nextRiftMetres = riftAt(1, this.t);
+    this.nextBreathMetres = this.t.breathMetres;
     // Where the next gate stands, in tiles, or null when none is dealt.
     this.pendingGateTile = null;
     this.justShifted = false;
@@ -300,13 +318,20 @@ export class Course {
     // the cursor happened to be — which is up to 107m ahead, because the
     // course is dealt that far in advance. The first gate was landing at
     // ~150m instead of 45m, so a competent run died before ever seeing one.
-    if (this.cursorMetres >= this.nextRiftMetres && this.pendingGateTile === null) {
-      this.nextRiftMetres = this.cursorMetres + this.t.realmMetres;
-      this.#dealRiftGate();
+    // A BREATH: a wide clear stretch, dealt on its own rhythm. Sometimes it is
+    // also a rift.
+    if (this.cursorMetres >= this.nextBreathMetres && this.pendingGateTile === null) {
+      this.nextBreathMetres = this.cursorMetres + this.t.breathMetres;
+      const isRift = this.cursorMetres >= this.nextRiftMetres;
+      if (isRift) {
+        this.riftNumber++;
+        this.nextRiftMetres = riftAt(this.riftNumber, this.t);
+      }
+      this.#dealBreath(isRift);
       return;
     }
 
-    const tier = tierAt(this.metres);
+    const tier = tierAt(this.metres, this.t);
     let deck = patternsFor(this.run.realm.id, tier);
     // Never the same phrase twice running: repetition is the thing the whole
     // library exists to avoid.
@@ -339,10 +364,21 @@ export class Course {
    * a twist — and the player can see it coming, which a hook has to be able
    * to do.
    */
-  #dealRiftGate() {
-    this.pendingGateTile = this.cursorTile + GATE_TILES / 2;
-    this.dealt.push({ id: 'rift-gate', tile: this.cursorTile, tiles: GATE_TILES, gate: true });
-    this.cursorTile += GATE_TILES;
+  #dealBreath(isRift) {
+    const tiles = this.t.breathTiles;
+    if (isRift) {
+      // The portal stands in the middle of the clear stretch, so it is seen
+      // coming and landed for.
+      this.pendingGateTile = this.cursorTile + GATE_TILES / 2;
+    }
+    this.dealt.push({
+      id: isRift ? 'rift-gate' : 'breath',
+      tile: this.cursorTile,
+      tiles,
+      gate: isRift,
+      breath: true,
+    });
+    this.cursorTile += tiles;
     this.lastPatternId = null;
   }
 
@@ -364,11 +400,29 @@ export class Course {
     // Everything ahead was dealt for the old realm's physics. Throw it away
     // and re-deal, or the new realm inherits patterns it was never checked
     // against — the one thing the library check cannot catch.
+    //
+    // The cursor MUST come back to the frontier. It used to be
+    // Math.max(cursorTile, frontier), and since the dealer runs up to 2400px
+    // ahead, cursorTile always won — so the obstacles were deleted and the gap
+    // they left was never re-dealt. Every rift was quietly handing out about
+    // fifty-four tiles, seventy-two metres, of completely empty course.
+    //
+    // That is why spacing the rifts out looked catastrophic: the competent
+    // median fell from 550m to 97m, and nothing about the patterns had
+    // changed. The distance was never being run, it was being given.
     const frontier = Math.ceil(this.run.x / TILE) + 6;
     this.run.obstacles = this.run.obstacles.filter((o) => o.tile < frontier);
-    this.cursorTile = Math.max(this.cursorTile, frontier);
+    this.cursorTile = frontier;
     this.#fill();
   }
+  /**
+   * Deals ahead without playing, so a test can inspect the schedule the dealer
+   * follows without having to survive far enough to see it.
+   */
+  forceDeal() {
+    this.#fill();
+  }
+
   step(dt, input) {
     if (!this.run.running) return;
     this.justShifted = false;

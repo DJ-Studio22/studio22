@@ -1345,3 +1345,104 @@ The strategy bots were re-run against the finished game and the table above is
 unchanged to the run. The rework was presentation and the numbers prove it.
 
 25 KB gzipped 9.1. 18 assertions; suite 315 → 333.
+
+## Phase 17 — Rift Runner: a stick figure, and the distance that was never run
+
+Three changes asked for. The second of them turned over a rock.
+
+### The runner is a person now
+
+It was a white rectangle with a visor, and the four verbs were
+indistinguishable: a jump was a rectangle higher up, a slide a shorter one, a
+dash a rectangle with a glow. The game asks a player to pick a verb in about a
+third of a second and gave them no picture of which verb they had picked.
+
+Limbs are drawn as capped lines from one set of joint positions per verb —
+legs scissoring on the run, tucked with the arms thrown up on the way up,
+reaching on the way down, body flat with a trailing leg on a slide, leant hard
+forward with the legs streaming on a dash. Stroked twice, dark under light, so
+the figure holds against both the pale Surface ground and the near-black void
+of a gap. The stride advances by DISTANCE rather than by time, so the legs turn
+over faster as the run speeds up instead of moon-walking at 900 px/s.
+
+### The acceleration, more than halved
+
+`speedPerKm` 26 → 10. Worth being precise about what that number does: over a
+median run it only ever contributed about 5% of the speed, so the seeded
+distributions barely move. What it changed is the feel of a long run, where the
+course stopped being legible before it stopped being survivable.
+
+### THE DISTANCE WAS NEVER BEING RUN
+
+Spacing the rifts out to 500m was meant to be a pacing change. It dropped the
+competent median from 550m to 97m and nothing about the patterns had changed,
+which is not a pacing change, it is a symptom.
+
+`#crossGate` throws away every obstacle dealt ahead when the realm changes —
+correctly, because they were authored for the old physics. Then:
+
+```js
+this.cursorTile = Math.max(this.cursorTile, frontier);
+```
+
+The dealer runs up to 2400px ahead, so `cursorTile` always won. The obstacles
+were deleted and **the gap they left was never re-dealt**. Every rift was
+quietly handing out about fifty-four tiles — seventy-two metres — of completely
+empty course.
+
+At a rift every 95m, a run crossed four or five of them. The shipped medians of
+350m and 655m were roughly 84m of running and 270m of gift. Rift Runner has
+never been a 350m game. It is an 84m game with a bug inflating the score, and
+no test could see it because every test measured distance, which is exactly the
+quantity that was being falsified.
+
+One line. `this.cursorTile = frontier;`
+
+### What the fix exposed
+
+With the gift gone, `first-rift` was killing the competent bot 53 times in 60 —
+and that is the SLIDE FAULT again, exactly. The dash covers 92px of phasing
+against a 40px wall, so the window to start it in was 52px, about 0.15
+seconds. A window smaller than a person can aim at, dressed up as a skill.
+`dashTime` 0.20 → 0.45 makes the window about 165px and a fifth of a second.
+The verb is unchanged and mistiming still kills.
+
+The obvious second fix was to move `first-bar` and `first-rift` out of tier 0,
+and the harness said no. It took the competent median from 154m to 352m and the
+good median from 345m to 389m — that is forgiveness, not difficulty. It lifts
+the weak run and leaves the strong one alone, and the skill gap collapses from
+2.2x to 1.1x. Timing those two verbs IS the ceiling. They stayed.
+
+### The breath, separated from the portal
+
+The clear stretch existed only to stand a rift in, so spacing the rifts out
+took the breathing away with them. It is its own thing now — `breathMetres: 95`
+and `breathTiles: 30` — and only the PORTAL is rare. That is the run-up
+convention applied to the middle of a run rather than the start of it: a
+stretch of clear ground the course depends on is a number somebody chose and
+can point at, never a side effect of where the dealer happened to be standing.
+
+### Where the rifts fall, and how far runs go
+
+`riftAt(n)` is a pure function now, so the progression can be read at a glance
+and asserted without dealing a course: **500, 2000, 4250, 7625, 12688**.
+
+| | before (with the gift) | after |
+|---|---:|---:|
+| competent median | 550m | 154m |
+| competent p90 | 1158m | 196m |
+| good median | 872m | 345m |
+| good p90 | 2234m | 533m |
+| skill gap | 1.6x | **2.2x** |
+| competent runs reaching rift 1 | 93% | **0%** |
+| good runs reaching rift 1 | 100% | **10%** |
+
+**This needs a decision.** The distances are honest now and the skill gap is
+better than it has ever been, but the first portal sits above the ninetieth
+percentile of the good bot and no competent run reaches one at all. "Earned"
+was the brief and 500m certainly is; whether one run in ten is what was meant
+is a call about the game, not about the code.
+
+334 assertions, up from 333. Three tests rewritten: they asserted the old
+intent — that the first rift lands inside 90m and the median competent run
+enters at least one — which is precisely what this phase set out to change.

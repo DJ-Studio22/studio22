@@ -171,10 +171,17 @@ export function runOnce(skill, tuning = TUNING) {
     course.step(dt, decision);
   }
 
+  // The realm and the phrase a run ended on, which is what a distribution
+  // cannot tell you. Spacing the rifts out dropped the competent median from
+  // 350m to 97m and nothing about "median 97" says why; "89% of deaths were in
+  // surface, on wide-gap" does.
+  const last = course.dealt.filter((d) => !d.gate && d.tile * TILE <= course.run.x + TILE * 2).pop();
   return {
     metres: course.metres,
     reason: course.reason,
     rifts: course.riftsEntered,
     alive: course.running,
+    realm: course.realm.id,
+    pattern: last ? last.id : null,
   };
 }
