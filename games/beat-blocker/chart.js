@@ -177,6 +177,33 @@ export function subdivisionFor(phrase, t = TUNING) {
 export const densityFor = (phrase, t = TUNING) =>
   Math.min(t.densityMax, t.densityBase + (phrase - 1) * t.densityPerPhrase);
 
+/**
+ * WHERE THE CHART STOPS GETTING HARDER, and it is a real place.
+ *
+ * The tempo climbs to a cap, the subdivision goes to sixteenths and stops, and
+ * the movement dials reach their limits -- and past that point the reachability
+ * floors are the binding constraint, so packing in more only gets it spaced out
+ * again. Every phrase after this one is the same phrase.
+ *
+ * That is the honest end of the escalation rather than a failure of nerve: a
+ * chart faster than a hand is not a harder game, it is an unplayable one. But
+ * an endless game that quietly stops escalating reads as one that ran out of
+ * ideas, so the player is told. game.js draws it; this is the one place that
+ * decides it.
+ */
+export function ceilingPhrase(t = TUNING) {
+  const capped = (n) => bpmAt(n, t) >= t.bpmMax
+    && subdivisionFor(n, t) >= 4
+    && densityFor(n, t) >= t.densityMax
+    && movementFor(n, t).cross >= t.crossMax
+    && movementFor(n, t).far >= t.farMax;
+  for (let n = 1; n <= 2000; n++) if (capped(n)) return n;
+  return Infinity;
+}
+
+/** Has the chart reached the hardest it will ever be? */
+export const atCeiling = (phrase, t = TUNING) => phrase >= ceilingPhrase(t);
+
 const clamp = (value, max) => Math.min(max, value);
 
 /** How much moving a phrase asks for: chance of a change, chance it is far. */
