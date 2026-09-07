@@ -14,6 +14,10 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 14: Rift Runner — game one of a batch of five. Endless runner whose
+  portals change the physics, with a breadth-first SOLVER that proves every
+  obstacle pattern is clearable in every realm it can be dealt in. Fourteen
+  games live
 - Phase 13: CI on every push and pull request, and engine/ coverage taken from
   67 tests to 124. Covering the shared code immediately found Input.pressed('up')
   dead in two shipped games. Whole suite 208 -> 265
@@ -969,3 +973,131 @@ One trap worth recording: menu input is **not** handled by `shell.update()`.
 That returns false the moment a screen is open and does nothing else — overlays
 run on the shell's own frame loop, because the game loop is suspended while one
 is up. Driving a menu in a test means pumping the clock, not calling update().
+
+## Phase 14 — Rift Runner, and a solver that proves the game is possible
+
+Game one of a batch of five. `games/rift-runner/`, three files: `rift.js`
+(physics, realms, solver), `patterns.js` (the obstacle library and the course),
+`game.js` (canvas and nothing else).
+
+An endless runner with three verbs — jump, slide, and a dash that phases
+through solid rift walls — where the portals change the RULES rather than the
+backdrop. Distance is the score.
+
+### The five realms
+
+Each scales the physics differently, so the same obstacle asks a different
+question:
+
+| Realm | Jump travel | What it changes |
+|---|---:|---|
+| Surface | 5.1 tiles | the baseline everything is read against |
+| Drift | 8.2 tiles | half gravity — gaps are trivial, low bars are lethal |
+| Forge | 3.4 tiles | heavy and short — gaps need the dash |
+| Surge | 4.7 tiles | fast, but the dash returns almost instantly |
+| Inverse | 5.1 tiles | gravity points up; you run on the ceiling |
+
+### A SOLVER, not a playtest
+
+The fairness claim is not "this felt fine". `isClearable()` is a breadth-first
+search over the real physics step — the same one the game runs — and it either
+walks a route through a pattern or reports that none exists. `patterns.js`
+declares which realms each pattern is legal in and the test refuses any pair
+the solver cannot solve.
+
+That found four authoring faults in my own library, with the arithmetic to
+prove each:
+
+- `spike-under-bar` was impossible **by 4px**. Clearing a one-tile spike puts
+  the feet at 40px and the head at 84; the bar was hung at 80.
+- `double-rift` had its walls 7 tiles apart against a dash cycle of 9.6 tiles
+  in Drift — the second wall arrived while the dash was still cooling.
+- `spike-stutter` and `rift-sandwich` are impossible in Drift, where a floaty
+  8.2-tile jump cannot come down inside a two-tile window. Their realm lists
+  say so now.
+
+**And three faults in the solver itself**, which is the part worth recording:
+
+- **Global dedup pruned the act of running.** x advances 2.8px a step against
+  a 6px quantisation, so two consecutive steps often shared a key and the
+  later one was dropped as "already seen" — which drops the branch. 76 of 90
+  pairs failed, including a single jumpable spike. Dedup is per time-layer now.
+- **Budget exhaustion returned `false`.** The worst possible bug in a fairness
+  checker: "I gave up" and "impossible" were the same answer. Running it at a
+  finer setting to double-check made the state count explode, so it hit the
+  cap on 54 of 87 pairs and announced that one spike could not be jumped. It
+  throws `SolverBudget` now, and cannot be mistaken for a verdict.
+- **Coarse settings produce false negatives**, which is fine and now relied
+  on deliberately. Quantisation can only merge routes away, never invent one,
+  so a "clearable" is proof and an "unclearable" is a maybe. `verifyLibrary`
+  runs cheap settings (5.3s for the whole library) and re-checks every
+  rejection at a fine setting before believing it.
+
+### Speed invariance, designed in rather than patched
+
+Gravity scales with the square of the run speed and the jump impulse linearly
+with it, so a jump covers the same number of TILES at 340 px/s and at 3,400.
+Slide and dash durations scale as 1/speed. A pattern authored in tiles is
+clearable forever; what escalates is how much wall-clock time you have to read
+it.
+
+This is the third game to need it. Gravity Flip found it; Ember rediscovered
+it the hard way when its reachable band hit zero at 25 km. Here it was written
+in from the first line, and there is a test that walks five realms out to
+5,000 km to check nobody has undone it.
+
+### What the bots said, and what they got wrong
+
+**Nobody was seeing the portals.** The median run of both skill levels entered
+**zero** rifts, in a game whose entire hook is the rifts. Two causes:
+
+- The shift waited for a lull — grounded, nothing within six tiles — and
+  patterns are dealt four tiles apart, so it essentially never found one. A
+  rift is now DEALT as a wide clear gate, so it always arrives, always on flat
+  ground, and can be seen coming.
+- The gate was then scheduled off the RUNNER's distance while being placed at
+  the DEALER's cursor, up to 107m further on. The first gate was landing at
+  ~150m when a competent run ended at 124m. Scheduled by cursor now, so it
+  lands at 49m.
+
+**Bars killed 27 runs in 40, and were right to.** A 0.42s slide covers 143px
+against a 120px bar — a 23px window to start it in, which is not a skill, it
+is a coin toss. The slide is HELD now. The five-tile `long-bar` had been very
+nearly impossible outright.
+
+**And one finding that corrected me rather than the game.** I built the
+"good" bot with a longer lookahead, assuming reading further ahead is the
+skill. A parameter sweep says the opposite, clearly: longer lookahead made it
+*worse*, 57m against 98m, because reacting early means committing early, and
+committing early to a fixed-distance move is how you land in the gap you were
+trying to clear. Both bots read the same distance now. What separates them is
+reaction time, whether they compute where a jump arc has to START, and
+`misreadChance` — reaching for the wrong verb under pressure, which is the
+actual beginner error and worth 2.6x on its own.
+
+**Measured, 60 seeded runs per skill:**
+
+| | competent | good |
+|---|---:|---:|
+| median distance | 249 m | **658 m** |
+| 90th percentile | 660 m | 1,679 m |
+| best | 1,288 m | 3,120 m |
+| portals entered (median) | 2 | 6 |
+
+### THE FIRST THIRTY SECONDS, BY HAND — and it failed
+
+Per the rule Ember earned. Played against a production build, doing nothing at
+all for the opening.
+
+**Dead at 11 metres.** The first obstacle arrived **1.06 seconds** after the
+title screen cleared, while a new player is still reading the screen. Every
+bot was fine with it because every bot is running on frame one. The run-up is
+26 tiles now — 3.4 seconds of clear ground — and the same test survives.
+
+Playing it also found a readability fault no test would have: **the gaps were
+nearly invisible.** The sky gradient showed through them, and at the bottom of
+the screen it is within a few percent of the ground colour. Each realm has a
+near-black void behind the floor now; sampling the ground row of the canvas
+shows two clearly distinct colours where before there was one.
+
+Page weight: 24.6 KB gzipped. 28 new assertions; suite 265 → 293.
