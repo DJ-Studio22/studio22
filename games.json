@@ -432,5 +432,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 240,
     "status": "live"
+  },
+  {
+    "id": "hangman",
+    "title": "Hangman",
+    "tagline": "Every word can be reasoned out. That is the promise.",
+    "description": "Hangman with the unfairness taken out of it. Every word in the lexicon is proved solvable from the revealed positions and the ruled-out letters alone — a solver that reasons the way a player does is run over the whole list at every difficulty tier, and the hardest word costs it three wrong guesses of the six you are given. Six wrong a word, three lost rounds a run, and the lexicon gets longer and stranger as you go. A hint costs one of your six, so asking for help brings the gallows a step closer; and from round five the category stops being printed, which gives that one button two uses competing for the same price. Plays properly on a gamepad and a phone rather than falling back to a keyboard.",
+    "category": "learning",
+    "path": "/games/hangman/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "words",
+      "deduction",
+      "vocabulary",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 300,
+    "status": "live"
   }
 ]

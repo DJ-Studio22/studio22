@@ -2052,3 +2052,103 @@ legibility fix than before it.
 
 Still learned rather than seen, and now labelled: charges keep between turns,
 and banked dice come back. No tuning changed.
+
+## Phase 26 — Hangman, and a promise that can be checked
+
+`games/hangman/`, three files: `words.js` (the lexicon and nothing else),
+`gallows.js` (the rules and the solver) and `game.js`. Twenty games live.
+
+### The claim, and why it is the only one worth making
+
+Hangman has exactly one way of being unfair, and it is not "the word was
+hard":
+
+> **A word must be solvable by REASONING, not only by already knowing it.**
+
+Given the revealed positions, the letters ruled out and the length, a player
+who thinks should get there inside the budget. If the only route to CHIMPANZEE
+is having CHIMPANZEE in mind before you start, this is a quiz with a drawing
+attached.
+
+So there is a solver, and it does what a thinking player does: keep every word
+still consistent with the board, guess the letter that appears in most of them.
+
+| tier | words | solved by reasoning | worst case | solved by frequency alone |
+|---|---:|---:|---:|---:|
+| 0 | 50 | **50/50** | 3 wrong of 6 | 6/50 |
+| 1 | 48 | **48/48** | 3 wrong of 6 | 11/48 |
+| 2 | 46 | **46/46** | 2 wrong of 6 | 5/46 |
+
+Every word, every tier, with half the budget to spare. And reading the board is
+worth about five times guessing ETAOINSHRDLU blind, which is the other half of
+the claim — if those numbers were close the game would be a slot machine with
+an alphabet.
+
+**What the number does not mean, stated rather than glossed:** the solver
+reasons over the game's own word list. A person does not hold exactly these
+words, so this is not "x% of players will solve it". It is the stronger and
+more useful claim — *the information on the board is sufficient*. A word the
+solver cannot get is one where the board never narrowed enough, and that is the
+game's fault rather than the player's.
+
+The deduction that does most of the work is the one people make without
+noticing: **a letter already guessed, not showing here, cannot be here.** Take
+it out and the solver is markedly worse. There is a test for it alone.
+
+### The alphabet was the hard part
+
+Hangman on a keyboard is trivial and on anything else is usually a fudge. The
+letter grid is the one input model, and every device gets a real way to drive
+it:
+
+- **keyboard** — press the letter. `Input.isKeyHeld(code)` was added for this:
+  the layouts map codes onto named *actions*, which is the wrong shape for
+  twenty-six of the same action with an argument.
+- **gamepad** — walk the grid with the stick, confirm with A. It wraps at the
+  edges and **skips letters already spent**, so the route to any letter stays
+  short as the round goes on.
+- **touch** — put a finger on the letter. `Input.tapped()` was added for this:
+  it reports a touch that no touch button and no virtual stick claimed, in
+  viewport coordinates, which `GameCanvas.screenToGame()` already knows how to
+  convert.
+
+All three resolve to one call, `run.guess(letter)`, so the difficulty measured
+in `tests/` is true of every device rather than of whichever one was to hand.
+
+Both engine additions are general — a tile grid, a map, a word — and the
+pointer one is written up in `engine/input.js` with the warning that it is not
+licence for a second control model.
+
+### The hint costs a guess, and later it has two jobs
+
+A free hint is not a decision. This one is paid for in the only currency the
+round has: **one of your six wrong guesses.** So asking for help brings the
+gallows a step closer, and you weigh "I could work this out with four left"
+against "I could know a letter and have three".
+
+And what changes as a run goes on: **from round five the category stops being
+printed.** The same button will buy it back, for the same price as a letter —
+so one hint has two uses competing for one cost, and which is worth more
+depends on the board. On a blank board the category is worth far more than a
+letter; on a half-filled one it is worth far less. It is refused outright when
+it would cost you the round, because a hint that kills you is not help.
+
+### What the screenshots found
+
+- **The hint panel sat on top of the letter grid**, covering the O key. Moved
+  under the gallows.
+- **The bottom row of letters was clipped by two pixels** against the frame —
+  the sort of thing that reads as a rendering fault rather than a layout one.
+
+### Contrast
+
+| pair | before | after |
+|---|---:|---:|
+| **an untried key vs the board it sits on** | **42** | 159 |
+| **untried vs tried-and-wrong** | **110** | 186 |
+| tried-and-wrong vs revealed-by-hint | 110 | 146 |
+
+The second is the pair a player checks on *every single guess*, and at 110 the
+grid was doing its job badly. Everything is 105 or better now.
+
+20 assertions; suite 397 → 417.
