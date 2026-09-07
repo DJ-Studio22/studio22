@@ -4,10 +4,10 @@
 //
 // THE RULE
 // --------
-// Reach the gate, slowly enough to stop there. You have a small tank of fuel,
-// no time limit worth worrying about, and several bodies whose pull is the only
-// thing that will get you across. Burning is a decision; falling is free. Each
-// gate refills the tank and hands you a harder field, without end.
+// Fly as far down the corridor as you can. Bodies to slingshot around and to
+// avoid, fuel rings scattered along the way that fill the tank when you pass
+// through one, and no end: the world is built ahead of you as you go. Burning
+// is a decision; falling is free. Distance is the score.
 //
 // THE LINE
 // --------
@@ -40,11 +40,20 @@ import { Flight, TUNING, speedOf } from './orbit.js';
 
 const GAME_ID = 'gravity-well';
 
-// One field unit is SCALE pixels, so a body is round and the prediction is
-// drawn in the same coordinates it was computed in.
-const SCALE = 4.7;
-const W = Math.round(TUNING.width * SCALE);    // 940
-const H = Math.round(TUNING.height * SCALE);   // 611
+// One world unit is SCALE pixels, so a body is round and the prediction is
+// drawn in the same coordinates it was computed in. The canvas is as tall as
+// the corridor and as wide as it needs to be; the camera handles the rest.
+const SCALE = 4.3;
+const H = Math.round(TUNING.height * SCALE);   // 645
+const W = 960;
+
+// WHERE THE CAMERA SITS, as a fraction of the screen width.
+//
+// Not centred. The craft sits a third of the way across, because everything
+// worth reading is in front of it: the whole point of the game is seeing what
+// is coming before you commit to it, and a centred camera spends half the
+// screen on corridor you have already flown.
+const CAMERA_AT = 0.34;
 
 // --- Art palette ---------------------------------------------------------
 //
@@ -69,10 +78,11 @@ const ART = {
     field: 'rgba(201,139,75,0.11)',
     fieldEdge: 'rgba(201,139,75,0.20)',
   },
-  gate: {
-    ring: '#5df2c0',
+  ring: {
+    edge: '#5df2c0',
     inner: 'rgba(93,242,192,0.16)',
     glow: 'rgba(93,242,192,0.30)',
+    spent: 'rgba(93,242,192,0.10)',
   },
   craft: {
     hull: '#e8f1ff',
@@ -124,15 +134,22 @@ let running = false;
 let burnNoise = 0;
 let shake = 0;
 let flash = null;
-let lastGates = 0;
+let lastRings = 0;
 let wasDry = false;
+// The camera, in world units. It follows the craft with a little lag, which is
+// what makes a slingshot read as being flung rather than as the world jumping.
+let camera = { x: 0, y: TUNING.height / 2 };
 
+// Stars live in world coordinates and are recycled behind the camera, so the
+// background scrolls with the corridor instead of sitting still on the glass.
 const stars = [];
-for (let i = 0; i < 140; i++) {
+for (let i = 0; i < 170; i++) {
   stars.push({
-    x: Math.random() * W,
-    y: Math.random() * H,
-    r: 0.5 + Math.random() * 1.3,
+    x: Math.random() * (W / SCALE) * 1.6,
+    y: Math.random() * TUNING.height,
+    r: 0.4 + Math.random() * 1.1,
+    // Two layers, so there is parallax to read speed from.
+    depth: Math.random() < 0.4 ? 0.45 : 0.85,
     bright: Math.random() < 0.15,
   });
 }
@@ -143,8 +160,9 @@ function reset() {
   burnNoise = 0;
   shake = 0;
   flash = null;
-  lastGates = 0;
+  lastRings = 0;
   wasDry = false;
+  camera = { x: flight.craft.x, y: TUNING.height / 2 };
   particles.clear();
 }
 
@@ -155,8 +173,8 @@ function finish() {
   running = false;
   audio.play('over');
   shell.showGameOver(flight.score, {
-    gatesMade: flight.gatesMade,
-    reachedLevel: flight.level,
+    distance: `${Math.round(flight.distance)} units`,
+    ringsTaken: flight.ringsTaken,
     fuelBurned: Math.round(flight.fuelSpent),
     ended: flight.reason,
   });
@@ -177,8 +195,6 @@ function update(dt) {
   if (shake > 0) shake = Math.max(0, shake - dt * 3);
   if (flash) { flash.life -= dt; if (flash.life <= 0) flash = null; }
   if (burnNoise > 0) burnNoise -= dt;
-
-  for (const star of stars) star.twinkle = star.bright;
 
   if (!running) return;
 
@@ -210,18 +226,26 @@ function update(dt) {
   if (flight.craft.fuel <= 0 && !wasDry) {
     wasDry = true;
     audio.play('dry');
-    say('TANK DRY — RIDE IT IN', ART.hud.warn);
+    say('TANK DRY — FIND A RING', ART.hud.warn);
   }
   if (flight.craft.fuel > 0) wasDry = false;
 
-  if (flight.gatesMade > lastGates) {
-    lastGates = flight.gatesMade;
+  if (flight.ringsTaken > lastRings) {
+    lastRings = flight.ringsTaken;
     audio.play('gate');
-    say(`GATE ${flight.gatesMade} — LEVEL ${flight.level}`, ART.hud.good);
+    say('FUEL', ART.hud.good);
     particles.emit(sx(flight.craft.x), sy(flight.craft.y), {
-      ...ParticlePresets.sparkle, count: 26, colors: [ART.gate.ring, '#ffffff'], speed: [50, 200],
+      ...ParticlePresets.sparkle, count: 26, colors: [ART.ring.edge, '#ffffff'], speed: [50, 200],
     });
   }
+
+  // THE CAMERA FOLLOWS, with lag. Ahead of the craft rather than on it, because
+  // what matters is the corridor you have not flown yet.
+  const lead = Math.min(60, Math.max(0, flight.craft.vx) * 0.5);
+  const wantX = flight.craft.x + lead;
+  const wantY = Math.max(TUNING.height * 0.5, Math.min(TUNING.height * 0.5, flight.craft.y));
+  camera.x += (wantX - camera.x) * Math.min(1, dt * 3.2);
+  camera.y += (wantY - camera.y) * Math.min(1, dt * 3.2);
 
   if (!flight.running) {
     if (flight.reason && flight.reason !== 'Out of fuel') {
@@ -238,8 +262,17 @@ function update(dt) {
 
 // --- Drawing -------------------------------------------------------------
 
-const sx = (x) => x * SCALE;
-const sy = (y) => y * SCALE;
+// World to screen, through the camera. Everything drawn goes through these,
+// including the prediction, so the line is in the same place as the craft.
+const sx = (x) => (x - camera.x) * SCALE + W * CAMERA_AT;
+const sy = (y) => (y - camera.y) * SCALE + H / 2;
+
+// A LENGTH, not a position. The two are different once there is a camera, and
+// conflating them is not a cosmetic mistake: sx() of a radius is a screen x
+// coordinate, which goes negative as soon as the camera moves past it, and
+// canvas throws on a gradient with a negative radius. The game loop stopped
+// dead the first time it was played after the rework.
+const len = (units) => units * SCALE;
 
 function drawSpace() {
   const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -247,16 +280,37 @@ function drawSpace() {
   g.addColorStop(1, ART.space.near);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
+
+  // Parallax stars, recycled once they fall behind. Two depths, so there is
+  // something to read speed from when the corridor is empty.
+  const span = (W / SCALE) * 1.6;
   for (const star of stars) {
+    let x = (star.x - camera.x * star.depth) % span;
+    if (x < -20) x += span;
     ctx.fillStyle = star.bright ? ART.space.starBright : ART.space.star;
+    ctx.globalAlpha = star.depth;
     ctx.beginPath();
-    ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+    ctx.arc(x * SCALE, star.y * SCALE, star.r, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.globalAlpha = 1;
+
+  // The floor and the ceiling of the corridor, which are as fatal as a planet.
+  ctx.strokeStyle = ART.hud.warn;
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, sy(0));
+  ctx.lineTo(W, sy(0));
+  ctx.moveTo(0, sy(TUNING.height));
+  ctx.lineTo(W, sy(TUNING.height));
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 function drawBodies() {
   for (const body of flight.bodies) {
+    if (sx(body.x) < -200 || sx(body.x) > W + 200) continue;
     // THE REACH OF A BODY, drawn. A player should be able to see where the pull
     // starts to matter rather than learn it by dying, and the radius shown is
     // where gravity is about equal to the engine — a number from the physics
@@ -266,45 +320,47 @@ function drawBodies() {
     ctx.strokeStyle = ART.body.fieldEdge;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.arc(sx(body.x), sy(body.y), sx(reach), 0, Math.PI * 2);
+    ctx.arc(sx(body.x), sy(body.y), len(reach), 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     const g = ctx.createRadialGradient(
-      sx(body.x - body.radius * 0.35), sy(body.y - body.radius * 0.35), sx(body.radius * 0.15),
-      sx(body.x), sy(body.y), sx(body.radius),
+      sx(body.x - body.radius * 0.35), sy(body.y - body.radius * 0.35), len(body.radius * 0.15),
+      sx(body.x), sy(body.y), len(body.radius),
     );
     g.addColorStop(0, ART.body.rim);
     g.addColorStop(0.55, ART.body.core);
     g.addColorStop(1, ART.body.shade);
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(sx(body.x), sy(body.y), sx(body.radius), 0, Math.PI * 2);
+    ctx.arc(sx(body.x), sy(body.y), len(body.radius), 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function drawGate() {
-  const x = sx(flight.gate.x);
-  const y = sy(flight.gate.y);
-  const r = sx(TUNING.gateRadius);
-  ctx.fillStyle = ART.gate.inner;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = ART.gate.ring;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.stroke();
-  // A slow pulse, so the one thing you are aiming at is never lost against the
-  // stars.
-  const pulse = 1 + 0.14 * Math.sin(performance.now() / 420);
-  ctx.strokeStyle = ART.gate.glow;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(x, y, r * pulse * 1.5, 0, Math.PI * 2);
-  ctx.stroke();
+function drawRings() {
+  const r = TUNING.gateRadius * SCALE;
+  for (const ring of flight.rings) {
+    const x = sx(ring.x);
+    const y = sy(ring.y);
+    if (x < -60 || x > W + 60) continue;
+    ctx.fillStyle = ART.ring.inner;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = ART.ring.edge;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+    // A slow pulse, so fuel is never lost against the stars.
+    const pulse = 1 + 0.14 * Math.sin(performance.now() / 420 + ring.x);
+    ctx.strokeStyle = ART.ring.glow;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r * pulse * 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }
 
 function drawPath() {
@@ -314,8 +370,12 @@ function drawPath() {
   if (forecast.points.length < 2) return;
 
   const doomed = Boolean(forecast.hit);
-  const arriving = speedOf(forecast.end) <= TUNING.gateSpeed;
-  ctx.strokeStyle = doomed ? ART.path.doomed : arriving ? ART.path.slow : ART.path.good;
+  // Green when the line passes through fuel, because that is the other thing
+  // worth knowing about where you are going.
+  const fuelling = !doomed && flight.rings.some((ring) => forecast.points.some(
+    (p) => Math.hypot(p.x - ring.x, p.y - ring.y) < TUNING.gateRadius,
+  ));
+  ctx.strokeStyle = doomed ? ART.path.doomed : fuelling ? ART.path.slow : ART.path.good;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 7]);
   ctx.beginPath();
@@ -380,7 +440,7 @@ function drawHud() {
 
   ctx.font = '600 13px system-ui, sans-serif';
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText(`LEVEL ${flight.level}  ·  ${flight.bodies.length} BODIES`, 22, 60);
+  ctx.fillText(`${Math.round(flight.distance)} UNITS  ·  ${flight.ringsTaken} RINGS`, 22, 60);
 
   // Fuel.
   const fuel = flight.craft.fuel / TUNING.fuel;
@@ -391,20 +451,17 @@ function drawHud() {
   ctx.fillStyle = fuel < 0.25 ? ART.hud.fuelLow : ART.hud.fuel;
   ctx.fillRect(W - 168, 18, 146 * fuel, 15);
 
-  // SPEED, against the speed the gate will accept — because "too fast to stop"
-  // is the thing most likely to be misjudged, and it is a number the game
-  // already knows.
-  const speed = speedOf(flight.craft);
-  const ok = speed <= TUNING.gateSpeed;
+  // HOW FAR THE NEAREST FUEL IS, which is the question a dry tank asks.
+  let nearest = null;
+  for (const ring of flight.rings) {
+    const d = Math.hypot(ring.x - flight.craft.x, ring.y - flight.craft.y);
+    if (!nearest || d < nearest) nearest = d;
+  }
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText('SPEED', W - 210, 56);
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(W - 168, 44, 146, 15);
-  ctx.fillStyle = ok ? ART.hud.good : ART.hud.warn;
-  ctx.fillRect(W - 168, 44, 146 * clamp(speed / (TUNING.gateSpeed * 2), 0, 1), 15);
-  // The line the gate will accept, marked on the bar.
-  ctx.fillStyle = ART.hud.text;
-  ctx.fillRect(W - 168 + 73, 41, 2, 21);
+  ctx.fillText('FUEL AHEAD', W - 210, 56);
+  ctx.fillStyle = nearest === null ? ART.hud.dim : ART.hud.good;
+  ctx.font = '700 15px system-ui, sans-serif';
+  ctx.fillText(nearest === null ? '—' : `${Math.round(nearest)}`, W - 130, 56);
 
   if (flash) {
     ctx.globalAlpha = clamp(flash.life, 0, 1);
@@ -430,7 +487,7 @@ function render() {
   if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 9, (Math.random() - 0.5) * shake * 9);
   drawSpace();
   drawBodies();
-  drawGate();
+  drawRings();
   if (running) drawPath();
   drawCraft();
   particles.draw(ctx);
@@ -460,7 +517,7 @@ shell = new GameShell({
     { action: 'Burn', gamepad: 'A', keyboard: 'Space', touch: 'BURN pad' },
     { action: 'The dotted line', gamepad: 'Is where you are actually going', keyboard: 'Is where you are actually going', touch: 'Is where you are actually going' },
     { action: 'Red line', gamepad: 'Ends in a planet — turn', keyboard: 'Ends in a planet — turn', touch: 'Ends in a planet — turn' },
-    { action: 'The gate', gamepad: 'Only accepts you below the speed mark', keyboard: 'Only accepts you below the speed mark', touch: 'Only below the speed mark' },
+    { action: 'Green rings', gamepad: 'Fill the tank — fly through one', keyboard: 'Fill the tank — fly through one', touch: 'Fill the tank — fly through one' },
     { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },
   ],
 });

@@ -35,8 +35,8 @@
 // A plain exported object, so a test can clone it, change one figure and run
 // both versions side by side. See tests/README.md, convention 3.
 export const TUNING = {
-  width: 200,
-  height: 130,
+  // The corridor is unbounded to the right; height is floor to ceiling.
+  height: 150,
 
   // THE INTEGRATOR'S FIXED STEP.
   //
@@ -65,108 +65,164 @@ export const TUNING = {
   // What the prediction draws: how far ahead, and at what resolution. Long
   // enough to show a whole swing round a body, and it is the same arithmetic
   // whatever these are set to.
-  // NINE AND A HALF SECONDS OF LINE, and the figure is not arbitrary: the same
-  // pilot given more of it flies better, measurably. Sixty first levels, one
-  // pilot, three horizons -- 43 cleared at 7.5 seconds, 50 at 11, 55 at 15. If
-  // foresight is what the game rewards then the game should hand a player a
-  // generous amount of it, and 9.5 is where the line still reads as one arc
-  // rather than a plate of spaghetti.
-  predictSeconds: 9.5,
+  // FIVE SECONDS OF LINE, and the figure was measured rather than chosen.
+  //
+  // The line answers "where does this take me if I keep doing this", so its
+  // useful length is bounded by how long anybody actually holds a control. The
+  // same pilot at different horizons, thirty seeds each, distance in units:
+  //
+  //   none  670 | 0.5s  670 | 1s 2074 | 2s 3370 | 3s 7661 | 4.5s 7153 | 6s 7657
+  //   and then it falls away: 9.5s 3021, 15s 2626.
+  //
+  // Eleven times better with three seconds of it than with none, a plateau from
+  // three to six, and worse beyond -- because a fifteen-second line drawn on
+  // the assumption you never move the stick is a fifteen-second lie. Five is in
+  // the middle of the plateau and long enough to show a whole swing round a
+  // body.
+  predictSeconds: 5,
   predictEvery: 4,            // keep one point in four, to draw
 
-  // The level.
-  gateRadius: 4.2,
-  // Reaching the gate too fast is not reaching the gate. This is what makes an
-  // approach a problem rather than a direction.
-  gateSpeed: 34,
+  // A FUEL RING: how close you must pass to take it.
+  gateRadius: 5.6,
 
-  // Escaping. A craft this far outside the field is gone, and saying so beats
-  // letting a player watch a dot leave for thirty seconds.
-  strayMargin: 90,
+  // Leaving the corridor. There is a floor and a ceiling; this is how far past
+  // one counts as gone, and saying so beats watching a dot leave for thirty
+  // seconds.
+  strayMargin: 40,
 
-  // HOW MUCH ROOM THE START GETS, and it is here because of what playing it
-  // cold looked like. Twenty-two units of clearance is about a second and a
-  // half of falling: five seconds of touching nothing ended the run CRASHED
-  // with no fuel burned, which is the fault CLAUDE.md names twice -- a game
-  // that kills you before you have acted. Fifty-two units is far enough out
-  // that the pull is gentle and the first thing that happens is a slow drift
-  // you have time to read.
-  startClear: 52,
+  // Scoring: distance, plus something for the rings, because a run that takes
+  // the awkward ring is worth more than one that coasts past it.
+  scorePerRing: 120,
 
-  // Scoring: the gate, plus what you did not spend getting there.
-  scorePerGate: 500,
-  scorePerFuel: 6,
-  // A level refills the tank, so a run is a sequence of problems rather than
-  // one long budget. What carries over is the score.
-  levels: {
-    bodiesBase: 1,
-    bodiesPerLevel: 0.34,
-    bodiesMax: 5,
+  // THE CORRIDOR. Chunks are generated ahead of the craft and forgotten behind
+  // it, so the world is unbounded in one direction and the camera has something
+  // to follow.
+  chunkWidth: 150,
+  corridor: {
+    lookAhead: 3,
+    bodiesBase: 1.2,
+    bodiesPerChunk: 0.16,
+    bodiesMax: 6,
     massBase: 1.0,
-    massPerLevel: 0.06,
-    // How far the gate is from the start, as a fraction of the field.
-    reachBase: 0.42,
-    reachPerLevel: 0.02,
-    reachMax: 0.8,
+    massPerChunk: 0.02,
+    // A ring in every chunk, and a second one this often.
+    ringChance: 0.45,
+    // The clear lane a chunk must leave somewhere across its height.
+    gap: 7,
   },
 };
 
 export const END = { STRANDED: 'Out of fuel', CRASHED: 'Crashed', STRAYED: 'Lost' };
 
-// --- The field ------------------------------------------------------------
+// --- The corridor --------------------------------------------------------
+//
+// THE WORLD IS ONE CONTINUOUS CHAIN, GENERATED AHEAD OF YOU.
+//
+// It used to be discrete levels: a field, a start, a gate, and a fresh field
+// when you reached it. That made the gate a finish line and the camera
+// pointless -- everything fitted on one screen, so there was nothing to follow.
+//
+// Now the craft flies right and the world is built in CHUNKS in front of it and
+// forgotten behind. Bodies to slingshot around and to avoid, and fuel rings
+// scattered along the way that fill the tank when you pass through one. Distance
+// is the score. There is no finish, only how far.
+
+/** How far into the corridor a chunk begins. */
+export const chunkStart = (index, t = TUNING) => index * t.chunkWidth;
 
 /**
- * A level: bodies, a start, and a gate.
+ * The bodies and rings in one chunk of corridor.
  *
- * Generated and then CHECKED, the same discipline as the mini golf generator
- * proving a hole is sinkable and Colour Heist proving a vault has a route. A
- * level nobody can reach is not a hard level.
+ * Generated and then CHECKED, the same discipline as before: a chunk that
+ * buries a ring inside a body, or leaves no gap wide enough to fly through, is
+ * thrown away and rolled again. A corridor nobody can pass is not a hard
+ * corridor.
  */
-export function buildLevel(n, t = TUNING) {
-  const L = t.levels;
-  const bodies = Math.min(L.bodiesMax, Math.round(L.bodiesBase + L.bodiesPerLevel * (n - 1)));
-  const reach = Math.min(L.reachMax, L.reachBase + L.reachPerLevel * (n - 1));
-  const mass = L.massBase + L.massPerLevel * (n - 1);
+export function buildChunk(index, t = TUNING) {
+  const x0 = chunkStart(index, t);
+  // THE FIRST CHUNK IS EMPTY. It is the run-up, and it is a number somebody
+  // chose rather than whatever the generator happened to produce -- without it
+  // a body could be placed on the start and the first run ended CRASHED four
+  // tenths of a second in, having flown thirty-seven units.
+  const difficulty = Math.max(0, index - 1);
+  const bodies = index === 0 ? 0 : Math.min(
+    t.corridor.bodiesMax,
+    Math.round(t.corridor.bodiesBase + t.corridor.bodiesPerChunk * difficulty),
+  );
+  const mass = t.corridor.massBase + t.corridor.massPerChunk * difficulty;
 
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const level = layout(n, bodies, reach, mass, t);
-    if (level) return level;
+  for (let attempt = 0; attempt < 120; attempt++) {
+    const chunk = layoutChunk(index, x0, bodies, mass, t);
+    if (chunk) return chunk;
   }
-  // Fall back to a level with one body, which is always layoutable. Better a
-  // slightly easy level than a hang or a throw in the middle of a run.
-  return layout(n, 1, L.reachBase, mass, t) ?? layout(n, 1, 0.4, 1, t);
+  return layoutChunk(index, x0, 1, t.corridor.massBase, t) ?? { index, x0, bodies: [], rings: [] };
 }
 
-function layout(n, bodyCount, reach, mass, t) {
-  const start = { x: t.width * 0.12, y: t.height * (0.3 + Math.random() * 0.4) };
-  const angle = (Math.random() * 2 - 1) * 0.6;
-  const distance = t.width * reach;
-  const gate = {
-    x: start.x + Math.cos(angle) * distance,
-    y: start.y + Math.sin(angle) * distance,
-  };
-  if (gate.x > t.width - 12 || gate.y < 10 || gate.y > t.height - 10) return null;
-
+function layoutChunk(index, x0, bodyCount, mass, t) {
+  // BODIES GO IN BANDS, and one band is always left empty.
+  //
+  // Scattering them at random and rejecting any layout without a lane through
+  // it sounds equivalent and is not: past three or four bodies almost every
+  // random layout blocks the corridor, so the generator exhausted its retries
+  // and fell back to a single body. Measured, the corridor stopped getting
+  // harder at chunk twenty and then got EASIER -- four bodies at twenty, one at
+  // forty, one at four thousand. Building the lane in rather than hoping for it
+  // keeps the escalation real.
+  const bands = bodyCount + 1;
+  const bandHeight = t.height / bands;
+  const free = Math.floor(Math.random() * bands);
   const bodies = [];
+  let band = 0;
   for (let i = 0; i < bodyCount; i++) {
-    const radius = 5 + Math.random() * 5;
+    if (band === free) band++;
+    const radius = 5 + Math.random() * 6;
+    const centre = (band + 0.5) * bandHeight;
+    const slack = Math.max(0, bandHeight / 2 - radius - 2);
     const body = {
-      x: 20 + Math.random() * (t.width - 40),
-      y: 12 + Math.random() * (t.height - 24),
+      x: x0 + 14 + Math.random() * (t.chunkWidth - 28),
+      y: centre + (Math.random() * 2 - 1) * slack,
       radius,
-      // Mass scales with size, so a big body looks like the pull it has. A
-      // player should never have to learn a body's strength by dying to it.
       mass: radius * radius * 0.9 * mass,
     };
-    // Not on top of the start, not on top of the gate, not on top of another
-    // body -- all three of which produce a level that cannot be flown.
-    if (near(body, start, radius + t.startClear)) return null;
-    if (near(body, gate, radius + t.gateRadius + 9)) return null;
-    if (bodies.some((other) => near(body, other, body.radius + other.radius + 8))) return null;
+    if (bodies.some((other) => near(body, other, body.radius + other.radius + 18))) return null;
     bodies.push(body);
+    band++;
   }
 
-  return { n, start, gate, bodies };
+  // A ring or two per chunk, never inside a body and never in its skin.
+  const rings = [];
+  const wanted = Math.random() < t.corridor.ringChance ? 2 : 1;
+  for (let i = 0; i < wanted; i++) {
+    const ring = {
+      x: x0 + 20 + Math.random() * (t.chunkWidth - 40),
+      y: 16 + Math.random() * (t.height - 32),
+      taken: false,
+      id: String(index) + ':' + String(i),
+    };
+    if (bodies.some((body) => near(body, ring, body.radius + t.gateRadius + 14))) return null;
+    if (rings.some((other) => near(other, ring, t.gateRadius * 6))) return null;
+    rings.push(ring);
+  }
+
+  // THE GAP CHECK. Somewhere in this chunk there has to be a horizontal line
+  // the craft could fly along without touching anything -- otherwise the
+  // corridor is a wall and the only question is where you die.
+  if (!hasGap(bodies, t)) return null;
+
+  return { index, x0, bodies, rings };
+}
+
+/** Is there a lane through this chunk wide enough to fly? */
+function hasGap(bodies, t) {
+  const need = t.craftRadius + t.corridor.gap;
+  for (let y = need; y <= t.height - need; y += 2) {
+    let clear = true;
+    for (const body of bodies) {
+      if (Math.abs(body.y - y) < body.radius + need) { clear = false; break; }
+    }
+    if (clear) return true;
+  }
+  return false;
 }
 
 const near = (a, b, d) => Math.hypot(a.x - b.x, a.y - b.y) < d;
@@ -291,36 +347,55 @@ export class Flight {
   }
 
   reset() {
-    this.level = 1;
+    const t = this.t;
     this.score = 0;
-    this.gatesMade = 0;
+    this.distance = 0;
+    this.ringsTaken = 0;
+    this.bodiesPassed = 0;
     this.fuelSpent = 0;
     this.running = true;
     this.reason = null;
-    this.#load();
-  }
+    this.chunks = [];
+    this.nextChunk = 0;
 
-  #load() {
-    const level = buildLevel(this.level, this.t);
-    this.bodies = level.bodies;
-    this.gate = level.gate;
-    this.start = level.start;
-    // A tankful per level, so a run is a sequence of problems rather than one
-    // long budget that a single bad first burn ruins.
-    this.craft = {
-      x: level.start.x, y: level.start.y, vx: 0, vy: 0, angle: 0, fuel: this.t.fuel,
-    };
+    this.craft = { x: 24, y: t.height / 2, vx: 0, vy: 0, angle: 0, fuel: t.fuel };
     this.time = 0;
     this.carry = 0;
-    this.arrivedSpeed = null;
-    // NOTHING MOVES UNTIL THE PLAYER TOUCHES SOMETHING.
-    //
-    // The other half of the same fix, and the same trick Colour Heist uses to
-    // start its clock. This is a game about reading a field before committing
-    // to it, so the field has to be readable before it starts happening --
-    // otherwise the first thing every level teaches is that looking at it costs
-    // you. There is no timer behind this: it waits as long as you do.
+    // Nothing moves until the player touches a control. See the note in
+    // PROGRESS.md: this is a game about reading a field before committing to
+    // it, so the field has to be readable before it starts happening.
     this.armed = false;
+    this.#extend();
+  }
+
+  /** Build corridor ahead of the craft and forget what is well behind it. */
+  #extend() {
+    const t = this.t;
+    const ahead = this.craft.x + t.chunkWidth * t.corridor.lookAhead;
+    while (chunkStart(this.nextChunk, t) < ahead) {
+      this.chunks.push(buildChunk(this.nextChunk, t));
+      this.nextChunk++;
+    }
+    const behind = this.craft.x - t.chunkWidth * 1.5;
+    this.chunks = this.chunks.filter((c) => c.x0 + t.chunkWidth > behind);
+    this.#rebuild();
+  }
+
+  // The live world, CACHED rather than rebuilt on every read.
+  //
+  // These were getters that walked the chunks and allocated a fresh array each
+  // time. That is fine until you notice who calls them: the collision check
+  // every simulation step, and the prediction inside its own inner loop, eight
+  // candidate controls deep. A ninety-second bot run never finished. They are
+  // rebuilt when the corridor changes and when a ring is taken, which is the
+  // only time they can change.
+  #rebuild() {
+    this.bodies = [];
+    this.rings = [];
+    for (const chunk of this.chunks) {
+      for (const body of chunk.bodies) this.bodies.push(body);
+      for (const ring of chunk.rings) if (!ring.taken) this.rings.push(ring);
+    }
   }
 
   /** The line the game draws, for the control being held right now. */
@@ -329,9 +404,9 @@ export class Flight {
   }
 
   /**
-   * `dt` is real time; the simulation is advanced in fixed steps and the
-   * remainder carried, so what is flown does not depend on the frame rate --
-   * which is the other half of the prediction being honest.
+   * `dt` is real time; the simulation advances in fixed steps and the remainder
+   * is carried, so what is flown does not depend on the frame rate -- which is
+   * the other half of the prediction being honest.
    */
   step(dt, control = {}) {
     if (!this.running) return;
@@ -340,11 +415,10 @@ export class Flight {
       if (!control.burn && !control.turn) return;
       this.armed = true;
     }
+
     this.carry += dt;
     let steps = Math.floor(this.carry / t.step);
     if (steps > t.maxCatchUp) {
-      // A tab that was in the background does not get to simulate the minute it
-      // missed in a single frame.
       this.carry = 0;
       steps = t.maxCatchUp;
     } else {
@@ -353,11 +427,17 @@ export class Flight {
 
     for (let i = 0; i < steps && this.running; i++) {
       const before = this.craft.fuel;
+      const wasAt = this.craft.x;
       advance(this.craft, this.bodies, control, t.step, t);
       this.fuelSpent += before - this.craft.fuel;
       this.time += t.step;
+      // DISTANCE IS THE SCORE, and only forward counts: drifting backwards and
+      // forwards over the same stretch is not progress.
+      if (this.craft.x > wasAt) this.distance = Math.max(this.distance, this.craft.x);
       this.#check();
     }
+    this.#extend();
+    this.score = Math.round(this.distance - 24) + this.ringsTaken * t.scorePerRing;
   }
 
   #check() {
@@ -369,61 +449,57 @@ export class Flight {
         return this.#end(END.CRASHED);
       }
     }
-    if (strayed(craft, t)) return this.#end(END.STRAYED);
-
-    const toGate = Math.hypot(craft.x - this.gate.x, craft.y - this.gate.y);
-    if (toGate < t.gateRadius) {
-      const speed = speedOf(craft);
-      // ARRIVING IS NOT THE SAME AS ARRIVING SLOWLY ENOUGH. Without this the
-      // answer to every level is "point at it and hold the trigger", and the
-      // bodies are scenery.
-      if (speed <= t.gateSpeed) return this.#gate(speed);
+    // The corridor has a floor and a ceiling; going out the back is the only
+    // other way to leave it.
+    if (craft.y < -t.strayMargin || craft.y > t.height + t.strayMargin
+      || craft.x < this.distance - t.chunkWidth) {
+      return this.#end(END.STRAYED);
     }
 
-    // Out of fuel is only the end if you are also going nowhere useful: a
-    // coasting craft on a good arc is still playing.
+    // FUEL RINGS. Passing through one fills the tank -- no speed limit, because
+    // a ring is a refuel and not a landing, and the craft is usually moving
+    // fast when it needs one most.
+    for (const chunk of this.chunks) {
+      for (const ring of chunk.rings) {
+        if (ring.taken) continue;
+        if (Math.hypot(craft.x - ring.x, craft.y - ring.y) > t.gateRadius) continue;
+        ring.taken = true;
+        this.#rebuild();
+        this.ringsTaken++;
+        this.lastRingAt = this.time;
+        craft.fuel = t.fuel;
+      }
+    }
+
     if (craft.fuel <= 0 && this.#hopeless()) return this.#end(END.STRANDED);
     return undefined;
   }
 
   /**
-   * With the tank empty, is the gate still reachable?
+   * With the tank empty, is there anything left to fly to?
    *
    * Answered by flying it: coast for half a minute and see whether the craft
-   * ever passes through the gate slowly enough. Same arithmetic again -- the
-   * game never asks a question about the future except by running the future.
-   *
-   * ORDER MATTERS HERE, and getting it wrong ended runs that were going fine.
-   * The first version asked "does this path end badly?" before "does it reach
-   * the gate?", and a coasting craft eventually leaves the field by definition,
-   * so every empty tank was declared hopeless -- including one falling straight
-   * through the gate two seconds later. Reaching the gate is checked FIRST, on
-   * every step, and only a path that crashes or leaves before it gets there is
-   * hopeless.
+   * makes it through a ring or simply falls into something. Same arithmetic
+   * again -- the game never asks a question about the future except by running
+   * the future.
    */
   #hopeless() {
     const t = this.t;
     const copy = { ...this.craft };
+    const bodies = this.bodies;
+    const rings = this.rings;
     const steps = Math.round(30 / t.step);
     for (let i = 0; i < steps; i++) {
-      advance(copy, this.bodies, {}, t.step, t);
-      if (Math.hypot(copy.x - this.gate.x, copy.y - this.gate.y) < t.gateRadius
-        && speedOf(copy) <= t.gateSpeed) return false;
-      for (const body of this.bodies) {
+      advance(copy, bodies, {}, t.step, t);
+      for (const ring of rings) {
+        if (Math.hypot(copy.x - ring.x, copy.y - ring.y) < t.gateRadius) return false;
+      }
+      for (const body of bodies) {
         if (Math.hypot(copy.x - body.x, copy.y - body.y) < body.radius + t.craftRadius) return true;
       }
-      if (strayed(copy, t)) return true;
+      if (copy.y < -t.strayMargin || copy.y > t.height + t.strayMargin) return true;
     }
     return true;
-  }
-
-  #gate(speed) {
-    const t = this.t;
-    this.gatesMade++;
-    this.arrivedSpeed = speed;
-    this.score += t.scorePerGate + Math.round(this.craft.fuel * t.scorePerFuel);
-    this.level++;
-    this.#load();
   }
 
   #end(reason) {

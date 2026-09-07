@@ -2719,3 +2719,77 @@ evenly-matched cell — 165. Each is reinforced by the ring as well as the fill.
 19 assertions; suite 456 → 475. This file takes 100 seconds of the suite's run,
 which is most of it: the two measured claims are long-run bot comparisons and
 there is no cheap version of them.
+
+## Phase 34 — Gravity Well: a camera, fuel that does something, and a chain
+
+Three faults reported, and they turned out to be one design fault: the game was
+built as discrete levels — a field, a start, a gate, a fresh field on arrival.
+Everything fitted on one screen, so there was nothing for a camera to follow;
+the gate was a finish line rather than a thing in the world, so passing through
+it "did nothing" visible; and there was no chain to fly along.
+
+Rebuilt as **one continuous corridor**, generated in chunks ahead of the craft
+and forgotten behind it. Slingshot from body to body, refuel by flying through
+the green rings, go as far as you can. Distance is the score. The camera follows
+with lag and sits the craft a third of the way across, because everything worth
+reading is in front of it.
+
+### What the rework changed about the measurement
+
+The foresight claim had to be re-run, and it came back **better shaped than
+before**. Same pilot, same corridor, same seeds; the only difference is how far
+ahead it looks. Thirty seeds each, median distance:
+
+| lookahead | none | 0.5s | 1s | 2s | 3s | 4.5s | 6s | 9.5s | 15s |
+|---|---|---|---|---|---|---|---|---|---|
+| distance | 670 | 670 | 2074 | 3370 | **7661** | 7153 | 7657 | 3021 | 2626 |
+
+**Eleven times better with three seconds of it than with none** — and then it
+stops paying, and past six it gets worse.
+
+That is not a flaw in the idea. It is a property of what the line *means*: it
+answers "where does this take me if I keep doing this", so it is worth exactly
+as much as the time you keep doing it. A fifteen-second line drawn on the
+assumption you never move the stick is a fifteen-second lie. The game draws
+five, which is the middle of the measured plateau, and the test asserts that the
+drawn length is inside the range that was measured to pay.
+
+### Two faults the numbers found
+
+**All deaths were equal, and that made looking further ahead worse.** The bot's
+scorer returned Infinity for any path ending badly, so in a dense corridor —
+where most options end badly *somewhere* inside a long horizon — every candidate
+came back identical and the choice fell through to a fallback. The first
+measurement said 2156 units at four seconds of lookahead and 578 at fifteen:
+foresight actively harmful, entirely the scorer's fault. Dying later is better
+than dying sooner, and it is scored that way now.
+
+**The corridor stopped getting harder at chunk twenty and then got easier.**
+Bodies were scattered at random and any layout without a clear lane through it
+was rejected — but past three or four bodies almost every random layout blocks
+the corridor, so the generator exhausted its retries and fell back to placing a
+single body. Four bodies at chunk twenty, one at forty, one at four thousand.
+They go in bands now with one band always left empty, so the lane is built in
+rather than hoped for, and the escalation is real: 1, 2, 3, 4, 6, capped at 6.
+
+### And one the hand-play found
+
+`createRadialGradient` threw on the first play after the rework and stopped the
+loop dead. The cause is worth naming because it is a whole class: **a length is
+not a position**, and the two are only the same thing until there is a camera.
+`sx(radius)` was fine when the world was the screen; with a camera it is a
+screen x-coordinate, which goes negative the moment the camera moves past it.
+There is a separate `len()` now, and the comment says why.
+
+Nothing else changed about the honest line: one integrator, the drawing calls
+the same `predict()` the craft flies, and the test that breaks the physics on
+purpose to prove the comparison can fail is still there.
+
+The convention-3 test came out better than it went in, too. Turning gravity off
+does not simply make the corridor easier — the median barely moves (4464 with,
+4327 without) while the floor rises enormously (worst run 432 with gravity, 2247
+without). Which is a truer description of what the pull does: it is what makes a
+run vary, and that spread is the game.
+
+21 assertions; suite 475 → 474 (the level-based tests went, the corridor ones
+arrived).
