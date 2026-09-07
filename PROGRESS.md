@@ -1797,3 +1797,99 @@ rather than orange so it cannot be confused with the gold of a ricochet, and a
 block gets warmer as it comes apart.
 
 22 assertions; suite 336 → 358.
+
+## Phase 22 — Dungeon Dice, and the failure mode a dice game always has
+
+Game five of five, and the batch is done. `games/dungeon-dice/`, two files:
+`dice.js` (the whole simulation, DOM-free) and `game.js` (canvas, and one
+readout that had to be right). Eighteen games live.
+
+### The failure a dice game always has
+
+There is exactly one way for a dice game to be bad and it is fatal: **the dice
+decide and the player watches.** So two claims, and they fail differently, so
+they are measured separately.
+
+**WORTH IT.** A bot that works the roll must beat one that takes what it is
+given. The two differ in one field, `manipulates`, and a test asserts that — so
+the gap is the manipulation and cannot be anything else.
+
+| | floors (median) | p90 | best | rerolls | nudges | banks |
+|---|---:|---:|---:|---:|---:|---:|
+| greedy — takes the roll | **8** | 10 | 13 | 0 | 0 | 0 |
+| manipulator — works it | **15** | 22 | 24 | 34 | 111 | 10 |
+
+**NOT A ROBBERY.** For the turn each run died on, `hadAnOut()` searches every
+legal sequence of manipulations and asks whether *any* survived. Rerolls are
+sampled rather than enumerated, so a `true` is proof a route existed and a
+`false` is a strong maybe — which makes the reported figure an **upper bound**
+on how often the dice actually robbed the player.
+
+**5%.** It started at 25%.
+
+### The three things that fixed it, in the order they were found
+
+**Charges carry over.** Bolts used to exist only for the turn they were rolled.
+One bolt face in six over five dice means about four turns in ten produced
+none — and on those turns there was no manipulation available at all, only the
+single free reroll. A quarter of deaths had no out. Carrying charges lets a
+player bank power on the easy turns and spend it on the hard one, and it adds
+the decision the game was missing: spend now, or save for what is winding up.
+25% → 8%.
+
+**The player's ceiling has to scale.** With charges fixed, runs got longer and
+robbery went back UP to 28% — because the best possible block was five shields
+at three apiece, fifteen, forever, while incoming climbed past it around floor
+ten. From there no roll of any kind survived a full landing. That is not
+difficulty, it is the game running out of answers before the player does.
+`sharpen` and `reinforce` were added to the upgrade offers so the rates move
+with the floor. 28% → 5%, and runs went from 9 floors to 15.
+
+**A blank is one nudge from a bolt.** The nudge ring is ordered
+`blank → bolt → shield → sword → heart`, and that first adjacency is the escape
+hatch: the worst face on the table turns into the currency that buys another
+change, and pays for itself doing it. A player with nothing is never a player
+with nothing to do. There is a test for it on its own.
+
+### The tools are used, and that is also a test
+
+The bank was dead for a whole revision — nothing could afford it, and it showed
+up as `banks 0.0` in every run. A tool nobody reaches for should not be in the
+game, so "all three tools are actually used" is now an assertion rather than an
+assumption.
+
+### What the hand-play and the contrast check found
+
+A turn-based game has no standing-start hazard to speak of — five seconds of
+doing nothing changes nothing — but playing it cold found two things:
+
+- **The sword face was a plus sign.** Drawn as a vertical stroke with a
+  crossbar, it read as arithmetic rather than as the face that does the damage.
+  It has a blade and a guard now.
+- **Empty charge sockets read as full ones.** Drawn as discs at low alpha, all
+  eight looked lit from any distance, so a player with nothing looked like a
+  player with eight. Empty ones are outlines now.
+
+Contrast sampling flagged two pairs:
+
+| pair | before | after |
+|---|---:|---:|
+| **shield vs bolt** | **106** | 222 |
+| a die marked for reroll vs a plain one | 136 | 227 |
+
+The shield was blue and so was the bolt, and those are the two faces it hurts
+most to confuse: one stops the hit, the other is the currency you pay to change
+your mind. The shield is green now and blue belongs to charges alone. A marked
+die also carries a drawn `↻`, because colour is the one channel a player can be
+short of.
+
+19 assertions; suite 358 → 377.
+
+### The batch
+
+Five games, five branches, five pull requests: Rift Runner, Endless Mini Golf,
+Winter Base Building, Tank Tactics, Dungeon Dice. Every one of them had its
+central claim measured rather than asserted, and in three of the five the first
+measurement said the claim was false — the rift gates were gifting distance,
+the ricochet was worth nothing, and the dice were robbing a quarter of runs.
+None of those would have been found by playing.
