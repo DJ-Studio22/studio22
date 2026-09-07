@@ -361,5 +361,29 @@
     "tournamentReady": true,
     "estimatedRunTime": 300,
     "status": "live"
+  },
+  {
+    "id": "tank-tactics",
+    "title": "Tank Tactics",
+    "tagline": "The wall is the second barrel.",
+    "description": "Arena tanks, and a ricochet you can actually aim. Your shell bounces off the walls, and a shot that has come off a wall hits twice as hard — so banking is worth choosing even when you have a clear line. Dug-in tanks carry plate no straight shot can touch, and the only way through is a bounce, which turns the ricochet from a trick into the thing the game is about. Destructible cover, a shield that takes one hit and recharges, and waves that grow without a ceiling. Waves cleared is the score.",
+    "category": "arcade",
+    "path": "/games/tank-tactics/index.html",
+    "difficulty": "hard",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "tanks",
+      "shooter",
+      "ricochet",
+      "arena",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 240,
+    "status": "live"
   }
 ]

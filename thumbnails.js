@@ -708,6 +708,49 @@ function winter() {
     + '</svg>';
 }
 
+/**
+ * Tank Tactics -- the bank shot, mid-flight.
+ *
+ * The card has to say what the game IS, and it is not "tanks": it is the shot
+ * that goes the long way round. So the aiming line is the subject — dim on the
+ * way out, gold after the bounce, arriving at a tank that is plainly behind
+ * cover and could not have been hit any other way.
+ */
+function tankTactics() {
+  const block = (x, y, w, h) => '<g><rect x="' + x + '" y="' + y + '" width="' + w
+    + '" height="' + h + '" fill="#5a6675" stroke="#8a97a8" stroke-width="2"/></g>';
+  const tank = (x, y, hull, dark, turret, barrel, angle) =>
+    '<g transform="translate(' + x + ',' + y + ')">'
+    + '<rect x="-17" y="-19" width="34" height="6" fill="#232a22"/>'
+    + '<rect x="-17" y="13" width="34" height="6" fill="#232a22"/>'
+    + '<rect x="-15" y="-14" width="30" height="28" rx="5" fill="' + hull
+    + '" stroke="' + dark + '" stroke-width="3"/>'
+    + '<g transform="rotate(' + angle + ')"><rect x="0" y="-3" width="26" height="6" fill="'
+    + barrel + '"/></g>'
+    + '<circle cx="0" cy="0" r="9" fill="' + turret + '"/></g>';
+  return '<svg ' + VIEW + '>'
+    + '<rect width="320" height="200" fill="#20262f"/>'
+    // The hazard-striped wall the shot comes off, top edge.
+    + '<rect width="320" height="16" fill="#39424f"/>'
+    + '<g stroke="#c8a13c" stroke-width="5">'
+    + '<path d="M-20 16 L-4 0 M10 16 L26 0 M40 16 L56 0 M70 16 L86 0 M100 16 L116 0'
+    + ' M130 16 L146 0 M160 16 L176 0 M190 16 L206 0 M220 16 L236 0 M250 16 L266 0'
+    + ' M280 16 L296 0 M310 16 L326 0"/></g>'
+    // Cover, with the target parked behind it.
+    + block(150, 96, 22, 74)
+    // The shot: out dim, back gold, with the bounce marked.
+    + '<path d="M74 150 L196 22" stroke="rgba(242,247,252,.34)" stroke-width="3"'
+    + ' stroke-dasharray="8 8"/>'
+    + '<path d="M196 22 L286 118" stroke="#ffd45e" stroke-width="3" stroke-dasharray="8 8"/>'
+    + '<circle cx="196" cy="22" r="7" fill="#ffd45e"/>'
+    // The player, bottom left, and the plated tank it is reaching round to.
+    + tank(74, 150, '#4e8f5a', '#2f5c39', '#69ad76', '#8fd39c', -46)
+    + tank(288, 122, '#3aa0c4', '#1d5f7a', '#5cc0e0', '#9fe0f2', 180)
+    // The plate, facing the player, which is why the straight shot is no good.
+    + '<rect x="264" y="106" width="8" height="32" rx="3" fill="#eef4f8" stroke="#9fb6c4" stroke-width="2"/>'
+    + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -727,6 +770,7 @@ const ART = {
   'rift-runner': riftRunner,
   'mini-golf': miniGolf,
   winter,
+  'tank-tactics': tankTactics,
 };
 
 /**

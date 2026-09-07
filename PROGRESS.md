@@ -1682,3 +1682,118 @@ activities with a 5x difference in exchange rate cannot trade against each
 other — and neither would change in two dimensions.
 
 The 1200 lines of the real game did not get written. That is the result.
+
+## Phase 21 — Tank Tactics, and a ricochet that had to be made worth taking
+
+Game four of five. `games/tank-tactics/`, two files: `arena.js` (the whole
+simulation, DOM-free) and `game.js` (canvas, input, and the aiming line).
+Seventeen games live.
+
+### The claim, and the version of it that failed
+
+> **The ricochet is the skill ceiling.** A bank shot is something you can READ
+> and AIM, not something that occasionally comes off.
+
+The first build had bouncing shells, destructible cover, waves, all of it — and
+the bots said it was worthless. A bot that solved bank shots and a bot that
+never banked cleared **exactly the same number of waves**, and the banking one
+was slightly worse.
+
+Of course it was. The arena is open and the tank is quick, so walking two
+metres opens a clean shot faster than solving a bounce. **A skill that is never
+the best answer is not a ceiling, it is decoration** — and no amount of tuning
+fixes that, because the problem was that banking had no upside at all.
+
+Two lines fixed it, both in the tuning where they can be argued with:
+
+- `bankDamage: 2` against `directDamage: 1` — a ricochet is worth **choosing**
+  even when you already have a clear shot.
+- `dugInKinds: ['sniper']` — a plated tank cannot be hurt head on at all, so it
+  is worth **learning**. A shot that has not come off a wall sparks off the
+  plate and stops.
+
+### What the bots say now
+
+Both bots differ in exactly one field — `banks` — and a test asserts that, so
+the gap between them is the value of the ricochet and nothing else.
+
+| | waves (median) | p90 | best | ricochet hits | direct hits |
+|---|---:|---:|---:|---:|---:|
+| direct — never banks | **4** | 4 | 4 | 0 | 1008 |
+| bank — solves one bounce | **6** | 8 | 9 | 471 | 1847 |
+
+The direct bot scores **exactly 4 in every run of 40**. That is not a slope, it
+is a wall, and it is where the dug-in tanks start. A player who never learns
+the ricochet gets the same number every time, which is the clearest way a game
+can say "this is the thing to learn". A test pins it there.
+
+### Readable, measured rather than asserted
+
+A bouncing projectile is a slot machine by default. The measurement is blunt:
+nudge the barrel by one degree and see how far the impact moves.
+
+| | median move | aimable |
+|---|---:|---:|
+| straight shot | 0.28 units | 98% |
+| **one bounce** | **0.62 units** | **90%** |
+| two bounces | 0.74 | 84% |
+| three bounces | 0.74 | 81% |
+
+"Aimable" means a degree of barrel moves the impact less than the width of a
+tank. Ninety per cent of one-bounce shots clear that, sampled over the whole
+floor and the whole circle rather than at a convenient spot. The tenth that do
+not are corner grazes where the shell is about to switch which wall it meets
+first — a discontinuity rather than a gradient, and the drawn line jumps
+visibly when it happens, so it is honest rather than hidden.
+
+This is convention 11 — *a window a person cannot hit is not difficulty* —
+applied to a verb that is aimed rather than timed.
+
+### The aiming line is the solver
+
+The line on screen is drawn by calling the same `tracePath()` the shell flies,
+and the bots aim with the same `bankSolutions()` the line is built from. What
+you are shown, what the game rewards, and what the harness measures are one
+computation. The bank solution itself is the mirror trick — reflect the target
+through the wall and aim at the image — chosen over a search because it is
+exactly the reasoning a player does by eye.
+
+Every solution is then **proved by firing it**, because a closed form is the
+sort of thing that is right on paper and wrong in the game. Same discipline as
+the mini golf generator.
+
+### Two faults the harness found before a human could
+
+- **`tracePath` allowed one bounce too many.** Written `while (bounces <=
+  maxBounces)`, a limit of one traced two — so every aiming line was a lie
+  about where the shell went after the first wall. Caught by a test asserting
+  the mirror solution lands, which failed with `2 !== 1`.
+- **The arena deadlocked.** The last enemy of a wave would settle behind a
+  block where it could not see the player and the player could not see it,
+  neither would move, and the battle stopped — forever. Every run reported zero
+  waves on the harness cap. Enemies work around cover now, and shoot the cover
+  when they cannot.
+
+### What the hand-play and the contrast check found
+
+Standing start, four seconds of no input: survivable, the shield takes the
+first hit. But the barrel's resting angle pointed **straight into the middle
+block**, so the first shot a new player takes — before touching the aim — was a
+blocked one. The spawn is nine units off centre now, which puts a clean lane up
+the board. The opening should ask for an input a player could have known to
+make.
+
+Contrast sampling flagged three pairs and one was serious:
+
+| pair | before | after |
+|---|---:|---:|
+| **dug-in tank vs a block of cover** | **33** | 185 |
+| a banked shell vs an incoming shell | 148 | 249 |
+| rubble vs the floor | 71 | 149 |
+
+Thirty-three. The one enemy you must pick out was the same colour as the
+scenery it parks next to. Dug-in tanks are cyan now, incoming fire is pink
+rather than orange so it cannot be confused with the gold of a ricochet, and a
+block gets warmer as it comes apart.
+
+22 assertions; suite 336 → 358.
