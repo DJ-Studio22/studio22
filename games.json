@@ -455,5 +455,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 300,
     "status": "live"
+  },
+  {
+    "id": "asteroid-salvage",
+    "title": "Asteroid Salvage",
+    "tagline": "Armour is not free. It is heavy.",
+    "description": "Fly a field, collect salvage, spend it, fly a denser one. The shop offers engine, hull and cargo — and armour is made of something, so every plate you bolt on slows the ship that has to dodge. Acceleration is thrust divided by mass, which makes the three upgrades interfere rather than stack. The next field is announced before the shop closes: a dense field is many rocks slowly and wants a ship that can thread them, a fast one is few rocks quickly and wants a ship that can take the one you did not see. Three fixed purchase orders were run against each other and none of them wins more than half, which is the difference between a shop and a shopping list. Salvage collected is the score.",
+    "category": "arcade",
+    "path": "/games/asteroid-salvage/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "space",
+      "dodging",
+      "upgrades",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 240,
+    "status": "live"
   }
 ]

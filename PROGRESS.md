@@ -2152,3 +2152,73 @@ The second is the pair a player checks on *every single guess*, and at 110 the
 grid was doing its job badly. Everything is 105 or better now.
 
 20 assertions; suite 397 → 417.
+
+## Phase 27 — Asteroid Salvage, and a shop that is not a shopping list
+
+`games/asteroid-salvage/`, two files: `flight.js` (the whole simulation,
+DOM-free) and `game.js`. Twenty-one games live.
+
+### The claim
+
+> **The three upgrades compete. There is no order that is simply correct.**
+
+That is the trap the real-time Winter prototype was rejected for — three sinks
+on one pool, one pays back fastest, every run buys the same thing first. It
+cannot be hoped away; it has to be built in and then measured.
+
+Two mechanisms, both physical rather than arithmetical:
+
+- **Mass.** Acceleration is thrust over mass, and hull plates and cargo bays
+  are made of something. Three levels of hull nearly triples the mass, so
+  armour literally slows you down and the engine you did not buy is the reason
+  you cannot dodge.
+- **The field has a character**, drawn per field. *Dense* is many rocks slowly
+  and wants a ship that can thread them; *Fast* is few rocks quickly and wants
+  a ship that can take the one you did not see.
+
+### What the bots say, at 150 seeds
+
+| | banked (median) | p90 | build (e/h/c) |
+|---|---:|---:|---|
+| engineFirst | 39 | 64 | 1.8 / 0.7 / 0.3 |
+| hullFirst | 46 | 71 | 1.2 / 1.7 / 0.6 |
+| cargoFirst | 45 | 74 | 0.8 / 0.2 / 1.9 |
+| **adaptive** | **52** | 80 | 1.3 / 1.1 / 1.1 |
+
+Per-seed wins among the fixed orders: **33 / 61 / 56** — nobody over 41%.
+
+Every bot flies identically. They differ only in what they buy, because the
+claim is about the shop and a clever pilot would paper over a bad build.
+
+### Two things the numbers forced
+
+**Armour was simply the best buy.** At +2 hull for 0.30 mass, `hullFirst` won
+23 of 40 seeds. A hit point for half a level of sluggishness is a trade; two
+hit points for a third of one is not. Now +1 for 0.55.
+
+**The field's character was unpredictable, so it could not be bought for.** It
+was drawn on *entering* the field, after the shop had closed — so the adaptive
+bot could only read the field just flown, which predicts nothing because the
+draw is independent. It measured as no better than buying blind, which was
+correct and useless. **The next field is announced in the shop now**, and the
+same mechanism becomes the decision it was meant to be.
+
+### And one thing about measuring
+
+At 40 seeds the adaptive margin sat inside the noise — `cargoFirst` came out
+ahead on one sample and behind on the next. That would have been a test that
+passes or fails on the weather. At 150 the ordering is stable; the test runs 80,
+which is where it stops flipping, and the figure is in the file with the reason.
+
+### What the hand-play found
+
+Five seconds of touching nothing on the first field left the hull at **two of
+four**. Two causes, two fixes: the opening scatter could put a rock on top of
+the ship (`spawnClearRadius`), and rocks keep arriving from the right while a
+new player reads the screen (`openingGraceSeconds: 2.0`, using the shield that
+already exists so it announces itself). 4/4 now.
+
+Also: a ship pinned against the right wall had its nose drawn past the edge of
+the canvas.
+
+16 assertions; suite 417 → 433.
