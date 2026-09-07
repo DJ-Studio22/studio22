@@ -971,51 +971,6 @@ function beatBlocker() {
   return out + '</svg>';
 }
 
-/**
- * Pixel Paintball -- two paints meeting, and the bar that decides the wave.
- *
- * The card has one job: say that the FLOOR is the game. So the floor is most of
- * it, drawn as a ragged front between cyan and magenta rather than a tidy
- * split, with the roller trail showing where the ground was just taken.
- */
-function pixelPaintball() {
-  const cell = 10;
-  let out = '<svg ' + VIEW + '><rect width="320" height="200" fill="#22242c"/>';
-
-  // The floor: a ragged front, one column at a time, so it reads as territory
-  // rather than as a two-tone background.
-  for (let cx = 0; cx < 32; cx++) {
-    const front = 9 + Math.round(Math.sin(cx * 0.55) * 2.6 + Math.sin(cx * 1.7) * 1.2);
-    for (let cy = 0; cy < 16; cy++) {
-      if (cy > front + 1 && cy < front + 3 && cx % 5 === 2) continue;   // bare patches
-      const mine = cy < front;
-      out += '<rect x="' + (cx * cell) + '" y="' + (cy * cell) + '" width="' + cell
-        + '" height="' + cell + '" fill="' + (mine ? '#22d3ee' : '#f0559b') + '"/>';
-    }
-  }
-
-  // The roller trail: a cyan tongue pushed into the magenta.
-  out += '<path d="M92 96 L128 96 L150 118 L128 140 L92 140 Z" fill="#22d3ee"/>'
-    + '<circle cx="150" cy="118" r="15" fill="#22d3ee"/>';
-
-  // The player, mid-push, and a bot splattered behind the front.
-  out += '<circle cx="150" cy="118" r="11" fill="#e8fbff" stroke="#0e7490" stroke-width="3"/>'
-    + '<rect x="150" y="114" width="20" height="8" fill="#22d3ee"/>'
-    + '<circle cx="238" cy="150" r="10" fill="#5c4450" stroke="#8c1e52" stroke-width="3"/>'
-    + '<circle cx="262" cy="60" r="10" fill="#ffe1ee" stroke="#8c1e52" stroke-width="3"/>'
-    + '<rect x="244" y="56" width="18" height="8" fill="#f0559b"/>';
-
-  // The bar: the score IS the ground, so the card carries the same reading the
-  // HUD does, with the line you have to stay above marked on it.
-  out += '<rect x="0" y="160" width="320" height="40" fill="#15161b"/>'
-    + '<rect x="16" y="176" width="288" height="14" fill="#22242c"/>'
-    + '<rect x="16" y="176" width="160" height="14" fill="#22d3ee"/>'
-    + '<rect x="216" y="176" width="88" height="14" fill="#f0559b"/>'
-    + '<rect x="112" y="171" width="4" height="24" fill="#ffd54a"/>'
-    + '<text x="16" y="171" font-family="system-ui,sans-serif" font-size="11"'
-    + ' font-weight="800" fill="#eef2f7">56% HELD</text>';
-  return out + '</svg>';
-}
 
 /**
  * Gravity Well -- the craft, the gate, and the line that bends round a body.
@@ -1069,6 +1024,69 @@ function gravityWell() {
   return out + '</svg>';
 }
 
+/**
+ * Bigger Fish -- you, something you can eat, something that can eat you, and a
+ * spike between you and it.
+ *
+ * The card has to say the trade in one picture, so it is a size ladder: a green
+ * cell smaller than yours, yours, and a red one larger, with the spike sitting
+ * exactly where the big one would have to go around and the small one would
+ * not. The dashed ring is the split reach, which is the only way the middle one
+ * catches the left one.
+ */
+function biggerFish() {
+  const cell = (x, y, r, fill, rim, label) => '<circle cx="' + x + '" cy="' + y + '" r="' + r
+    + '" fill="' + fill + '" stroke="' + rim + '" stroke-width="' + Math.max(2, r * 0.13) + '"/>'
+    + (label ? '<text x="' + x + '" y="' + (y + r * 0.18) + '" text-anchor="middle"'
+      + ' font-family="system-ui,sans-serif" font-size="' + Math.round(r * 0.5)
+      + '" font-weight="700" fill="rgba(0,0,0,.55)">' + label + '</text>' : '');
+
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="bf-water" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#0d2c3c"/><stop offset="1" stop-color="#071a24"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#bf-water)"/>';
+
+  // The grid, which is what says the pond is bigger than the card.
+  for (let x = 20; x < 320; x += 40) {
+    out += '<line x1="' + x + '" y1="0" x2="' + x + '" y2="200" stroke="rgba(120,200,230,.07)" stroke-width="1"/>';
+  }
+  for (let y = 20; y < 200; y += 40) {
+    out += '<line x1="0" y1="' + y + '" x2="320" y2="' + y + '" stroke="rgba(120,200,230,.07)" stroke-width="1"/>';
+  }
+
+  // Pellets.
+  const pellets = [[40, 44], [88, 150], [140, 30], [196, 168], [250, 40], [292, 120],
+    [64, 96], [172, 108], [228, 96], [116, 182], [268, 176], [24, 132]];
+  const colours = ['#7fe3ff', '#a8f0c6', '#ffe6a3', '#ffb3d1'];
+  for (let i = 0; i < pellets.length; i++) {
+    out += '<circle cx="' + pellets[i][0] + '" cy="' + pellets[i][1] + '" r="3.4" fill="'
+      + colours[i % colours.length] + '"/>';
+  }
+
+  // The split reach of the middle cell: the only way it catches the green one.
+  out += '<circle cx="150" cy="104" r="62" fill="none" stroke="rgba(255,194,71,.28)"'
+    + ' stroke-width="2" stroke-dasharray="7 9"/>';
+
+  // The spike, between you and the fish that can eat you.
+  const sx = 232, sy = 66, sr = 15;
+  let spike = '';
+  for (let i = 0; i <= 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    const rr = sr * (i % 2 ? 1.32 : 0.9);
+    spike += (i ? ' L' : 'M') + (sx + Math.cos(a) * rr).toFixed(1) + ' ' + (sy + Math.sin(a) * rr).toFixed(1);
+  }
+  out += '<path d="' + spike + ' Z" fill="#1f8a5b" stroke="#6ef2b0" stroke-width="2"/>';
+
+  // The ladder: prey, you, and a bigger fish.
+  out += cell(72, 128, 17, '#4bd97f', '#146b39', '18')
+    + cell(150, 104, 30, '#ffc247', '#8a5a00', '92')
+    + '<circle cx="150" cy="104" r="16" fill="rgba(255,255,255,.22)"/>'
+    + cell(272, 128, 44, '#ff5f6d', '#8a1c2a', '410');
+
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -1092,7 +1110,7 @@ const ART = {
   'color-heist': colorHeist,
   hangman,
   'beat-blocker': beatBlocker,
-  'pixel-paintball': pixelPaintball,
+  'bigger-fish': biggerFish,
   'gravity-well': gravityWell,
   'asteroid-salvage': asteroidSalvage,
 };
