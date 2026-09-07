@@ -1022,6 +1022,52 @@ function beatBlocker() {
   return out + '</svg>';
 }
 
+/**
+ * Pixel Paintball -- two paints meeting, and the bar that decides the wave.
+ *
+ * The card has one job: say that the FLOOR is the game. So the floor is most of
+ * it, drawn as a ragged front between cyan and magenta rather than a tidy
+ * split, with the roller trail showing where the ground was just taken.
+ */
+function pixelPaintball() {
+  const cell = 10;
+  let out = '<svg ' + VIEW + '><rect width="320" height="200" fill="#22242c"/>';
+
+  // The floor: a ragged front, one column at a time, so it reads as territory
+  // rather than as a two-tone background.
+  for (let cx = 0; cx < 32; cx++) {
+    const front = 9 + Math.round(Math.sin(cx * 0.55) * 2.6 + Math.sin(cx * 1.7) * 1.2);
+    for (let cy = 0; cy < 16; cy++) {
+      if (cy > front + 1 && cy < front + 3 && cx % 5 === 2) continue;   // bare patches
+      const mine = cy < front;
+      out += '<rect x="' + (cx * cell) + '" y="' + (cy * cell) + '" width="' + cell
+        + '" height="' + cell + '" fill="' + (mine ? '#22d3ee' : '#f0559b') + '"/>';
+    }
+  }
+
+  // The roller trail: a cyan tongue pushed into the magenta.
+  out += '<path d="M92 96 L128 96 L150 118 L128 140 L92 140 Z" fill="#22d3ee"/>'
+    + '<circle cx="150" cy="118" r="15" fill="#22d3ee"/>';
+
+  // The player, mid-push, and a bot splattered behind the front.
+  out += '<circle cx="150" cy="118" r="11" fill="#e8fbff" stroke="#0e7490" stroke-width="3"/>'
+    + '<rect x="150" y="114" width="20" height="8" fill="#22d3ee"/>'
+    + '<circle cx="238" cy="150" r="10" fill="#5c4450" stroke="#8c1e52" stroke-width="3"/>'
+    + '<circle cx="262" cy="60" r="10" fill="#ffe1ee" stroke="#8c1e52" stroke-width="3"/>'
+    + '<rect x="244" y="56" width="18" height="8" fill="#f0559b"/>';
+
+  // The bar: the score IS the ground, so the card carries the same reading the
+  // HUD does, with the line you have to stay above marked on it.
+  out += '<rect x="0" y="160" width="320" height="40" fill="#15161b"/>'
+    + '<rect x="16" y="176" width="288" height="14" fill="#22242c"/>'
+    + '<rect x="16" y="176" width="160" height="14" fill="#22d3ee"/>'
+    + '<rect x="216" y="176" width="88" height="14" fill="#f0559b"/>'
+    + '<rect x="112" y="171" width="4" height="24" fill="#ffd54a"/>'
+    + '<text x="16" y="171" font-family="system-ui,sans-serif" font-size="11"'
+    + ' font-weight="800" fill="#eef2f7">56% HELD</text>';
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -1046,6 +1092,7 @@ const ART = {
   'color-heist': colorHeist,
   hangman,
   'beat-blocker': beatBlocker,
+  'pixel-paintball': pixelPaintball,
   'asteroid-salvage': asteroidSalvage,
 };
 

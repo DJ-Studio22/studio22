@@ -2358,3 +2358,96 @@ the weighted scale, and a shield that cannot block against one that can
 measures 160, backed up by the covered lane lighting.
 
 18 assertions; suite 433 → 451.
+
+## Phase 29 — Pixel Paintball, and four goes at making a shooter not be a shooter
+
+Territory held is the score. Splattering a bot is worth nothing directly: it
+takes that bot out for three seconds, which is long enough to paint the patch
+it was defending. The claim:
+
+> Neither pure strategy wins. A player who only paints is shot off the ground
+> they cover; a player who only hunts owns nothing worth holding.
+
+The same shape the turn-based Winter has and its real-time prototype could not
+produce — two extremes failing in **different** ways with the best play between
+them. One bot is swept from never-shoot to only-shoot and nothing else about it
+changes.
+
+### It did not work three times, and each failure was a different lesson
+
+**Shots painted a line as they flew.** Chasing bots around the arena with the
+trigger down covered the ground as a side effect, so hunting was free coverage.
+
+| aggression | 0.00 | 0.35 | 0.60 | 0.80 | 1.00 |
+|---|---|---|---|---|---|
+| median score | 786 | 7306 | 10739 | 11549 | **10963** |
+
+**Coverage moved to the roller** — you paint the ground you walk over. Hunting
+still won, because bots roamed the whole arena, so chasing them walked you over
+all of it. Giving each bot a patch to stay in did not fix it either.
+
+**And the reason it kept not working:** painting and shooting cost nothing
+shared, so suppression was free on top of coverage. At phrase-level detail this
+is the exact fault the real-time Winter was rejected for.
+
+### What fixed it was ink
+
+One tank, two uses — the symmetry that makes the turn-based Winter work. Ink
+pays for **every cell that changes hands** and for **every shot**, and it comes
+back six times faster where the ground around you is already yours. Attacking
+empties you; your own territory is where you reload; a hunter deep in bot paint
+has nowhere to fill up.
+
+| aggression | 0.00 | 0.20 | 0.40 | 0.60 | 1.00 |
+|---|---|---|---|---|---|
+| median score | 2146 | 6255 | **6947** | 6739 | 4395 |
+
+Across two disjoint blocks of eighty seeds the middle beats the hunter by 60%
+and 72%, and the painter by four to five times. And the extremes fail
+differently: the painter holds the least ground and never lasts, the hunter
+lasts and spends the run on bots.
+
+**The proof that it is ink and not luck**: a convention-3 test clones the
+tuning with `inkPerShot: 0, inkPerCell: 0` and the hunter goes straight back to
+the top — 11394 against the middle's 8712. Take the cost away and it collapses
+into the shooting gallery it was for three versions.
+
+### Two attempts at the refill rule that were quietly wrong
+
+**Refill while standing on your own paint** — the roller paints under your own
+feet, so a player who is moving is by definition standing on their own paint.
+The tank refilled itself faster than the roller could empty it, and "one tank,
+two uses" was a sentence in a comment rather than a rule in the game.
+
+**Refill only while standing still** — handed the game straight back to the
+hunter, who stops anyway to shoot. It also made the painter pay twice.
+
+It reads the ground *around* you now, and asks whether most of it is yours.
+game.js draws that disc as a ring that lights up, so the rule is visible rather
+than discovered.
+
+### What the hand-play found, and none of it was in the bots
+
+**Every bot beelined at the player from spawn.** Five seconds of touching
+nothing left the player holding 0% with three bots stacked on top of them —
+every bot in the wave started inside its engage range of the middle. Waves now
+open with three seconds in which bots paint their own patch and do not come for
+you.
+
+**Holding the trigger down permanently is fatal and the game said so in
+silence.** No refill means no shots *and* no paint: forty seconds of pressing
+everything with nothing appearing on the floor. Playing that way scored 216 at
+11% held. Releasing the trigger while sweeping — the same script otherwise —
+scored 554 at 21% with 19 bots splattered and 3 hits taken. The rule stays; the
+game now flashes **OUT OF INK — LET GO AND FALL BACK** and pulses the bar.
+
+**The bar to clear was set by bots that cannot be surprised.** Playing sensibly
+by eye reached 21% of the arena on wave one against a flat 28%, which fails a
+player for not yet knowing the game rather than for playing it badly. It starts
+at 17% and climbs to 28% by wave four, so the late game is unchanged. The line
+drawn on the territory bar comes from the same function the whistle uses.
+
+Contrast sampling: the three colours on the floor are the only three there, at
+485 / 411 / 363 apart on the weighted scale.
+
+18 assertions; suite 451 → 469.
