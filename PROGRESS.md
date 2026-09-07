@@ -2222,3 +2222,139 @@ Also: a ship pinned against the right wall had its nose drawn past the edge of
 the canvas.
 
 16 assertions; suite 417 → 433.
+
+## Phase 28 — Beat Blocker, where the music is made out of the chart
+
+A rhythm game with no music to follow. `engine/audio.js` synthesises tones,
+there are no samples and no backend to fetch a track from, so the usual
+arrangement — a recording, and a chart hand-authored against it — was not
+available.
+
+So it is inverted. **The chart is the source of truth and the music is its
+consequence.** `chart.js` owns a tempo and a list of attack times as plain
+numbers; `game.js` plays a kick on each of that phrase's beats and a note as
+each attack lands, and judges a press against the same numbers. The two cannot
+drift apart because they are not two things being kept in step — they are one
+list, read twice.
+
+The honest cost, stated up front: a chart generated from a rule is a drum
+pattern, not a song. It swings, it syncopates and it builds, and nobody will
+hum it.
+
+The benefit is that **fairness becomes arithmetic**, and none of it needs a
+speaker.
+
+### The claim
+
+> The window is one a person can hit, at every tempo, and the shield can always
+> physically get there.
+
+Convention 11 applied to the one genre made entirely of timing windows. Two
+ways it goes wrong, both guarded:
+
+**A window in beats shrinks as the tempo climbs.** At 84bpm an eighth of a beat
+is 89ms and generous; at 260 the same eighth is 29ms and frame-perfect. The
+windows here are 55ms and 115ms and they are *constants* — a faster phrase asks
+for more, never for more precision. A test judges the same delta under two
+tunings whose tempos differ and nothing else.
+
+**A pattern can ask you to be in two places at once.** The shield genuinely
+travels: 150ms a lane, and a press only counts in the lane it is *covering*.
+So a chart is only dealt if the shield could have got there.
+
+### The generator was rebuilt because of what the second one measured
+
+The first version generated a note in every slot the density allowed, gave each
+a random lane, and deleted whatever broke the reachability floors. It read
+fine. It was wrong: at speed almost every crossing breaks a floor and almost
+every same-lane note survives one, so the filter quietly sorted the late game
+into **a single column**.
+
+| phrase | bpm | notes/sec | lane changes/sec |
+|---|---|---|---|
+| 20 | 170 | 2.65 | 1.41 |
+| 60 | 260 | 5.69 | **0.00** |
+| 90 | 260 | 5.96 | **0.00** |
+
+A three-lane game that had stopped using two of them, with nothing failing
+anywhere. Now the generator **places** notes rather than filtering them: it
+picks the lane, asks how long the shield needs, and puts the note at the first
+grid slot that far away. A chart cannot then be both maximally fast and
+maximally wide, which is exactly the trade the escalation should be making.
+
+| phrase | bpm | notes/sec | lane changes/sec | lanes crossed/sec |
+|---|---|---|---|---|
+| 1 | 84 | 0.79 | 0.17 | 0.17 |
+| 20 | 170 | 2.30 | 1.24 | 1.59 |
+| 60 | 260 | 2.98 | 2.44 | 3.79 |
+
+**Where the escalation ends, honestly.** Tempo climbs to a cap (a beat faster
+than a hand is not a harder game), the subdivision takes over to sixteenths,
+and then movement carries it — until around phrase 80 the reachability floors
+are the binding constraint and the chart stops getting harder. That is a real
+terminal difficulty and it is where it should be: the score keeps climbing
+because you keep blocking, and nothing past that point is a chart a person
+could play anyway.
+
+### The claim, measured
+
+Two bots differing in exactly one field: `readsChart`. Same movement, same
+slop, same button — only *when* differs. The masher is not a weak player, it is
+the null hypothesis.
+
+| bot | median score | p10 | p90 |
+|---|---|---|---|
+| onBeat | **756** | 735 | 783 |
+| masher | 8 | 4 | 12 |
+
+The best mashing run scored below the worst timed one.
+
+### Three faults the numbers found, none of them tuning
+
+**The lanes are not all adjacent.** A flat lane floor is right for lane 0 to 1
+and a lie for lane 0 to 2. Charts passed it and still cost a bot with *zero
+jitter* a heart every few phrases, because it was still in transit.
+`reachMs(from, to)` has the distance in it now.
+
+**The floors were enforced inside a phrase and nowhere across the seam between
+two.** The downbeat opening a phrase could land in a lane the shield had no
+time to reach. The previous phrase's last attack is the anchor now, at a
+negative time — and clamped to slot zero, because without that the first note
+of a phrase could be placed at a negative time, which is to say already missed.
+
+**A cliff that was the bot's fault, not the chart's.** Survival went from 90%
+at 45ms of slop to 0% at 60ms. The cause: the bot stood over a note whose
+window had not expired even once the shield could no longer reach it, so one
+miss took the next note with it. A person who is late gives up and moves. With
+that fixed the shape is what it should be:
+
+| slop | median score | survives 20 phrases |
+|---|---|---|
+| 0ms | 756 | 100% |
+| 45ms | 741 | 100% |
+| 90ms | 562 | 100% |
+| 110ms | 244 | 13% |
+| 140ms | 41 | 0% |
+
+Precision pays; being roughly on the beat survives; pressing outside the window
+does not. Four hearts with no way back had made that a pass/fail exam — a
+couple of hundred attacks will find any miss rate above about 2% — so thirty
+blocks in a row buys a heart back, which turns the same numbers into a slope.
+
+### What the hand-play found
+
+Five seconds of looking at a game I had never seen cost **three of four
+hearts**. The run-up was four beats — 2.9 seconds — after which attacks arrived
+every 1.4. It is eight beats now: two full bars of pulse with nothing falling,
+which is long enough to hear the tempo, find the shield and watch the first
+attack come down. The number is chosen and pointed at, per CLAUDE.md, rather
+than whatever the generator happened to leave.
+
+It also caught `particles.render(ctx)` — there is no such method; the game
+loop threw on the first block and stopped. Every test passed.
+
+Contrast sampling: an attack against the lane it falls down measures **408** on
+the weighted scale, and a shield that cannot block against one that can
+measures 160, backed up by the covered lane lighting.
+
+18 assertions; suite 433 → 451.
