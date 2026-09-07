@@ -315,5 +315,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 90,
     "status": "live"
+  },
+  {
+    "id": "mini-golf",
+    "title": "Endless Mini Golf",
+    "tagline": "Sink it under par. Bank the difference.",
+    "description": "Crazy golf that never runs out. Aim, charge and putt through generated holes with walls to bank off, water that costs you a stroke, sand that kills a ball dead and ramps that will not let it stop. You do not get a fixed number of shots — you get a bank. Sink under par and the difference is added to it; go over and it is spent. Run it to zero and the round is over, mid-hole if that is where it happens. Every hole is proved sinkable within par before you ever see it.",
+    "category": "puzzle",
+    "path": "/games/mini-golf/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "golf",
+      "aim",
+      "procedural",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 180,
+    "status": "live"
   }
 ]

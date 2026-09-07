@@ -14,6 +14,9 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 15: Endless Mini Golf — game two of five. Procedural crazy golf where
+  every hole is PROVED sinkable within par before it is dealt, against a bank
+  of strokes rather than a fixed count. Fifteen games live
 - Phase 14: Rift Runner — game one of a batch of five. Endless runner whose
   portals change the physics, with a breadth-first SOLVER that proves every
   obstacle pattern is clearable in every realm it can be dealt in. Fourteen
@@ -1101,3 +1104,111 @@ near-black void behind the floor now; sampling the ground row of the canvas
 shows two clearly distinct colours where before there was one.
 
 Page weight: 24.6 KB gzipped. 28 new assertions; suite 265 → 293.
+
+## Phase 15 — Endless Mini Golf, and a hole that is proved before you see it
+
+Game two of five. `games/mini-golf/`, three files: `green.js` (tiles, putt
+physics, the search), `holes.js` (generation, the stroke economy, the round),
+`game.js` (canvas and nothing else). Fifteen games live.
+
+### Generate, then prove, then deal
+
+The generator is allowed to be adventurous — water across the direct line, a
+wall behind the cup — because it does not have to be careful. Every hole is
+carved and then handed to a search over the real putt physics, and only dealt
+if the search actually sinks it within par. One it cannot solve is thrown away
+and another generated, at about 7ms a go.
+
+That matters more here than in a hand-authored game. A cup with no angle into
+it does not read as unlucky, it reads as broken, and the player cannot tell
+"I can't see the shot" from "there is no shot".
+
+The search is a **beam search over a sampled fan**, so it is sound but not
+complete — it either sinks the ball by really simulating every stroke, or it
+fails to find a way in the beam it looked at. That asymmetry is exactly the
+right way round: being incomplete costs a few discarded holes at generation
+time, being unsound would cost the player a hole they cannot finish.
+
+### The stroke economy
+
+You do not get a fixed number of shots, you get a **bank**. Sink under par and
+the difference is added; go over and it is spent. Run it to zero and the round
+ends, mid-hole if that is where it happens.
+
+So a bad hole is survivable and a run of them is not, and a good hole buys room
+for a bad one later. Holes completed is the score — strokes are the resource,
+not the result, which is why the scoreboard counts holes and the HUD counts
+strokes.
+
+### One control model, three devices
+
+Aim on the stick, the arrows, or the touch joystick; hold to charge, release to
+hit. Identical everywhere, deliberately: three control schemes would mean the
+difficulty measured in `tests/` describes only one of them. The power meter
+rises AND falls while held, so letting go is a decision at every power rather
+than only at full.
+
+### Measured, 24 seeded rounds per skill
+
+| | competent | good |
+|---|---:|---:|
+| holes completed (median) | 5 | **20** |
+| 90th percentile | 8 | 31 |
+| best | 14 | 42 |
+
+Every round of both ends by running the bank dry, which is the economy doing
+its job rather than a timer.
+
+The two bots differ in one thing: the competent one aims at the cup, and the
+good one tries a fan and keeps whichever shot leaves the ball best placed.
+Playing the dog-leg rather than the straight line is worth 4x.
+
+### What the hand-play found — twice
+
+Per the convention Ember and Rift Runner earned.
+
+**The round ended on hole one.** Played cold with crude aim, the first hole
+came in at seven strokes against a par of two, which spent the entire starting
+bank before the player had learned which button charges. Par 2 is an ace or a
+loss: two is break-even and three already costs you. **The par floor is three
+now** — there is room to be bad at a hole without the round ending on it.
+Competent rounds went from 4 holes to 5, and more importantly stopped ending
+before they began.
+
+**The board was drawn a quarter of the size it should have been.** Holes grow
+from 12x9 to 22x15 tiles, and pinning the tile at 32px meant an early hole sat
+in the middle of the canvas with the ball a five-pixel dot in it. It is scaled
+to fit now, so hole 1 is enormous, hole 40 still fits, and the ball is the same
+size relative to the green either way. Nothing but playing it would have
+raised that — it was perfectly legible, just small enough that reading the line
+was a squint.
+
+### The contrast check found nothing, which is also a result
+
+Per the other new convention. Every hazard was measured against the fairway it
+sits on, in weighted RGB:
+
+| | vs green | vs the alternate square |
+|---|---:|---:|
+| water | 219 | 221 |
+| sand | 280 | 301 |
+| ramp | 169 | 198 |
+| mover | 327 | 332 |
+| cup | 299 | 269 |
+| ball | 447 | 473 |
+
+The closest meaningful pair is the ramp at 169, and it carries a drawn arrow as
+well as its colour. The two near pairs the check does flag — table against
+rough, and the two green squares of the checker — are both deliberate and
+neither is a thing the player has to tell apart.
+
+### Also worth recording
+
+The competent bot can get **stuck**: aiming straight at a cup it has no line to,
+it will putt into the same wall until the bank is gone. That is the economy
+working — going over par spends the bank — but it means bank size does not
+change how many holes it finishes, which made "a bigger bank buys more holes"
+the wrong way to test that the tuning is live. That test now checks the Course
+reads the bank it is given and that tripling the friction shortens a putt.
+
+24.1 KB gzipped. 22 assertions; suite 293 → 315.
