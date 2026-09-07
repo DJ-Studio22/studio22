@@ -257,6 +257,15 @@ export class Input {
 
   static #activeDevice = 'keyboard';
 
+  // The most recent tap, and where the pointer is. #pendingTap is collected by
+  // the DOM handlers; update() moves it to #tap so it reads as a one-frame
+  // edge, exactly like a button press.
+  static #tap = null;
+  static #pendingTap = null;
+  static #pointerDown = false;
+  static #pointerX = 0;
+  static #pointerY = 0;
+
   static #connectCallbacks = [];
   static #disconnectCallbacks = [];
 
@@ -331,6 +340,10 @@ export class Input {
       if (gamepadIsActive) Input.#activeDevice = 'gamepad';
     }
 
+    // A tap lives exactly one frame, the same as pressed().
+    Input.#tap = Input.#pendingTap;
+    Input.#pendingTap = null;
+
     Input.#curButtons = Input.#players.map((frame) => {
       const buttons = {};
       for (const name of BUTTON_NAMES) buttons[name] = frame[name];
@@ -359,6 +372,54 @@ export class Input {
     const cur = Input.#curButtons[playerIndex]?.[button] ?? false;
     const prev = Input.#prevButtons[playerIndex]?.[button] ?? false;
     return !cur && prev;
+  }
+
+  // -------------------------------------------------------------------
+  // Pointing at things
+  // -------------------------------------------------------------------
+  //
+  // Not every game is a stick and a button. Picking a letter out of an
+  // alphabet, a tile out of a grid, a spot on a map — on a touchscreen the
+  // natural action is to put a finger on the thing, and a virtual stick
+  // dragging a cursor across twenty-six cells is a worse game pretending to
+  // be a consistent one.
+  //
+  // So Input reports TAPS as well: a click, or a touch that no touch button
+  // and no virtual stick claimed. Coordinates are viewport space, exactly as
+  // a MouseEvent's clientX/clientY — the caller hands them to
+  // GameCanvas.screenToGame(), which is the conversion every other coordinate
+  // in the engine already goes through.
+  //
+  // This is not licence for a second control model. A game built on it must
+  // still play from a pad and a keyboard; see Hangman, where the same letter
+  // grid is walked with a stick, typed at directly, or tapped, and all three
+  // resolve to the one action "choose this letter".
+
+  /**
+   * Is this raw key down right now?
+   *
+   * The layouts map a fixed set of codes onto named ACTIONS, which is the
+   * right shape for a game where a button means "jump". It is the wrong shape
+   * for a game whose input is a letter: twenty-six actions called A to Z would
+   * be twenty-six of the same action with an argument, and every layout in the
+   * file would have to carry them.
+   *
+   * So a game that reads letters asks about the key directly. Takes a
+   * KeyboardEvent.code — 'KeyQ', 'Digit4' — because that is what the rest of
+   * this module speaks and because it does not move with the keyboard layout.
+   */
+  static isKeyHeld(code) {
+    return Input.#heldKeys.has(code);
+  }
+
+  /** The tap since the last update(), in viewport coordinates, or null. */
+  static tapped() {
+    return Input.#tap;
+  }
+
+  /** Where the pointer is while it is held down, or null. */
+  static pointer() {
+    return Input.#pointerDown ? { x: Input.#pointerX, y: Input.#pointerY } : null;
   }
 
   static getConnectedPads() {
@@ -777,6 +838,18 @@ export class Input {
       }
     }
 
+    // A touch no button and no stick wanted is a TAP at that spot. Checked
+    // last, after both have had their turn, so a thumb on a fire pad never
+    // also reads as a poke at whatever is behind it.
+    for (const touch of event.changedTouches) {
+      if (Input.#touchButtonTouches.has(touch.identifier)) continue;
+      if (Input.#stickOwning(touch.identifier)) continue;
+      Input.#pendingTap = { x: touch.clientX, y: touch.clientY };
+      Input.#pointerDown = true;
+      Input.#pointerX = touch.clientX;
+      Input.#pointerY = touch.clientY;
+    }
+
     // Only now, having taken the touch, is it ours to stop scrolling with.
     if (claimed) event.preventDefault();
   }
@@ -838,6 +911,23 @@ export class Input {
       for (const cb of Input.#disconnectCallbacks) cb(event.gamepad.index);
     });
 
+    // A mouse is a pointer too, and somebody on a desktop poking at a letter
+    // grid expects it to work. Same edge, same coordinates.
+    window.addEventListener('pointerdown', (event) => {
+      if (event.pointerType === 'touch') return;   // the touch path owns those
+      Input.#pendingTap = { x: event.clientX, y: event.clientY };
+      Input.#pointerDown = true;
+      Input.#pointerX = event.clientX;
+      Input.#pointerY = event.clientY;
+      Input.#activeDevice = 'keyboard';
+    });
+    window.addEventListener('pointermove', (event) => {
+      if (event.pointerType === 'touch') return;
+      Input.#pointerX = event.clientX;
+      Input.#pointerY = event.clientY;
+    });
+    window.addEventListener('pointerup', () => { Input.#pointerDown = false; });
+
     window.addEventListener('keydown', (event) => {
       if (Input.#isTypingIntoField()) return;
       Input.#heldKeys.add(event.code);
@@ -856,6 +946,7 @@ export class Input {
     window.addEventListener('blur', () => {
       Input.#heldKeys.clear();
       Input.#releaseAllTouches();
+      Input.#pointerDown = false;
     });
 
     if (Input.#touchEnabled) {

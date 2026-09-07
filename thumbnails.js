@@ -851,6 +851,65 @@ function colorHeist() {
   return out + '</svg>';
 }
 
+/**
+ * Hangman -- a word half out, and the grid that got it there.
+ *
+ * The card has to say what is different about this one, which is not the
+ * gallows: it is that the letters you have spent are on the board in front of
+ * you, green and red, and the answer follows from them. So the grid gets as
+ * much room as the word.
+ */
+function hangman() {
+  const key = (x, y, w, h, fill, edge) => '<rect x="' + x + '" y="' + y + '" width="' + w
+    + '" height="' + h + '" rx="5" fill="' + fill + '" stroke="' + edge + '" stroke-width="2"/>';
+  const letter = (x, y, ch, fill) => '<text x="' + x + '" y="' + y
+    + '" text-anchor="middle" font-family="system-ui,sans-serif" font-size="17"'
+    + ' font-weight="800" fill="' + fill + '">' + ch + '</text>';
+
+  let out = '<svg ' + VIEW + '><rect width="320" height="200" fill="#222a32"/>';
+
+  // The gallows, most of the way there.
+  out += '<g stroke="#8a6a44" stroke-width="6" stroke-linecap="round" fill="none">'
+    + '<path d="M20 150 L70 150 M45 150 L45 30 L92 30"/></g>'
+    + '<path d="M92 30 L92 44" stroke="#c9b48a" stroke-width="4"/>'
+    + '<g stroke="#e8eef2" stroke-width="4" fill="none" stroke-linecap="round">'
+    + '<circle cx="92" cy="56" r="11"/><path d="M92 67 L92 100 M92 74 L76 88 M92 74 L108 88"/></g>';
+
+  // The word, half revealed.
+  const slots = ['C', null, 'S', 'T', 'L', 'E'];
+  slots.forEach((ch, i) => {
+    const x = 140 + i * 29;
+    out += '<path d="M' + (x - 11) + ' 62 L' + (x + 11) + ' 62" stroke="rgba(232,238,242,.3)"'
+      + ' stroke-width="3"/>';
+    if (ch) out += '<text x="' + x + '" y="56" text-anchor="middle"'
+      + ' font-family="system-ui,sans-serif" font-size="26" font-weight="800"'
+      + ' fill="#e8eef2">' + ch + '</text>';
+  });
+  out += '<text x="227" y="88" text-anchor="middle" font-family="system-ui,sans-serif"'
+    + ' font-size="11" font-weight="700" fill="#ffc857">Places</text>';
+
+  // The grid underneath, with what has been spent showing.
+  const spent = { C: 'hit', E: 'hit', S: 'hit', T: 'hit', L: 'hit', I: 'miss', N: 'miss', R: 'miss' };
+  const row = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+  const row2 = ['K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T'];
+  [row, row2].forEach((letters, r) => {
+    letters.forEach((ch, i) => {
+      const x = 16 + i * 29;
+      const y = 112 + r * 40;
+      const state = spent[ch];
+      const fill = state === 'hit' ? '#3f8f5c' : state === 'miss' ? '#93242f' : '#4e5e6d';
+      const edge = state ? 'rgba(0,0,0,.25)' : '#6b7c8c';
+      out += key(x, y, 26, 30, fill, edge)
+        + letter(x + 13, y + 21, ch, state === 'miss' ? '#f6cdd1' : '#f2f6f9');
+    });
+  });
+
+  // The cursor, so the card says "this is driveable without a keyboard".
+  out += '<rect x="130" y="149" width="30" height="34" rx="7" fill="none"'
+    + ' stroke="#ffc857" stroke-width="3"/>';
+  return out + '</svg>';
+}
+
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -873,6 +932,7 @@ const ART = {
   'tank-tactics': tankTactics,
   'dungeon-dice': dungeonDice,
   'color-heist': colorHeist,
+  hangman,
 };
 
 /**
