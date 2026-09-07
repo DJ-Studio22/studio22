@@ -88,7 +88,34 @@ export const TUNING = {
 
   // Enemies, and how the waves grow. No ceiling on either.
   enemyRadius: 1.1,
-  enemySpeed: 7.4,
+  // HALF THE SPEED IT WAS. At 7.4 every tank in a wave arrived at once and a
+  // wave was one undifferentiated rush; there was no arena to move through
+  // because the arena came to you.
+  enemySpeed: 3.6,
+
+  // --- Sleeping, waking, engaging -----------------------------------------
+  //
+  // A tank does not start hunting. It holds its post, or walks a short patrol,
+  // until it can SEE the player — and then it takes a moment to react before
+  // it does anything about it. Those two states are what turn a wave from a
+  // rush into a thing you pick apart from the edges.
+  //
+  // Sight is line of sight plus a range, both of which the player can reason
+  // about: cover blocks it, distance blocks it, and standing still behind a
+  // block means nobody is looking for you.
+  // Twenty, not twenty-six, and the hand-play picked the number. The player
+  // spawns about twenty-five units from the front row, so at 26 two of the
+  // three tanks in the first wave had noticed before a new player had touched
+  // a control. The opening should start with nobody looking at you.
+  sightRange: 20,
+  // The beat between being seen and being shot at. Long enough that a player
+  // who breaks a sightline immediately can get away with it, which is what
+  // makes the sighting moment worth showing.
+  alertSeconds: 0.9,
+  // A woken tank stays awake, because a tank that forgets you the moment you
+  // duck is a tank you can farm from one corner.
+  patrolSpeed: 1.9,
+  patrolRadius: 5.5,
   // Enemy fire is slow and sloppy on purpose. A bank shot takes a second to
   // set up and a second to land, and a player being shot at four times a
   // second never gets to take one — the skill the game is built around needs
@@ -104,6 +131,19 @@ export const TUNING = {
 
   playerHp: 5,
 };
+
+/**
+ * What a tank is doing about you.
+ *
+ * HOLDING  has not seen you. Sits on its post or walks a small patrol.
+ * ALERTED  has just seen you and is turning to face it. Cannot shoot yet.
+ * ENGAGED  hunting. Closes, shoots, and does not go back to sleep.
+ *
+ * The middle state is the one that matters for the player: it is a whole
+ * second of "that one has noticed" before anything comes back, which is what
+ * makes a sightline something to manage rather than something to discover.
+ */
+export const STATE = { HOLDING: 'holding', ALERTED: 'alerted', ENGAGED: 'engaged' };
 
 export const KIND = {
   GRUNT: 'grunt',       // walks at you and shoots straight
@@ -451,6 +491,7 @@ export class Battle {
     this.bankHits = 0;
     this.directHits = 0;
     this.deflections = 0;
+    this.sightings = 0;
   }
 
   spawnWave() {
@@ -458,14 +499,23 @@ export class Battle {
     const roster = waveRoster(this.wave, t);
     this.enemies = roster.map((kind, i) => {
       const across = (i + 1) / (roster.length + 1);
+      const x = t.wallThickness + 3 + across * (t.width - 2 * t.wallThickness - 6);
+      const y = t.wallThickness + 3 + (i % 2) * 3;
       return {
         id: nextId++,
         kind,
-        x: t.wallThickness + 3 + across * (t.width - 2 * t.wallThickness - 6),
-        y: t.wallThickness + 3 + (i % 2) * 3,
+        x,
+        y,
         hp: (kind === KIND.SNIPER ? 4 : 1) + Math.floor((this.wave - 1) * t.enemyHpPerWave),
         reload: t.enemyReload * (0.4 + (i % 5) * 0.2),
         vx: 0, vy: 0,
+        // Where it holds while it has not seen anybody, and how far round that
+        // post it wanders.
+        postX: x,
+        postY: y,
+        state: STATE.HOLDING,
+        alert: 0,
+        patrol: (i % 4) * (Math.PI / 2),
       };
     });
     this.cover = buildCover(this.wave, t);
@@ -638,7 +688,49 @@ export class Battle {
     const b = bounds(t);
     const toPlayer = Math.atan2(p.y - e.y, p.x - e.x);
     const distance = Math.hypot(p.x - e.x, p.y - e.y);
-    const sees = hasLineOfSight(e, p, this.cover, t);
+    const clearLine = hasLineOfSight(e, p, this.cover, t);
+    const canSee = clearLine && distance <= t.sightRange;
+
+    // --- What it is doing about you ---
+    if (e.state === STATE.HOLDING) {
+      if (canSee) {
+        e.state = STATE.ALERTED;
+        e.alert = t.alertSeconds;
+        this.sightings++;
+      } else {
+        // A slow circle round its post. Not a hunt — a patrol you can watch
+        // and time, which is what makes approaching one a plan.
+        e.patrol += dt * 0.7;
+        const px = e.postX + Math.cos(e.patrol) * t.patrolRadius;
+        const py = e.postY + Math.sin(e.patrol) * t.patrolRadius;
+        const toPost = Math.atan2(py - e.y, px - e.x);
+        if (e.kind !== KIND.SNIPER) {
+          e.x += Math.cos(toPost) * t.patrolSpeed * dt;
+          e.y += Math.sin(toPost) * t.patrolSpeed * dt;
+          e.x = Math.max(b.left + t.enemyRadius, Math.min(b.right - t.enemyRadius, e.x));
+          e.y = Math.max(b.top + t.enemyRadius, Math.min(b.bottom - t.enemyRadius, e.y));
+          for (const block of this.cover) {
+            if (block.hp <= 0) continue;
+            pushOutOfBlock(e, block, t.enemyRadius);
+          }
+        }
+        e.reload = Math.max(e.reload, t.enemyReload * 0.5);
+        return;
+      }
+    }
+
+    if (e.state === STATE.ALERTED) {
+      e.alert -= dt;
+      // Break the sightline in time and it settles back down. This is the
+      // whole reason the alerted state is a second long rather than instant.
+      if (!canSee) { e.state = STATE.HOLDING; e.alert = 0; return; }
+      if (e.alert > 0) return;
+      e.state = STATE.ENGAGED;
+    }
+
+    // Once engaged, it stays engaged. A tank that forgets you the moment you
+    // duck is a tank you farm from one corner.
+    const sees = clearLine;
 
     // Snipers hold position. Everything else closes, but stops short so the
     // arena does not turn into a scrum with no room to aim.
