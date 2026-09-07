@@ -14,6 +14,9 @@
 - Phase 4 (partial): Sinkhole built new — games/sinkhole/. Descending faller: drop through gaps before the rising ledge pins you to the ceiling spikes. 20.2 KB gzipped
 - Phase 4 DONE: Circuit Racer built new — games/circuit-racer/. Three laps against a blocking rival, fastest lap is the score. FIRST game where lower is better (setScoreDirection low). 20.9 KB gzipped. All six games are now live
 - Phase 7 (partial): hot-seat tournaments — engine/tournament.js (rules, no DOM), engine/tournament-ui.js (screens), styles/tournament.css, party.html rebuilt. Three modes, 2-8 players, on-screen keyboard, animated standings, podium. Party page 18.6 KB gzipped. shell.js Phase 7 hook is wired: games need no changes to be tournament-ready
+- Phase 13: CI on every push and pull request, and engine/ coverage taken from
+  67 tests to 124. Covering the shared code immediately found Input.pressed('up')
+  dead in two shipped games. Whole suite 208 -> 265
 - Phase 12: security and cross-browser pass. Injection surface audited end to
   end, full git history scanned for credentials, zero external requests proved
   on the deployed site, headers confirmed live, and the site tested in Gecko
@@ -832,3 +835,137 @@ try/catches and returns an empty array. They work.
   good proxy for layout and rendering and a poor one for audio policy.
 - **A physical gamepad in Firefox or WebKit.** The API's presence was checked;
   no pad was connected to test button mapping against.
+
+## Phase 13 — CI, and covering the engine
+
+Two structural gaps closed, and closing the second one immediately found a bug
+that had been live in two games for months.
+
+### CI, so the lesson is a mechanism
+
+`.github/workflows/ci.yml` runs on every push to main and on every pull
+request: `npm ci`, `npm test`, `npm run build`, then two post-build checks.
+Node 22 and 24, `fail-fast: false` so a version-specific break is visible as
+one, read-only token, and superseded runs on a branch are cancelled.
+
+This project's hardest-won lesson is that **a failed build is a silent
+deploy** — `engine/canvas.js` once had a parse error, the build failed, and
+Cloudflare Pages went on serving the previous version while the repo was
+broken. That lesson was written in the README, which is not a mechanism.
+
+Worth being precise about what does and does not block: Pages builds
+independently of the Action, so a red check does not by itself stop a deploy.
+What stops a *merge* is branch protection with "Require status checks to pass"
+and `verify` selected. That is a one-time repository setting, it cannot be made
+from a commit, and it is written up in DEPLOY.md.
+
+**Two new checks, because `npm run build` exiting zero is not the same as the
+build being right:**
+
+- `tools/verify-build.mjs` asks games.json what should exist and then looks.
+  Every live game's page present, each with a module script and a
+  `#boot-fallback`; every file from `public/` copied, including `_headers` and
+  `404.html`; `reference/` absent. A game added to the manifest whose folder
+  was never created is a green build and a broken hub, and nothing else would
+  catch it.
+- `tools/check-no-external.mjs` fails the build if anything in `dist/` would
+  make the browser fetch from another origin, and if the CSP stops containing
+  its load-bearing directives. The zero-external-requests claim was verified by
+  hand in Phase 12; this is what keeps it true.
+
+The second one was written twice. The first version flagged every absolute URL
+and immediately caught the portfolio link in the footer — a false positive, and
+a check that cries wolf is a check people learn to skip. It looks only at
+references the browser resolves on its own now (`src`, `srcset`, `<link href>`,
+`url()`, `@import`, absolute URLs in bundled JS). Outbound `<a href>` links are
+reported as information and never fail.
+
+Both were proved to fail before being trusted: deleting a game page and adding
+a Google Fonts link each turned CI red.
+
+`package.json` gains `engines: { node: ">=22" }` — the test script passes a
+glob to `node --test`, which Node 21 introduced, so Node 20 fails with a
+confusing "no test files found" rather than a clear one. Plus `npm run verify`
+and `npm run ci`, so a local run is the same commands CI runs.
+
+### Covering engine/ — 67 tests to 124
+
+The asymmetry was backwards: seven games had measured rules modules while the
+6,500 lines every one of them imports had a handful of tests. `input.js` (836
+lines), `loop.js` (433) and `shell.js` (1,227) had none at all.
+
+| | before | after |
+|---|---:|---:|
+| engine tests | 67 | **124** |
+| whole suite | 208 | **265** |
+
+**`loop.js` — 13 tests.** The fixed timestep (update always gets the same dt,
+whatever the frame took), the step count following real time rather than frame
+count, alpha staying inside [0, 1). The spiral guard: a 60-second stall runs at
+most 8 steps and the backlog is discarded rather than owed. Time never running
+backwards when rAF reports a timestamp fractionally before `start()` did. And
+containment — a throw in update or render stops the loop exactly once and logs
+exactly once.
+
+**`input.js` — 24 tests.** Edge detection, the radial deadzone (a diagonal is
+not easier than an axis, which is the whole reason it is radial), device
+merging, blur clearing held keys so alt-tabbing does not leave the player
+running into a wall. The four party keyboard layouts are checked for key
+collisions — four people on one keyboard, and a collision is invisible until
+four people are actually sitting there. Plus the graceful-degradation paths
+WebKit-on-Windows exercised by accident in Phase 12: no Gamepad API, and a
+Gamepad API that throws.
+
+**`shell.js` — 20 tests.** Scores reaching the session and the best read back
+being the *better* number rather than the one just submitted; score direction,
+so Circuit Racer's "lower is better" survives; `?tournament` parsing in every
+form including the explicit offs; the sound preference being read at boot and
+written back; menu navigation wrapping in both directions and reopening on the
+first item.
+
+### THE BUG THIS FOUND, on the first run
+
+`Input.pressed('up')` had never worked. up/down/left/right were not in
+`BUTTON_NAMES` — movement is an analogue vector, so the directions were never
+edge-tracked — and asking for a button that does not exist is not an error. It
+read an undefined slot and returned false, forever, silently.
+
+**Two shipped games depended on it.** Block Buster's own controls list says
+"Hard drop: B or up / Shift or Up", and the Up half had never once worked.
+Ballast inherited the same line when its controls were deliberately aligned
+with Block Buster's in Phase 11. Nobody noticed because B works, and a dead
+alternative looks exactly like a player who did not try it.
+
+Fixed in the engine rather than in the two games, because that is where the
+gap was: the four directions are now derived from the merged movement vector
+in one helper and edge-tracked alongside the face buttons, crossing at the same
+half-deflection threshold `shell.js` and `tournament-ui.js` already use for
+menu navigation. A stick, a d-pad, WASD and the touch joystick all produce the
+same edges. Verified in a browser against a production build — ArrowUp alone
+now lands pieces in both stackers.
+
+This is the argument for covering shared code, stated as plainly as it can be:
+one gap in `engine/` was two broken games, for months, in a project where
+every game gets played.
+
+### And a smaller one, found by writing the test rather than running it
+
+`setKeyboardLayout(playerIndex, layout)` accepted its two arguments in either
+order without complaint. Reversed, a number landed in the layout slot, every
+lookup on it came back undefined, and that player's keyboard did nothing for
+the whole party — with no error anywhere. It throws now, and says which order
+it wanted. The first draft of the test file got the order wrong, which is how
+this surfaced.
+
+### Testing modules that need a DOM
+
+`helpers/dom.mjs` gained a manual clock, `clock.tick()` (which advances every
+queued callback rather than the oldest — a page can have the game loop and the
+shell's overlay loop on rAF at once), `append`/`prepend`, a global
+`getComputedStyle`, and an event payload on `dispatch` so a keydown can carry a
+`code`.
+
+One trap worth recording: menu input is **not** handled by `shell.update()`.
+That returns false the moment a screen is open and does nothing else — overlays
+run on the shell's own frame loop, because the game loop is suspended while one
+is up. Driving a menu in a test means pumping the clock, not calling update().

@@ -141,3 +141,50 @@ worse than having no card.
 **One image serves every page.** Per-game cards would be better and are
 deliberately not built - six more images to keep in step with six
 descriptions, for a link preview most visitors never see.
+
+---
+
+## Continuous integration, and making it block
+
+`.github/workflows/ci.yml` runs `npm ci`, `npm test`, `npm run build` and the
+two post-build checks on every push to `main` and every pull request, on Node
+22 and 24. Locally, `npm run ci` is the same sequence.
+
+### The one manual step
+
+**Cloudflare Pages builds independently of GitHub Actions.** A red check does
+not, by itself, stop a deploy — Pages has already started its own build from
+the same commit. What a red check can stop is a *merge*, and that needs branch
+protection, which is a repository setting and cannot be made from a commit.
+
+In GitHub: **Settings → Branches → Add branch ruleset** (or *Add rule*) for
+`main`, then enable:
+
+- **Require a pull request before merging** — otherwise a direct push to
+  `main` bypasses checks entirely, which is the case this is meant to catch.
+- **Require status checks to pass before merging**, and select the
+  `test and build (node 22)` and `test and build (node 24)` checks. They only
+  appear in that list after the workflow has run at least once, so push the
+  workflow first and come back.
+- **Do not allow bypassing the above settings**, unless you want an override.
+
+Until that is switched on, CI is an alarm rather than a gate: it will tell you
+main is broken, promptly and visibly, but it will not prevent it.
+
+### Why the build is checked twice
+
+`npm run build` exiting zero means Vite did not crash. It does not mean the
+build is right. Two things run after it:
+
+- `tools/verify-build.mjs` asks `games.json` what should exist and then looks
+  for it — every live game's page, each with a module script and a boot
+  fallback, plus everything `public/` is supposed to contribute. A game added
+  to the manifest whose folder was never created produces a perfectly green
+  build and a hub full of dead links.
+- `tools/check-no-external.mjs` fails if anything in `dist/` would make the
+  browser fetch from another origin, or if the CSP has lost one of its
+  load-bearing directives. The landing page promises the site contacts nobody;
+  this is what keeps that from quietly stopping being true.
+
+Both fail the build, and both were checked by breaking them on purpose before
+being trusted.

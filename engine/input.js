@@ -60,6 +60,42 @@ const BUTTON_NAMES = [
   'a', 'b', 'btnX', 'btnY', 'start', 'back', 'lb', 'rb', 'lt', 'rt', 'ls', 'rs',
 ];
 
+// The four directions, tracked for edges the same way the face buttons are.
+//
+// WHY THIS EXISTS
+// ---------------
+// Movement is an ANALOGUE vector, so up/down/left/right are not in
+// BUTTON_NAMES and never were. That meant Input.pressed('up') read an
+// undefined slot and returned false forever — silently, because asking for a
+// button that does not exist is not an error.
+//
+// Two games were written against it. Block Buster shipped with 'Hard drop: B
+// or up' printed in its own controls list and the Up half has never once
+// worked; Ballast inherited the same line. Nobody noticed because B works and
+// a dead alternative looks exactly like a player who did not try it.
+//
+// Found by tests/engine.input.test.mjs, which is the whole argument for
+// covering engine/ — this is shared code, so one gap was two broken games.
+//
+// A direction counts as pressed once the merged vector crosses
+// DIRECTION_THRESHOLD, which is the same figure the shell and the tournament
+// UI already use to turn a stick into menu navigation.
+// Matches NAV_THRESHOLD in shell.js and tournament-ui.js. Half deflection is
+// far enough to be deliberate and near enough not to need a firm push.
+const DIRECTION_THRESHOLD = 0.5;
+
+// Derived in one place and used by both the held-state frame and the
+// edge-tracked snapshot, so the two can never disagree about which way the
+// player is pointing.
+function directionsFrom(x, y) {
+  return {
+    up: y <= -DIRECTION_THRESHOLD,
+    down: y >= DIRECTION_THRESHOLD,
+    left: x <= -DIRECTION_THRESHOLD,
+    right: x >= DIRECTION_THRESHOLD,
+  };
+}
+
 // Elements that own their own taps. A touch starting on one of these belongs
 // to the page, not to the game: claiming it would both steal the input and
 // suppress the click the element is waiting for. Games can opt any other
@@ -275,7 +311,13 @@ export class Input {
       );
       const buttons = mergeButtonsWithOr([gamepadFrame, keyboardFrame, touchFrame]);
 
-      Input.#players[i] = { x: move.x, y: move.y, aimX: aim.x, aimY: aim.y, ...buttons };
+      Input.#players[i] = {
+        x: move.x, y: move.y, aimX: aim.x, aimY: aim.y,
+        // The same four as held state, so get().up reads as naturally as
+        // get().a does.
+        ...directionsFrom(move.x, move.y),
+        ...buttons,
+      };
 
       // Gamepads have no "just moved" event to hook, so activeDevice can
       // only be set to 'gamepad' here, by noticing live input during the
@@ -292,6 +334,10 @@ export class Input {
     Input.#curButtons = Input.#players.map((frame) => {
       const buttons = {};
       for (const name of BUTTON_NAMES) buttons[name] = frame[name];
+      // Directions are derived from the merged movement vector rather than
+      // read off a device, so a stick, a d-pad, WASD and the touch joystick
+      // all produce the same edges.
+      Object.assign(buttons, directionsFrom(frame.x, frame.y));
       return buttons;
     });
   }
@@ -379,6 +425,23 @@ export class Input {
     const resolved = typeof layout === 'string' ? KEYBOARD_LAYOUTS[layout] : layout;
     if (!resolved) {
       throw new Error(`Input.setKeyboardLayout: unknown layout "${layout}"`);
+    }
+    // The arguments are (playerIndex, layout) and it is an easy pair to swap.
+    // Without these two checks the swapped call is SILENT: a number lands in
+    // the layout slot, every lookup on it is undefined, and that player's
+    // keyboard simply does nothing for the rest of the party. Throwing here
+    // costs nothing and turns a mystery into a stack trace.
+    if (typeof resolved !== 'object') {
+      throw new TypeError(
+        `Input.setKeyboardLayout: layout must be a preset name or a mapping object, got ${typeof resolved}. `
+        + 'The argument order is (playerIndex, layout).',
+      );
+    }
+    if (!Number.isInteger(playerIndex) || playerIndex < 0 || playerIndex >= MAX_PLAYERS) {
+      throw new RangeError(
+        `Input.setKeyboardLayout: playerIndex must be 0..${MAX_PLAYERS - 1}, got ${playerIndex}. `
+        + 'The argument order is (playerIndex, layout).',
+      );
     }
     Input.#keyboardLayouts[playerIndex] = resolved;
   }

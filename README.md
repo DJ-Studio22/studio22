@@ -17,14 +17,20 @@ npm install
 npm run dev       # Vite dev server
 npm run build     # writes dist/
 npm run preview   # serves the built dist/, which is the real test
-npm test          # the rule and tuning tests
+npm test          # the rule, tuning and engine tests
+npm run verify    # checks the build against games.json, and for external refs
+npm run ci        # test + build + verify — exactly what CI runs
 ```
 
 `npm run preview` matters more than it looks. A cleanup commit once introduced
 a parse-time `SyntaxError` in `engine/canvas.js`; the build failed, Cloudflare
 kept serving the previous version, and the site looked alive while the repo
-was broken. **A failed build is a silent deploy.** Check that the build
-passes, not just that the site responds.
+was broken. **A failed build is a silent deploy.**
+
+That is a mechanism now rather than a sentence: GitHub Actions runs the whole
+of `npm run ci` on every push and pull request, on Node 22 and 24. Making it
+block a merge needs branch protection turned on once in the repository
+settings — see [`DEPLOY.md`](DEPLOY.md).
 
 ---
 

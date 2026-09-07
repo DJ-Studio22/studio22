@@ -6,6 +6,9 @@ has to satisfy, and how to tell it is done.
 Tick a task only when its verification actually passed, not when the code was
 written.
 
+**Open right now:** item 13 only — real-hardware testing. Everything else is
+done. Item 13 cannot be closed from this machine and is not a code task.
+
 ---
 
 ## 1. Finish Keystroke — [x] DONE
@@ -250,5 +253,84 @@ Verification rather than assurances. Full write-up in PROGRESS.md Phase 12.
   26.6 was tested instead, which is faithful for layout and rendering and not
   for audio policy.
 - No physical gamepad was connected in Firefox or WebKit.
+
+---
+
+## 13. Real-hardware testing — OPEN
+
+**The least-evidenced claim in the project.** CLAUDE.md makes universal input a
+hard constraint — "Every game must work with: Xbox/PlayStation gamepad,
+keyboard, and touch. This is non-negotiable" — and that constraint is
+currently supported by one hand-test on one iPhone months ago, plus
+API-presence checks in three browser engines.
+
+Everything automated runs headless. A headless browser has no thumbs, no
+touchscreen, and no gamepad, so the parts of "universal input" that involve
+actual hardware have never been exercised at all.
+
+This is not a small gap. `Input.pressed('up')` was dead in two shipped games
+for months and no amount of playing found it, because B also worked. The
+things below have the same shape: a second way to do something that quietly
+does not, or a control that is subtly wrong rather than absent.
+
+### What specifically is unevidenced
+
+**Gamepad buttons on non-Chromium engines.** The Gamepad API's *presence* was
+checked in Chromium, Firefox and WebKit. No button has ever been pressed on a
+real pad in Firefox, and WebKit-on-Windows does not implement the API at all
+so nothing could be checked there. Button *index* mapping is the risk: the
+"standard" mapping is a convention, not a guarantee, and engines disagree
+about non-standard pads. Specifically untested:
+
+- Face buttons and d-pad on a real pad in Firefox.
+- Left/right trigger as an ANALOGUE axis — Neon Drift binds boost and brake to
+  the triggers, and trigger reporting differs most between engines.
+- Stick deadzone against a worn pad with real drift, rather than the synthetic
+  axis values the unit tests use.
+- Whether `gamepadconnected` fires on a pad connected BEFORE the page loaded,
+  which is the common case and the one browsers handle least consistently.
+- Rumble. `Input.rumble()` has three fallback paths and none has been felt.
+
+**Touch on Android.** All touch testing has been iOS. Nothing has run on an
+Android phone or tablet at all. Untested:
+
+- The virtual joystick and action pads under a real thumb, at real sizes.
+- Multi-touch: stick and button at once, which every action game needs.
+- Whether `startedOnPageUi()` correctly lets taps through to real buttons on
+  the arcade and party pages.
+- Chrome on Android's address-bar collapse changing the viewport mid-run,
+  which is exactly the case `100svh` and the canvas letterbox exist for.
+- Tournament mode's on-screen keyboard, which is touch-first by design.
+
+**iOS audio on current Safari.** The unlock in `engine/audio.js` is written
+against a specific historical iOS rule — resume() alone was not enough, a
+buffer had to be played inside the gesture handler. That was verified by hand
+once, on one iPhone, on a since-superseded iOS. Firefox is the only engine in
+the automated suite that suspends audio until a gesture, so it is the only one
+exercising that path at all, and it is not the engine the rule was written
+for. Untested:
+
+- Whether the unlock still fires on current iOS Safari.
+- Whether the silent-buffer step is still required, or now harmless noise.
+- The hardware mute switch, which on iOS silences Web Audio in some
+  configurations and not others.
+- Audio surviving a backgrounded tab and a returning one.
+
+### How to close it
+
+Borrowed hardware and an afternoon. In rough order of value:
+
+1. An Android phone, Chrome: play all thirteen games by touch. Watch for the
+   address bar resizing the viewport mid-run.
+2. A pad (Xbox or DualSense) in **Firefox**: all thirteen, with attention to
+   Neon Drift's triggers and Circuit Racer's steering.
+3. The same pad connected before page load, to check `gamepadconnected`.
+4. An iPhone on current iOS: confirm sound starts on first tap, then again
+   with the mute switch on.
+5. Party mode on a TV with two pads, which is the one configuration nothing
+   has ever verified end to end.
+
+Tick this only when the hardware has actually been in hand. It is a real gap
+and writing it down is not the same as closing it.
 
 ---

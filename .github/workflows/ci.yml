@@ -1,0 +1,91 @@
+# Studio 22 — continuous integration
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# The project's hardest-won lesson is that A FAILED BUILD IS A SILENT DEPLOY.
+# engine/canvas.js once had a parse error; `vite build` failed; Cloudflare
+# Pages kept serving the previous version. The site looked alive while the
+# repo was broken, and the only thing standing between that and a person
+# noticing was somebody remembering to run the build.
+#
+# That lesson was written down in the README, which is not a mechanism. This
+# is the mechanism.
+#
+# Cloudflare Pages builds independently of this workflow, so a red check here
+# does not by itself stop a deploy. What stops it is branch protection: with
+# "Require status checks to pass" enabled on main and `verify` selected, a
+# pull request cannot merge while this is failing. That is a one-time repo
+# setting and it is written up in DEPLOY.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # So a red main can be re-checked without an empty commit.
+  workflow_dispatch:
+
+# Read-only. This workflow builds and tests; it has no business writing to the
+# repository, and a token that cannot write cannot be made to.
+permissions:
+  contents: read
+
+# A second push to the same branch makes the first run irrelevant. Cancel it
+# rather than queueing behind it — except on main, where every commit's result
+# is worth having on the record.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  verify:
+    name: test and build (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Report every version's result. Stopping at the first failure hides
+      # whether a break is version-specific, which is the main reason to run
+      # more than one in the first place.
+      fail-fast: false
+      matrix:
+        # 22 is current LTS, 24 is current. The floor is 22 because the test
+        # script passes a glob to `node --test`, which Node 21 introduced —
+        # see the engines field in package.json.
+        node: ['22', '24']
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `npm ci` rather than `npm install`: it installs exactly what
+      # package-lock.json pins and fails if the lockfile and package.json have
+      # drifted, which is a real failure worth surfacing rather than papering
+      # over by resolving fresh versions.
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # A build can succeed and still be missing a page — a game added to
+      # games.json whose folder was never created, or a public/ file that
+      # stopped being copied. Both are green builds and broken sites.
+      - name: Verify the build matches the manifest
+        run: node tools/verify-build.mjs
+
+      # The site claims to make no third-party requests and enforces it with a
+      # CSP. If either the policy or the pages ever start pointing off-origin,
+      # this is where it should be caught rather than in a browser months later.
+      - name: Check the built site references no external origins
+        run: node tools/check-no-external.mjs

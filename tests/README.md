@@ -97,6 +97,8 @@ run a *competent* bot and a *good* one and report both.
 ```
 tests/
   helpers/seeded.mjs              seeded Math.random, and percentile helpers
+  helpers/dom.mjs                 the smallest DOM engine/ will run against,
+                                  plus a manual clock and frame pump
   helpers/skyhook-bot.mjs         the two-skill Skyhook bot (imported, not run)
   helpers/ember-bot.mjs           position-control vs rate-control balloonists
   helpers/ballast-bot.mjs         one stacking brain, with and without the list
@@ -180,3 +182,60 @@ The harness is for claims about arithmetic. It is very good at those and it
 is the only thing that can check them. It is not a substitute for playing the
 game, and playing the game is not a substitute for it either — neither one
 found what the other did.
+
+---
+
+## 8. engine/ gets covered too, and it is where the worst bugs live
+
+For a long time this directory tested games and not the engine. That was
+backwards. Seven games have measured rules modules; `engine/` is 6,500 lines
+that every one of the thirteen imports, so a fault there breaks all of them at
+once — and the black-screen bug that took every game down lived in
+`engine/canvas.js`.
+
+The parts worth covering are not the drawing. They are the arithmetic and the
+state machines:
+
+| Module | What is asserted |
+|---|---|
+| `canvas.js` | screen-to-game coordinates, letterboxing, backing-store size |
+| `loop.js` | the fixed timestep, the spiral guard, that a throw stops the loop |
+| `input.js` | edge detection, the radial deadzone, device merging, party layouts |
+| `shell.js` | scores reaching the session, score direction, `?tournament`, menus |
+| `session.js` | storage versioning, bests, the sound preference |
+| `manifest.js` | schema validation, search, categories |
+| `util.js` | the maths every game leans on |
+
+**Covering the engine paid for itself on the first run.** `Input.pressed('up')`
+had never worked: up/down/left/right were not in `BUTTON_NAMES`, so it read an
+undefined slot and returned false forever. Block Buster shipped with "Hard
+drop: B or up" printed in its own controls list and Ballast copied the line —
+two games, one dead control each, for months. Nobody noticed because B worked,
+and a dead alternative is indistinguishable from a player who never tried it.
+
+A second, smaller one came out of writing the test rather than running it:
+`setKeyboardLayout(playerIndex, layout)` accepted its arguments in either
+order without complaint, so a swapped call silently gave a party player a
+keyboard that did nothing. It throws now.
+
+### Testing a module that needs a DOM
+
+`helpers/dom.mjs` is a deliberately dumb stub — it records what was asked of it
+and returns plausible values. It does not lay anything out, and no test asserts
+on how anything looks. If a test needs more DOM than the stub has, that is a
+sign it has wandered into rendering and belongs in a browser instead.
+
+Two things it carries beyond elements:
+
+- **A manual clock** (`installDom({ manualClock: true })`). `loop.js` is an
+  accumulator and every property worth asserting is a claim about specific
+  millisecond values, which `setTimeout` cannot express.
+- **`clock.tick(ms)`**, which advances *every* callback queued at that moment
+  rather than the oldest one. A page can have several things on
+  requestAnimationFrame — the game loop plus the shell's overlay loop — and
+  servicing only the first reads exactly like the feature being broken.
+
+One trap worth knowing, because it cost time: menu input is **not** handled by
+`shell.update()`. That returns false the moment a screen is open and does
+nothing else; overlays run on the shell's own frame loop, because the game loop
+is suspended while one is up. Driving a menu in a test means pumping the clock.
