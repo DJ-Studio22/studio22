@@ -625,6 +625,43 @@ function riftRunner() {
     + '<rect x="172" y="110" width="14" height="6" fill="#1b2436"/></g>'
     + '</svg>';
 }
+/**
+ * Endless Mini Golf -- a dog-leg with water on the direct line.
+ *
+ * The card has to say what the game is ABOUT, which is not putting: it is the
+ * decision between the short way over the water and the long way round. So
+ * the aim line points at the corner rather than at the cup.
+ */
+function miniGolf() {
+  const T = 32;
+  const green = (x, y, w, h) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#3f9d5a"/>';
+  const wall  = (x, y, w, h) => '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#e8ddc4"/>';
+  return '<svg ' + VIEW + '>'
+    + '<rect width="320" height="200" fill="#11261c"/>'
+    // The fairway: along the bottom, then up and right. A dog-leg.
+    + green(24, 128, 168, 48) + green(144, 40, 152, 136)
+    // Boards around it.
+    + wall(16, 120, 184, 8) + wall(16, 176, 128, 8)
+    + wall(136, 32, 168, 8) + wall(296, 32, 8, 152) + wall(144, 176, 160, 8)
+    + wall(16, 120, 8, 64) + wall(136, 40, 8, 88)
+    // Water across the short line, which is the whole decision.
+    + '<rect x="196" y="96" width="64" height="56" fill="#2b6ecf"/>'
+    + '<g fill="rgba(190,225,255,.45)"><rect x="204" y="110" width="46" height="3"/>'
+    + '<rect x="212" y="126" width="32" height="3"/></g>'
+    // Sand on the long way round, so neither route is free.
+    + '<rect x="160" y="56" width="32" height="32" fill="#e3c778"/>'
+    // The cup, top right, with its flag.
+    + '<circle cx="272" cy="72" r="9" fill="#0b1a12" stroke="#f6f2e8" stroke-width="2"/>'
+    + '<path d="M272 72 L272 38" stroke="#f6f2e8" stroke-width="2"/>'
+    + '<path d="M272 38 L290 44 L272 50 Z" fill="#ff4d5e"/>'
+    // The ball, bottom left, aiming at the corner rather than the cup.
+    + '<g fill="rgba(255,255,255,.35)">'
+    + '<circle cx="92" cy="152" r="2.4"/><circle cx="106" cy="152" r="2.4"/>'
+    + '<circle cx="120" cy="152" r="2.4"/><circle cx="134" cy="152" r="2.4"/>'
+    + '<circle cx="148" cy="152" r="2.4"/><circle cx="162" cy="152" r="2.4"/></g>'
+    + '<circle cx="72" cy="152" r="6" fill="#ffffff" stroke="#9aa6a0" stroke-width="1.5"/>'
+    + '</svg>';
+}
 // --- The lookup ----------------------------------------------------------
 
 const ART = {
@@ -642,6 +679,7 @@ const ART = {
   ballast,
   ember,
   'rift-runner': riftRunner,
+  'mini-golf': miniGolf,
 };
 
 /**
