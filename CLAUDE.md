@@ -23,6 +23,9 @@ Deployed as a static site to Cloudflare Pages.
 - NEVER commit on `main`: branch, push, open a PR, wait for both CI checks,
   merge. Nothing on the server enforces this — see the git workflow section
   below for why, and follow it regardless.
+- NEVER merge a pull request without confirming its checks are green. Use
+  `npm run merge`, which refuses. `gh pr merge` does not look at the checks
+  and the rulesets have an admin bypass, so nothing else will stop you.
 
 ## Architecture rules
 - Games import FROM engine/. Nothing in engine/ ever imports FROM games/.
@@ -199,8 +202,7 @@ npm run ci                         # the identical sequence CI runs
 git add -A && git commit
 git push -u origin thing-im-doing
 gh pr create --fill
-gh pr checks --watch               # both checks green before merging
-gh pr merge --squash --delete-branch
+npm run merge                      # waits for the checks, REFUSES if any fail
 git checkout main && git pull
 ```
 
@@ -213,10 +215,27 @@ git checkout main && git pull
   trip.
 - **One branch per piece of work.** A branch carrying two unrelated changes
   cannot be reverted without taking both.
-- **Wait for the checks.** Opening the PR is not finishing; a PR with a red
-  check is unfinished work, and "it passed locally" is not a reason to merge
-  past one. Nothing enforces this either — `gh pr merge` will happily merge a
-  red PR, so waiting is a decision made every time.
+- **Merge with `npm run merge`, never with `gh pr merge`.** This is a hard
+  rule and it was bought with a broken `main`.
+
+  `gh pr merge` does not look at the checks. It squashes a pull request with a
+  failing build without a word, and the repo's rulesets carry an admin bypass,
+  so the server does not refuse either. The only thing between a red check and
+  `main` was remembering to read the output of `gh pr checks` before typing
+  the next command.
+
+  **On PR #16 that did not happen.** The checks were watched, node 24 came back
+  red, the merge was typed anyway, and `main` carried a failing suite for a
+  commit — found afterwards only because the suite happened to be run again for
+  an unrelated reason. Discipline that is only a habit fails exactly when you
+  are busy, which is exactly when it matters.
+
+  `tools/merge-pr.mjs` waits for pending checks, refuses on any failure, prints
+  what failed, and exits non-zero. There is deliberately **no `--force`**: the
+  way past a red check is to fix the branch.
+
+- **Opening the PR is not finishing.** A PR with a red check is unfinished
+  work, and "it passed locally" is not a reason to merge past one.
 - **A red check is fixed on the branch**, with another commit and another
   push. Never worked around.
 
