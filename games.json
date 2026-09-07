@@ -385,5 +385,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 240,
     "status": "live"
+  },
+  {
+    "id": "dungeon-dice",
+    "title": "Dungeon Dice",
+    "tagline": "The roll is the question, not the answer.",
+    "description": "A roguelite where every turn is a roll of five dice, and the game is what you do about it. Swords hit, shields block whatever is winding up, hearts heal, and bolts become charges that keep between turns. Charges buy the three things that make a bad roll answerable: reroll it, bend a face one step around the ring, or bank a die for the turn you will want it. Clear a floor and take an upgrade — a blank face becomes something, or every sword hits harder, or every shield blocks more. Floors survived is the score, and the dungeon grows without a ceiling.",
+    "category": "strategy",
+    "path": "/games/dungeon-dice/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "dice",
+      "roguelite",
+      "turn-based",
+      "endless",
+      "single-player",
+      "high-score"
+    ],
+    "featured": false,
+    "tournamentReady": true,
+    "estimatedRunTime": 300,
+    "status": "live"
   }
 ]
