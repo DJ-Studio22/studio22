@@ -197,10 +197,22 @@ test('and the bot that will not bank stops dead where the dug-in tanks start', (
 test('a bank hit is recorded as a bank hit', () => {
   // The bookkeeping the claim above rests on. If bounces were not counted the
   // whole comparison would be measuring nothing.
+  //
+  // The direct bot's count is asserted as NEARLY zero rather than exactly
+  // zero, and that correction was earned: it shoots at cover to break through,
+  // and a shell that comes off a block or a wall can find an enemy by
+  // accident. That was impossible while every tank charged the player and died
+  // in a heap; once tanks hold position there are more of them alive and
+  // spread out, and one accidental ricochet in a run turned up immediately.
+  //
+  // An accident is not a skill, so what matters is that the deliberate count
+  // dwarfs it.
   const bank = withSeed(4, () => runOnce('bank'));
   const direct = withSeed(4, () => runOnce('direct'));
   assert.ok(bank.bankHits > 0, 'the banking bot never landed a ricochet');
-  assert.equal(direct.bankHits, 0, 'the direct bot landed one somehow');
+  assert.ok(direct.bankHits * 20 < bank.bankHits,
+    `the direct bot landed ${direct.bankHits} ricochets against the banking bot's `
+    + `${bank.bankHits} — that is not an accident, it is banking`);
 });
 
 // --- The arena ------------------------------------------------------------
