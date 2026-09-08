@@ -77,10 +77,67 @@ export const TUNING = {
   maxCells: 8,
   splitLaunch: 620,          // initial speed of the launched half
   splitDrag: 2.6,            // how fast that launch bleeds off
-  // How long before halves can merge again, and how much longer a big cell
-  // waits. This is what makes splitting a commitment rather than a free dash.
-  recombineSeconds: 11,
-  recombinePerMass: 0.02,
+  // PUTTING YOURSELF BACK TOGETHER IS SOMETHING YOU DO, NOT SOMETHING THAT
+  // HAPPENS TO YOU.
+  //
+  // The first version was a timer: split, wait eleven seconds, snap back
+  // together wherever you happened to be. Nothing about that was steering --
+  // the whole post-split window was spent waiting rather than managing.
+  //
+  // Now the pieces drift towards each other on their own, and merge only after
+  // twenty seconds of CONTINUOUS CONTACT. Break contact and the clock starts
+  // again from nothing, so holding your pieces together through a fight, a
+  // spike field or a chase is work you are doing, and letting them apart to
+  // cover ground is a decision with a price.
+  mergeDrift: 34,               // how hard the pieces pull towards each other
+  mergeContactSeconds: 20,
+
+  // HOW FAR AHEAD THE PACK IS STEERED, and this is the line that makes breaking
+  // contact possible at all.
+  //
+  // The stick gives a DIRECTION, and moving every piece along the same
+  // direction moves them in parallel: two halves of equal mass then keep
+  // exactly the distance between them for ever, so contact can never be broken
+  // by steering and the merge clock just runs down on its own. Hand-play caught
+  // that immediately -- the clock counted from twenty to ten through a hard
+  // turn without a flicker.
+  //
+  // So the stick aims at a POINT this far ahead of the pack instead, and every
+  // piece swims towards it. Straight running gathers the pieces up; a hard turn
+  // swings the outside piece wide and pulls it off the inside one; a piece of a
+  // different size arrives at a different time. Contact becomes something the
+  // player's hands are doing.
+  steerAhead: 130,
+
+  // YOUR OWN PIECES ARE SOLID, and this is the other half of being able to
+  // break contact.
+  //
+  // Without it two halves settle exactly on top of each other -- the drift
+  // pulls them to the same point and nothing pushes back -- so they are welded
+  // together and no manoeuvre can part them. Measured: a hard about-turn left
+  // the contact clock running without a flicker, from 8.4 seconds to 10.4.
+  //
+  // Pushing them apart until they are just touching puts them on the EDGE of
+  // contact, where a turn, a size difference or a shove genuinely separates
+  // them. It also makes a split read as two fish rather than one blurred one.
+  cellPush: 40,
+  // How far into each other resting pieces settle, as a share of their combined
+  // radius, and how much daylight still counts as touching. Pushing them to
+  // exactly touching and then asking whether they touch is a question that
+  // answers itself wrong: they sit on the boundary and float a hair outside it,
+  // and the contact clock never starts at all. Measured: nought seconds of
+  // contact over eight seconds of running straight.
+  cellRest: 0.9,
+  // AND HOW FAR THEY STRING OUT WHEN YOU RUN.
+  //
+  // The rest distance is not a constant: at full stick the pieces spread to
+  // well beyond touching, and easing off lets them close again. Without this
+  // the push stopped the moment they were just touching, so running flat out
+  // held them at exactly the distance that still counts as contact and the
+  // merge clock ran on regardless -- 5.5 seconds to 8.5 through three seconds
+  // of full stick.
+  cellSpread: 0.7,
+  contactSlack: 3,
 
   // EJECT.
   ejectMinMass: 24,
@@ -139,19 +196,35 @@ export const TUNING = {
   // to -- there was no risk to decline. With it, the pond keeps producing
   // company in your own weight class, which is the whole premise: there is
   // always a bigger fish, and if there is not yet, there shortly will be.
+  //
+  // A RANGE RATHER THAN A FIGURE, and that is the difference between a pond and
+  // a queue. Arrivals all at the same share of the leader means every bot is
+  // roughly every other bot's size, nobody can eat anybody -- eating needs a
+  // clear quarter more mass -- and the only predator-prey pair in the water is
+  // you and them. Measured that way, seven bots managed seven meals between
+  // them in three minutes. A spread means there is always something in the pond
+  // that can eat something else in the pond.
   respawnShare: 0.7,
+  respawnSpread: 0.6,
   // How often anybody -- bot or the test harness's player -- may change their
   // mind. Shared, so no skill level gets to think more often than another.
   decideSeconds: 0.15,
 
-  // PEAK MASS IS THE SCORE, and how long you held it is reported beside it.
+  // THE SCORE IS THE AREA UNDER THE MASS CURVE: how big you were, multiplied
+  // by how long you stayed that way.
   //
-  // Held mass was tried as the score first, on the strength of a measurement
-  // that did not survive a bigger sample: at twelve seeds a selective player
-  // beat a greedy one 637 to 455 on mass held, which looked like the design's
-  // central claim showing up. At sixty seeds the same comparison is 416 to 405
-  // -- noise. So the score is what was asked for, and the honest reading of the
-  // trade is in PROGRESS.md rather than dressed up as a scoreboard.
+  // Peak mass was the first answer and it is the wrong shape for this game.
+  // Peak ignores how long you held it, so a run that spikes to five hundred and
+  // dies scores the same as one that holds five hundred for four minutes --
+  // which makes growing as fast as possible and accepting death optimal BY
+  // CONSTRUCTION, and no amount of tuning the risks can change that. Every risk
+  // added lowers both a reckless player and a careful one together.
+  //
+  // Mass-seconds fixes the shape: surviving big is worth more than briefly
+  // being big, which is the thing the design is actually about. Divided by this
+  // to keep the number readable rather than astronomical.
+  scoreDivisor: 10,
+  // Sampled for the "held" figure, which is reported beside the score.
   holdSeconds: 10,
   sampleSeconds: 0.5,
 };
@@ -213,12 +286,40 @@ export const speedOf = (mass, t = TUNING) => t.speedBase / (mass ** t.speedFallo
 /** Can `mass` eat `other`? */
 export const canEat = (mass, other, t = TUNING) => mass > other * t.eatRatio;
 
-/** How long a cell of this mass must stay split. */
-export const recombineDelay = (mass, t = TUNING) =>
-  t.recombineSeconds + mass * t.recombinePerMass;
+/**
+ * How long two pieces must stay in contact before they merge.
+ *
+ * A constant rather than a function of mass, and that is deliberate: the cost
+ * of a split should be about what you have to DO to undo it, not about a
+ * number that quietly grows as you get bigger.
+ */
+export const mergeContactSeconds = (t = TUNING) => t.mergeContactSeconds;
 
 /**
- * How far a cell can throw half of itself.
+ * IS `other` ACTUALLY A THREAT TO A CELL OF `mass` AT THIS DISTANCE?
+ *
+ * The obvious answer -- anything bigger, anywhere near -- is wrong, and wrong
+ * in a way that made the pond dead. A cell can catch something faster than it
+ * only by splitting, and splitting HALVES it: a fish thirty per cent bigger
+ * than you that splits produces two halves at sixty-five per cent of you, which
+ * cannot eat you at all. So the range at which a bigger fish is dangerous
+ * depends on whether its HALVES could still eat you.
+ *
+ * Treating every bigger cell as a split-threat had the good bots fleeing almost
+ * continuously and never engaging: measured over three minutes, seven steady
+ * bots managed two meals between them, against three hundred for a shoal of
+ * careless ones. The pond was inert at exactly the skill levels a player would
+ * choose.
+ */
+export function threatens(other, mass, distance, t = TUNING) {
+  // It can eat you where it stands, and it is close enough to lean on you.
+  if (canEat(other.mass, mass, t)
+    && distance < radiusOf(other.mass, t) + radiusOf(mass, t) + 120) return true;
+  // Or it can split onto you and the halves would still be big enough.
+  return canEat(other.mass / 2, mass, t) && distance < splitReach(other.mass, t) + 90;
+}
+
+/** How far a cell can throw half of itself.
  *
  * The launch decays exponentially, so the distance is the integral of it:
  * launch / drag. Used by the bots to decide whether a split actually reaches,
@@ -246,12 +347,22 @@ export class Pond {
     this.reason = null;
     this.peakMass = 0;
     this.heldMass = 0;
+    // The integral of mass over time: the score.
+    this.massSeconds = 0;
     this.samples = [];
     this.nextSample = 0;
     this.eaten = 0;
     this.splits = 0;
+    this.merges = 0;
+    // What the pond does to itself, so "the world has its own life" is a
+    // measurement rather than an impression.
+    this.botKills = 0;
+    this.botSplits = 0;
+    this.botSpiked = 0;
     this.ejections = 0;
     this.spiked = 0;
+    // How long each pair of a player's or bot's own cells has been touching.
+    this.contact = new Map();
 
     this.cells = [];
     this.blobs = [];                 // ejected mass in flight
@@ -320,7 +431,7 @@ export class Pond {
 
   #newCell(owner, x, y, mass) {
     const cell = {
-      id: nextId++, owner, x, y, mass, vx: 0, vy: 0, splitUntil: 0,
+      id: nextId++, owner, x, y, mass, vx: 0, vy: 0,
     };
     this.cells.push(cell);
     return cell;
@@ -372,14 +483,13 @@ export class Pond {
       const angle = Math.atan2(aimY - cell.y, aimX - cell.x);
       const half = cell.mass / 2;
       cell.mass = half;
-      cell.splitUntil = this.time + recombineDelay(half, t);
       const piece = this.#newCell(owner, cell.x, cell.y, half);
       piece.vx = Math.cos(angle) * t.splitLaunch;
       piece.vy = Math.sin(angle) * t.splitLaunch;
-      piece.splitUntil = cell.splitUntil;
       done++;
     }
     if (owner === 'player') this.splits += done;
+    else this.botSplits += done;
     return done;
   }
 
@@ -439,13 +549,19 @@ export class Pond {
     this.#eatBlobs();
     this.#hitSpikes();
     this.#eatEachOther();
-    this.#recombine();
+    // How hard the stick is pushed, which is what decides whether the pieces
+    // gather or spread. See #drift.
+    this.effort = Math.min(1, Math.hypot(input.x || 0, input.y || 0));
+    this.#drift(dt);
+    this.#separate(dt);
+    this.#merge(dt);
     this.#decay(dt);
     this.#respawnBots(dt);
     this.#topUpPellets();
 
     const mass = this.playerMass;
     this.peakMass = Math.max(this.peakMass, mass);
+    this.massSeconds += mass * dt;
     this.#sample(mass);
     if (!this.cellsOf('player').length) {
       this.running = false;
@@ -473,16 +589,36 @@ export class Pond {
     this.heldMass = Math.max(this.heldMass, floor);
   }
 
-  /** What the run is worth. Peak mass; heldMass is reported alongside it. */
-  get score() { return Math.round(this.peakMass); }
+  /**
+   * What the run is worth: mass-seconds, the area under the mass curve.
+   *
+   * Peak mass and the biggest size held for ten seconds are both still tracked
+   * and both reported, because they are the things a player actually watches.
+   * They are just not what is scored.
+   */
+  get score() { return Math.round(this.massSeconds / this.t.scoreDivisor); }
 
   #steerPlayer(dt, input) {
+    const t = this.t;
     const mag = Math.hypot(input.x || 0, input.y || 0);
     if (mag < 0.001) return;
-    for (const cell of this.cellsOf('player')) {
-      const speed = speedOf(cell.mass, this.t);
-      cell.x += (input.x / mag) * speed * dt;
-      cell.y += (input.y / mag) * speed * dt;
+    const mine = this.cellsOf('player');
+    if (!mine.length) return;
+
+    // The stick aims at a point ahead of the pack; every piece swims towards
+    // that point rather than along the stick. See steerAhead.
+    const centre = this.centreOf('player');
+    const aimX = centre.x + (input.x / mag) * t.steerAhead;
+    const aimY = centre.y + (input.y / mag) * t.steerAhead;
+
+    for (const cell of mine) {
+      const dx = aimX - cell.x;
+      const dy = aimY - cell.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 0.001) continue;
+      const speed = speedOf(cell.mass, t);
+      cell.x += (dx / d) * speed * dt;
+      cell.y += (dy / d) * speed * dt;
     }
   }
 
@@ -621,6 +757,7 @@ export class Pond {
         if (Math.hypot(spike.x - cell.x, spike.y - cell.y) > r) continue;
         this.#burst(cell);
         if (cell.owner === 'player') this.spiked++;
+        else this.botSpiked++;
       }
     }
   }
@@ -633,13 +770,11 @@ export class Pond {
     if (pieces < 1) return;
     const share = (cell.mass * (1 - t.spikeLoss)) / (pieces + 1);
     cell.mass = share;
-    cell.splitUntil = this.time + recombineDelay(share, t);
     for (let i = 0; i < pieces; i++) {
       const angle = (i / pieces) * Math.PI * 2 + Math.random();
       const piece = this.#newCell(cell.owner, cell.x, cell.y, share);
       piece.vx = Math.cos(angle) * t.splitLaunch * 0.7;
       piece.vy = Math.sin(angle) * t.splitLaunch * 0.7;
-      piece.splitUntil = cell.splitUntil;
     }
   }
 
@@ -660,12 +795,64 @@ export class Pond {
         big.mass += small.mass;
         dead.add(small.id);
         if (big.owner === 'player') this.eaten++;
+        else if (small.owner !== 'player') this.botKills++;
       }
     }
     if (dead.size) this.cells = this.cells.filter((c) => !dead.has(c.id));
   }
 
-  #recombine() {
+  /**
+   * The pieces pull towards each other, so a split closes on its own if you
+   * let it.
+   *
+   * Gentle -- a fraction of walking pace -- because it is a tendency rather
+   * than a tractor beam. You can pull the pieces apart by steering, and you
+   * will, because two cells sixty units apart cover twice the ground.
+   */
+  #drift(dt) {
+    const t = this.t;
+    // GATHERING COSTS YOU SPEED, and that is what makes holding your pieces
+    // together something you are doing.
+    //
+    // The pull towards each other only works while you are easing off; the push
+    // apart is always on. So running flat out spreads your pieces -- covering
+    // ground, and vulnerable, with the merge clock at nothing -- and knitting
+    // back together means slowing down in a pond that has just watched you
+    // divide yourself.
+    //
+    // Without this the pieces were welded: identical halves given identical
+    // velocities move in parallel for ever, and no amount of steering can part
+    // them. That is geometry rather than tuning, so the answer had to be a rule
+    // rather than a number.
+    const gather = Math.max(0, 1 - (this.effort ?? 0));
+    const owners = new Set(this.cells.map((c) => c.owner));
+    for (const owner of owners) {
+      const mine = this.cellsOf(owner);
+      if (mine.length < 2) continue;
+      const centre = this.centreOf(owner);
+      for (const cell of mine) {
+        const dx = centre.x - cell.x;
+        const dy = centre.y - cell.y;
+        const d = Math.hypot(dx, dy);
+        if (d < 0.5) continue;
+        // Bots always gather; only the player pays for it with speed, because
+        // only the player has a stick.
+        const pull = owner === 'player' ? t.mergeDrift * gather : t.mergeDrift;
+        cell.x += (dx / d) * pull * dt;
+        cell.y += (dy / d) * pull * dt;
+      }
+    }
+  }
+
+  /**
+   * Your own pieces are solid: they push each other apart until they are just
+   * touching, rather than settling into one another.
+   *
+   * The counterpart to the drift. Drift pulls them in, this holds them at arm's
+   * length, and the balance leaves them exactly on the edge of contact -- which
+   * is what makes contact something a manoeuvre can break.
+   */
+  #separate(dt) {
     const t = this.t;
     const owners = new Set(this.cells.map((c) => c.owner));
     for (const owner of owners) {
@@ -675,16 +862,81 @@ export class Pond {
         for (let j = i + 1; j < mine.length; j++) {
           const a = mine[i];
           const b = mine[j];
-          if (!a || !b || a.mass === 0 || b.mass === 0) continue;
-          if (this.time < a.splitUntil || this.time < b.splitUntil) continue;
-          const d = Math.hypot(a.x - b.x, a.y - b.y);
-          if (d > radiusOf(a.mass, t) * 0.8) continue;
-          a.mass += b.mass;
-          b.mass = 0;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const d = Math.hypot(dx, dy) || 0.001;
+          const effort = owner === 'player' ? (this.effort ?? 0) : 0;
+          const want = (radiusOf(a.mass, t) + radiusOf(b.mass, t))
+            * (t.cellRest + effort * t.cellSpread);
+          if (d >= want) continue;
+          const push = Math.min(t.cellPush * dt, (want - d) / 2);
+          a.x -= (dx / d) * push;
+          a.y -= (dy / d) * push;
+          b.x += (dx / d) * push;
+          b.y += (dy / d) * push;
         }
       }
     }
+  }
+
+  /**
+   * Merging: twenty seconds of unbroken contact, and breaking contact resets it.
+   *
+   * The contact clock lives per PAIR rather than per cell, so two pieces that
+   * have been together for nineteen seconds are not reset by a third arriving,
+   * and a pair that comes apart for a frame genuinely starts again. That reset
+   * is the point: keeping the pieces together through a fight is the work, and
+   * letting them apart to cover ground is the decision.
+   */
+  #merge(dt) {
+    const t = this.t;
+    const seen = new Set();
+    const owners = new Set(this.cells.map((c) => c.owner));
+
+    for (const owner of owners) {
+      const mine = this.cellsOf(owner);
+      for (let i = 0; i < mine.length; i++) {
+        for (let j = i + 1; j < mine.length; j++) {
+          const a = mine[i];
+          const b = mine[j];
+          if (a.mass === 0 || b.mass === 0) continue;
+          const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
+          const touching = Math.hypot(a.x - b.x, a.y - b.y)
+            <= radiusOf(a.mass, t) + radiusOf(b.mass, t) + t.contactSlack;
+          if (!touching) continue;
+          seen.add(key);
+          const held = (this.contact.get(key) ?? 0) + dt;
+          this.contact.set(key, held);
+          if (held >= t.mergeContactSeconds) {
+            a.mass += b.mass;
+            b.mass = 0;
+            this.contact.delete(key);
+            if (owner === 'player') this.merges++;
+          }
+        }
+      }
+    }
+
+    // Anything not touching this frame starts again from nothing.
+    for (const key of [...this.contact.keys()]) if (!seen.has(key)) this.contact.delete(key);
     this.cells = this.cells.filter((c) => c.mass > 0);
+  }
+
+  /**
+   * How close the player is to putting themselves back together: the longest
+   * unbroken contact among their own pieces, in seconds.
+   *
+   * Exported behaviour rather than a private detail because game.js draws it --
+   * a clock you are running has to be a clock you can see.
+   */
+  get contactHeld() {
+    let best = 0;
+    const mine = new Set(this.cellsOf('player').map((c) => c.id));
+    for (const [key, held] of this.contact) {
+      const [a, b] = key.split(':').map(Number);
+      if (mine.has(a) && mine.has(b)) best = Math.max(best, held);
+    }
+    return best;
   }
 
   /**
@@ -716,13 +968,28 @@ export class Pond {
     }
   }
 
-  /** What a newly arriving bot weighs: a share of the biggest thing in the pond. */
+  /**
+   * What a newly arriving bot weighs: a share of the biggest thing in the pond,
+   * drawn from a wide spread so the pond has a size ladder in it.
+   */
   #arrivalMass() {
-    let leader = this.t.startMass;
+    const t = this.t;
+    let leader = t.startMass;
     const owners = new Set(this.cells.map((c) => c.owner));
     for (const owner of owners) leader = Math.max(leader, this.massOf(owner));
-    return Math.max(this.t.startMass, leader * this.t.respawnShare * (0.7 + Math.random() * 0.6));
+    const share = t.respawnShare * (1 - t.respawnSpread + Math.random() * t.respawnSpread * 2);
+    return Math.max(t.startMass, leader * share);
   }
+
+  /**
+   * The arrival-mass draw, for tests.
+   *
+   * A seam rather than making #arrivalMass public: the spread of arrival sizes
+   * is a claim the pond makes -- there is a size ladder in the water -- and a
+   * claim needs to be checkable without running three minutes of simulation and
+   * hoping the right bots died.
+   */
+  arrivalMassForTest() { return this.#arrivalMass(); }
 
   #topUpPellets() {
     while (this.pellets.length < this.t.pellets) this.pellets.push(this.#randomPellet());
@@ -772,12 +1039,15 @@ export class Pond {
     // 1. THREATS. Anything that can eat the head cell.
     let threat = null;
     for (const other of others) {
-      if (!canEat(other.mass, head.mass, t)) continue;
       const d = Math.hypot(other.x - head.x, other.y - head.y);
       // A hunter that can split onto you is dangerous further away than it
-      // looks. Only the levels that check reach know that.
-      const range = skill.checksSplitReach ? splitReach(other.mass, t) + 90 : 150;
-      if (d < range && (!threat || d < threat.d)) threat = { cell: other, d };
+      // looks -- but only if its halves could still eat you. Only the levels
+      // that check reach know either half of that; the careless ones just look
+      // for something big and nearby.
+      const dangerous = skill.checksSplitReach
+        ? threatens(other, head.mass, d, t)
+        : canEat(other.mass, head.mass, t) && d < 150;
+      if (dangerous && (!threat || d < threat.d)) threat = { cell: other, d };
     }
     if (threat) {
       bot.goal = {
@@ -797,11 +1067,16 @@ export class Pond {
       // Bait: a small morsel sitting right next to something much bigger is a
       // trap. Only the levels that read it decline.
       if (skill.readsBait && this.#guarded(other, head)) continue;
-      // THE FATTEST TARGET, NOT THE NEAREST. Without this a big cell is never
-      // actually hunted -- every bot wanders off after whatever crumb happens
-      // to be closest, and growing costs nothing but speed. A pond where the
-      // leader draws attention is the other half of making size dangerous.
-      if (!prey || other.mass > prey.cell.mass) prey = { cell: other, d };
+      // WORTH IT, WEIGHED AGAINST THE WALK. Not the nearest -- that has every
+      // bot chasing crumbs and nothing ever hunting the leader. Not the fattest
+      // either, which was the previous version and had all seven bots setting
+      // off after the same distant target and ignoring the fight next to them.
+      //
+      // Mass over distance picks the meal that is actually worth going for,
+      // which is what spreads the pond out into several fights at once instead
+      // of one procession.
+      const worth = other.mass / (d + 200);
+      if (!prey || worth > prey.worth) prey = { cell: other, d, worth };
     }
 
     if (prey) {

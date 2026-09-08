@@ -13,7 +13,7 @@
 // nothing here is allowed to differ in reflexes or in stats.
 
 import {
-  Pond, TUNING, canEat, radiusOf, speedOf, splitReach,
+  Pond, TUNING, canEat, radiusOf, speedOf, splitReach, threatens,
 } from '../../games/bigger-fish/pond.js';
 
 // WHAT THESE POLICIES DIFFER IN, AND WHY IT IS ONLY THIS.
@@ -53,6 +53,11 @@ export const POLICIES = {
 
 const STEP = 1 / 60;
 
+// How far off the stick a player comes to knit their pieces back together.
+// Enough to let the drift win, slow enough to be a real cost in a pond that has
+// just watched you divide yourself.
+const EASE_THROTTLE = 0.25;
+
 /** Nearest of `items` to (x, y), or null. */
 function nearest(items, x, y, filter = () => true) {
   let best = null;
@@ -78,8 +83,10 @@ function decide(pond, policy, t) {
 
   // 1. RUNNING. Every policy does this: being eaten ends the run at any size,
   // so it is not a judgement about greed.
-  const threat = nearest(others, head.x, head.y, (c) => canEat(c.mass, head.mass, t)
-    && Math.hypot(c.x - head.x, c.y - head.y) < splitReach(c.mass, t) + 140);
+  // The same reading the bots use: a bigger fish is only a threat at range if
+  // the halves it would split into could still eat you.
+  const threat = nearest(others, head.x, head.y,
+    (c) => threatens(c, head.mass, Math.hypot(c.x - head.x, c.y - head.y), t));
   if (threat) {
     return { x: head.x - threat.item.x, y: head.y - threat.item.y };
   }
@@ -120,6 +127,14 @@ function decide(pond, policy, t) {
     return { x: prey.item.x - head.x, y: prey.item.y - head.y, split };
   }
 
+  // 2b. KNITTING BACK TOGETHER. With nothing to run from and nothing worth
+  // chasing, a split player eases off so the pieces gather -- which is the only
+  // way to merge, and costs speed while it happens.
+  if (mine.length > 1) {
+    const centre = pond.centreOf('player');
+    return { x: centre.x - head.x || 0.001, y: centre.y - head.y || 0.001, ease: true };
+  }
+
   // 3. GRAZING, and routing round the terrain if it is dangerous to you.
   // Sampled rather than searched, for the same reason the bots sample: the
   // nearest crumb of fifteen hundred is not a decision, it is a search.
@@ -155,6 +170,7 @@ export function runOnce(policyName, tuning = TUNING, options = {}) {
   let sinceDecision = tuning.decideSeconds;
   let want = { x: 0, y: 0 };
   let split = false;
+  let ease = false;
   while (pond.running && pond.time < seconds) {
     sinceDecision += STEP;
     if (sinceDecision >= tuning.decideSeconds) {
@@ -162,15 +178,31 @@ export function runOnce(policyName, tuning = TUNING, options = {}) {
       const choice = decide(pond, policy, tuning);
       want = { x: choice.x, y: choice.y };
       split = Boolean(choice.split);
+      ease = Boolean(choice.ease);
     } else {
       split = false;
     }
-    pond.step(STEP, { x: want.x, y: want.y, split });
+
+    // A STICK, NOT A VECTOR. The pond reads how hard the stick is pushed --
+    // easing off is what lets split pieces gather, and full stick strings them
+    // out -- so a harness handing it raw goal offsets is holding the stick
+    // flat out for ever and can never put itself back together.
+    const mag = Math.hypot(want.x, want.y) || 1;
+    const throttle = ease ? EASE_THROTTLE : 1;
+    pond.step(STEP, {
+      x: (want.x / mag) * throttle,
+      y: (want.y / mag) * throttle,
+      split,
+    });
   }
 
   return {
+    // The score: mass-seconds, the area under the mass curve. Peak and held are
+    // reported alongside because they are what a player watches, and because
+    // the difference between them is the whole reason the score changed.
+    score: pond.score,
     peak: Math.round(pond.peakMass),
-    held: pond.score,
+    held: Math.round(pond.heldMass),
     finalMass: Math.round(pond.playerMass),
     eaten: pond.eaten,
     splits: pond.splits,

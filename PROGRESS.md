@@ -2815,3 +2815,116 @@ the HUD carries it as a badge from then on: from here it is not about surviving
 something worse, it is about how long you can hold the hardest it gets.
 
 Suite 474 -> 475.
+
+## Phase 36 — Bigger Fish: a score that can be won by surviving, a pond with its own life, and a merge you steer
+
+Three changes to one game, and each invalidated the others' measurements, so all
+the numbers below were taken with all three in place.
+
+### 1. The claim, now proven
+
+Scored on peak mass, "caution beats greed" was false and could not be made true:
+peak ignores duration, so growing fast and dying is optimal by construction.
+
+Scored on **the area under the mass curve** — how big you were multiplied by how
+long you stayed that way — a selective player wins on three disjoint blocks of
+sixty seeds:
+
+| seeds | greedy | selective |
+|---|---|---|
+| 1–60 | 1684 | **2925** |
+| 61–120 | 1942 | **3839** |
+| 121–180 | 2139 | **2360** |
+
+Ahead on the mean in all three as well, and the ordering never flips. Between
+ten and ninety-eight per cent: the effect is real and its size is not stable,
+which is why the standing test asserts a twentieth rather than a half.
+
+The sample size is load-bearing rather than cautious. At forty seeds and a
+five-minute cap the same comparison comes out 0.86, 1.72 and 1.17 across blocks
+— it flips. Selective's advantage IS survival time, so a short cap truncates
+exactly the thing being measured. That test is three minutes, the most expensive
+in the suite, and the comment says so.
+
+### 2. The pond plays itself
+
+The bots were playing the player rather than the pond. Two things were wrong,
+and the second was a correctness bug rather than a liveliness one:
+
+**Every arrival was the same share of the leader**, so every bot was every other
+bot's size and nobody could eat anybody — eating needs a clear quarter more mass
+— and the only predator-prey pair in the water was you and them. Arrivals are
+drawn from a wide spread now, so there is a ladder in the pond.
+
+**A bigger fish was treated as a threat at range whatever its size.** But a cell
+catches something faster than it only by SPLITTING, and splitting halves it: a
+fish thirty per cent bigger than you arrives as two halves at sixty-five per
+cent of you, which cannot eat you at all. Good bots were therefore fleeing
+almost continuously and never engaging — seven steady bots managed **two meals
+between them in three minutes**, against three hundred for a careless shoal.
+
+With the threat rule corrected, and measured over two minutes with the player
+ignored:
+
+| bots | pursuing another bot, of 7 | kills |
+|---|---|---|
+| careless | 3.7 | 900-odd |
+| steady | 2.6 | 40-odd |
+| ruthless | 1.6 | fewer, and decisive |
+
+Which is the ladder reading in the world rather than only in the score: a
+careless shoal is visible chaos, and a ruthless one is a standoff that
+occasionally kills something.
+
+### 3. Merging is something you do
+
+Splitting used to end with a timer: wait eleven seconds, snap back together
+wherever you were. Now the pieces drift towards each other and merge after
+**twenty seconds of unbroken contact**, and breaking contact resets it.
+
+Getting that to be a decision rather than a countdown took three goes, and the
+first two are worth keeping because they are the same discovery twice:
+
+**Identical halves cannot be steered apart.** Given the same velocity they move
+in parallel for ever, so no manoeuvre separates them — a hard about-turn left
+the contact clock running without a flicker, 8.4 seconds to 10.4. That is
+geometry, not tuning.
+
+**Nor can they be pushed apart by a constant rule.** Making the pieces solid so
+they rest against each other put them exactly on the edge of contact, where they
+stayed: full stick took the clock from 5.5 to 8.5.
+
+What works is making the gathering cost something. **The pull towards each other
+only acts while you are easing off the stick, and how far the pieces rest apart
+grows with how hard you are pushing it.** So running flat out strings your
+pieces out and holds the clock at nothing; knitting back together means slowing
+down in a pond that has just watched you divide yourself. Measured: ten seconds
+of easing off banks 9.4 seconds of contact, two seconds of full stick resets it
+to 0.0, and easing off again starts from nothing.
+
+### And the claim that died for it
+
+**Splitting no longer pays on the score, and that is the honest cost of the
+change.** Over the same three blocks a never-splitting policy scores 3720
+against 2925, 3839 against 3839, and 2359 against 2360 — ahead, level, level.
+
+What splitting still does is what it is for: it catches things that would
+otherwise outrun you, by between a third and four fifths — 12.6 cells against
+8.8, 11.4 against 8.8, 8.7 against 4.9. So it is a tool with a price rather than
+a profit, and the test says that instead of the old claim.
+
+### Faults found on the way
+
+- **Clearing `pond.pellets` does not starve a pond.** It tops them back up every
+  frame, so three merge tests were quietly watching their subjects eat their way
+  from 100 mass to 125 while measuring distances against their radii. They build
+  a pond from a tuning with no pellets now.
+- **A bot harness holding a raw goal offset is holding the stick flat out.** The
+  pond now reads how hard the stick is pushed, so the harness had to learn to
+  ease off — otherwise no bot could ever put itself back together.
+- **A median with a zero in it is not a measurement.** Bot kills came out 6, 6,
+  25, 0 and 7 on five consecutive seeds; the test sums across ponds instead.
+- **The camera followed the player into the corner** and spent half the screen
+  on the black outside the wall. Clamped to the pond.
+
+25 assertions; suite 475 → 481.

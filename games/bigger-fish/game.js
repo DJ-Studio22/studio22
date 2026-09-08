@@ -19,8 +19,12 @@
 //
 // SPLIT is the only way to close on something faster than you, and it is a
 // commitment: half your mass is thrown forward, both halves are small enough to
-// be eaten by things that could not touch you a second earlier, and they will
-// not merge again for ten seconds or more.
+// be eaten by things that could not touch you a second earlier, and putting
+// yourself back together is something you DO -- the pieces drift towards each
+// other and merge only after twenty seconds of unbroken contact. Break contact
+// and that clock starts again from nothing, so holding your pieces together
+// through a fight is work, and letting them apart to cover ground is a decision
+// with a price.
 //
 // EJECT shoots a small piece of mass forward. It feeds a teammate you do not
 // have, so mostly it is for baiting, for shedding weight to get your speed
@@ -41,7 +45,7 @@ import { AudioManager } from '../../engine/audio.js';
 import { ParticlePresets, ParticleSystem, clamp } from '../../engine/util.js';
 
 import {
-  Pond, SKILL_NAMES, TUNING, radiusOf, speedOf, splitReach,
+  Pond, SKILL_NAMES, TUNING, mergeContactSeconds, radiusOf, speedOf, splitReach,
 } from './pond.js';
 
 const GAME_ID = 'bigger-fish';
@@ -156,8 +160,10 @@ function finish() {
   if (!running) return;
   running = false;
   audio.play('over');
-  shell.showGameOver(Math.round(pond.peakMass), {
+  shell.showGameOver(pond.score, {
     bots: SKILL_NAMES[skillIndex],
+    peakMass: Math.round(pond.peakMass),
+    heldFor10s: Math.round(pond.heldMass),
     cellsEaten: pond.eaten,
     splitsMade: pond.splits,
     timesSpiked: pond.spiked,
@@ -243,6 +249,19 @@ function update(dt) {
     camera.scale += (wanted - camera.scale) * Math.min(1, dt * 2.2);
     camera.x += (centre.x - camera.x) * Math.min(1, dt * 6);
     camera.y += (centre.y - camera.y) * Math.min(1, dt * 6);
+
+    // AND KEPT OVER THE POND. Following the player into a corner otherwise
+    // spends half the screen on the black outside the wall, which reads as the
+    // game having lost its edges. Where the pond is narrower than the view it
+    // is centred instead, so there is no jitter at the limit.
+    const halfW = (W / 2) / camera.scale;
+    const halfH = (H / 2) / camera.scale;
+    camera.x = halfW * 2 > TUNING.width
+      ? TUNING.width / 2
+      : clamp(camera.x, halfW, TUNING.width - halfW);
+    camera.y = halfH * 2 > TUNING.height
+      ? TUNING.height / 2
+      : clamp(camera.y, halfH, TUNING.height - halfH);
   }
 
   if (!pond.running) finish();
@@ -423,7 +442,14 @@ function drawHud() {
   ctx.fillText(String(Math.round(mass)), 22, 44);
   ctx.font = '600 13px system-ui, sans-serif';
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText(`PEAK ${Math.round(pond.peakMass)}  ·  ${SKILL_NAMES[skillIndex].toUpperCase()} BOTS`, 22, 64);
+  // The score is mass-seconds -- how big, times how long you stayed that way --
+  // so it is shown next to the mass it is accumulating from rather than saved
+  // for the end.
+  ctx.fillText(
+    `SCORE ${pond.score}  ·  PEAK ${Math.round(pond.peakMass)}  ·  `
+    + `${SKILL_NAMES[skillIndex].toUpperCase()} BOTS`,
+    22, 64,
+  );
 
   // SPEED, as a share of what a starting cell does, because the trade is the
   // game and a number you can watch fall is the clearest way to say it.
@@ -435,11 +461,34 @@ function drawHud() {
   ctx.fillStyle = share < 0.55 ? ART.hud.warn : ART.hud.good;
   ctx.fillRect(72, 77, 120 * clamp(share, 0, 1), 12);
 
+  // THE MERGE CLOCK, because it is a clock the player is running.
+  //
+  // Twenty seconds of unbroken contact puts your pieces back together and
+  // breaking contact resets it, so a bar that fills and visibly empties is the
+  // difference between managing something and waiting for something.
+  if (pond.cellsOf('player').length > 1) {
+    const held = pond.contactHeld;
+    const full = mergeContactSeconds();
+    ctx.fillStyle = ART.hud.dim;
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.fillText('MERGE', 22, 112);
+    ctx.fillStyle = 'rgba(255,255,255,0.10)';
+    ctx.fillRect(72, 101, 120, 12);
+    ctx.fillStyle = held > 0 ? ART.me.body : ART.hud.warn;
+    ctx.fillRect(72, 101, 120 * clamp(held / full, 0, 1), 12);
+    ctx.fillStyle = ART.hud.dim;
+    ctx.font = '600 12px system-ui, sans-serif';
+    ctx.fillText(
+      held > 0 ? `${Math.max(0, full - held).toFixed(0)}s OF CONTACT TO GO` : 'PIECES APART',
+      200, 112,
+    );
+  }
+
   // Whether the terrain has become your problem yet.
   if (mass >= TUNING.spikeMass) {
     ctx.fillStyle = ART.hud.warn;
     ctx.font = '700 13px system-ui, sans-serif';
-    ctx.fillText('BIG ENOUGH FOR SPIKES TO HURT', 22, 110);
+    ctx.fillText('BIG ENOUGH FOR SPIKES TO HURT', 22, 134);
   }
 
   if (flash) {
@@ -529,6 +578,7 @@ shell = new GameShell({
   controls: [
     { action: 'Swim', gamepad: 'Left stick', keyboard: 'WASD or arrows', touch: 'Drag the left side' },
     { action: 'Split', gamepad: 'A', keyboard: 'Space', touch: 'SPLIT pad' },
+    { action: 'Merging back', gamepad: '20s of unbroken contact', keyboard: '20s of unbroken contact', touch: '20s of unbroken contact' },
     { action: 'Eject', gamepad: 'B', keyboard: 'Shift', touch: 'EJECT pad' },
     { action: 'Green', gamepad: 'You can eat it', keyboard: 'You can eat it', touch: 'You can eat it' },
     { action: 'Red', gamepad: 'It can eat you', keyboard: 'It can eat you', touch: 'It can eat you' },
