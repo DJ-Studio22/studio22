@@ -237,7 +237,7 @@ test('a fed spike spits out another one, which is how you push one at somebody',
 test('SPIKES ARE HARMLESS SMALL AND RUINOUS LARGE', () => {
   // The mechanism that makes size turn the map hostile: a small player ignores
   // the terrain, a big one has to route around it.
-  const small = new Pond();
+  const small = new Pond({ ...TUNING, pellets: 0 });
   small.bots = [];
   const tiddler = small.cellsOf('player')[0];
   tiddler.mass = TUNING.spikeMass - 5;
@@ -247,11 +247,14 @@ test('SPIKES ARE HARMLESS SMALL AND RUINOUS LARGE', () => {
   assert.equal(small.cellsOf('player').length, 1, 'a small cell was burst by a spike');
   assert.equal(small.spiked, 0);
 
-  const big = new Pond();
+  // No pellets IN THE TUNING: a mouthful eaten on the way in would be counted
+  // against the spike, and this is measuring the spike. Emptying the array does
+  // not do it -- the pond tops its pellets back up every frame, so the whale ate
+  // between the assignment and the assertion. That passed on node 24 and failed
+  // on node 22, because the difference was a few hundredths of a mass unit
+  // against an exact comparison.
+  const big = new Pond({ ...TUNING, pellets: 0 });
   big.bots = [];
-  // No pellets: a mouthful eaten on the way in would be counted against the
-  // spike, and this is measuring the spike.
-  big.pellets = [];
   const whale = big.cellsOf('player')[0];
   whale.mass = 400;
   whale.x = big.spikes[0].x;
@@ -439,23 +442,33 @@ test('SKILL LEVELS DIFFER IN JUDGEMENT, NOT IN REFLEXES OR STATS', () => {
 });
 
 test('and the ladder is real — the same player does far worse against better bots', () => {
-  // Measured, not asserted. Ten seeds of four minutes each; the player
+  // Measured, not asserted. Twenty seeds of four minutes each; the player
   // policy is identical throughout, so the difference is entirely in how well
-  // the pond plays against it.
+  // the pond plays against it. A careless shoal splits at anything in front of
+  // it and feeds the player its halves, which is exactly the mistake it is
+  // meant to make.
   //
-  // Measured at 24 seeds: careless 2616, steady 306, ruthless 247. A careless
-  // shoal splits at anything in front of it and feeds the player its halves,
-  // which is exactly the mistake it is meant to make.
+  // THE THRESHOLD HAS TO CLEAR THE NOISE BY A LONG WAY, and the reason is worth
+  // writing down: this simulation is chaotic, and the last bits of Math.hypot
+  // and ** are not identical across V8 versions. Four minutes of pond amplifies
+  // a one-ulp difference into a completely different run, so the same seeds
+  // give different numbers on node 22 and node 24. An earlier version of this
+  // asserted a ratio of 2 on ten seeds; it measured 2.74 locally and 1.82 on
+  // CI, and went red.
+  //
+  // At twenty seeds the medians are 911 against 273 and 1571 against 195 --
+  // ratios of 3.3 and 8.1, with the means at 12.6 and 12.9. A floor of 1.6 is
+  // well under the smallest of those and well over anything chaos can produce.
   const against = (skill) => {
     const peaks = [];
-    for (let seed = 1; seed <= 10; seed++) {
+    for (let seed = 1; seed <= 20; seed++) {
       withSeed(seed, () => peaks.push(runOnce('selective', undefined, { seconds: 240, skill }).peak));
     }
     return summarise(peaks).median;
   };
   const careless = against('careless');
   const ruthless = against('ruthless');
-  assert.ok(careless > ruthless * 2,
+  assert.ok(careless > ruthless * 1.6,
     `a careless shoal is barely easier than a ruthless one: ${careless} against ${ruthless}`);
 });
 
@@ -482,8 +495,15 @@ test('SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU', () => {
   // Twenty-four seeds at five minutes rather than sixty at eight: the effect is
   // large enough that it does not need the sample the score claim below does.
   // At sixty seeds and eight minutes the same comparison is 12.6 cells against
-  // 8.8, 11.4 against 8.8, and 8.7 against 4.9 -- between a third and four
-  // fifths more, on every block.
+  // 8.8, 11.4 against 8.8, and 8.7 against 4.9.
+  //
+  // The FLOOR is a seventh rather than a third, and the block-to-block spread is
+  // why: at these settings three disjoint blocks measured 1.64, 2.63 and 1.29.
+  // A third would fail on the third block on this machine, never mind another
+  // one -- the simulation is chaotic and the last bits of Math.hypot are not
+  // identical across V8 versions, so four minutes of pond turns a one-ulp
+  // difference into a different run. A threshold has to clear that, not sit in
+  // the middle of it.
   const caught = (policy) => {
     const eaten = [];
     for (let seed = 1; seed <= 24; seed++) {
@@ -493,7 +513,7 @@ test('SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU', () => {
   };
   const splits = caught('selective');
   const never = caught('noSplit');
-  assert.ok(splits > never * 1.3,
+  assert.ok(splits > never * 1.15,
     `splitting caught ${splits} against ${never} without it, which is noise`);
 });
 
@@ -510,8 +530,10 @@ test('CAUTION BEATS GREED — the claim the score was changed to make measurable
   // disjoint blocks of sixty seeds: 2925 to 1684, 3839 to 1942, 2360 to 2139.
   // Between ten and ninety-eight per cent, ahead on the mean in all three as
   // well, and the ordering never flips. The thin block is the reason the
-  // threshold below is a tenth rather than a half: the effect is real and its
-  // size is not stable.
+  // threshold below is a twentieth rather than a half: the effect is real and
+  // its size is not stable, and on top of that the same seeds give different
+  // runs on different V8 versions, because the pond is chaotic and the last
+  // bits of Math.hypot are not identical between them.
   //
   // THIS IS THE MOST EXPENSIVE TEST IN THE SUITE, about three minutes, and the
   // sample size is load-bearing rather than cautious: at forty seeds and a
