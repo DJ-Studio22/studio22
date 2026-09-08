@@ -259,12 +259,35 @@ test('a fed spike spits out another one, which is how you push one at somebody',
 test('SPIKES ARE HARMLESS SMALL AND RUINOUS LARGE', () => {
   // The mechanism that makes size turn the map hostile: a small player ignores
   // the terrain, a big one has to route around it.
+  //
+  // ONE SPIKE, PUT IN THE MIDDLE ON PURPOSE, and an empty pond around it. This
+  // test used to move the player onto `spikes[0]`, wherever the pond had
+  // happened to scatter it, with the other cells still in the water. Both bit,
+  // and both bit rarely enough to look like a platform difference: on 2 of 400
+  // seeds it failed, and it picked one of them on CI while passing locally.
+  //
+  //   - `bots = []` empties the LIST of bots and leaves their CELLS in the
+  //     pond, so a burst piece ate a two-mass bystander in the same frame and
+  //     the run came out at 242 against an expected 240.
+  //   - a spike within a hundred units of a wall is a spike a hundred-radius
+  //     whale gets clamped away from, so it never burst at all.
+  //
+  // Neither is a fact about spikes, which is what this test is for.
+  const clear = (pond, x, y) => {
+    pond.bots = [];
+    pond.cells = pond.cells.filter((c) => c.owner === 'player');
+    pond.spikes = [{ ...pond.spikes[0], x, y }];
+    const cell = pond.cellsOf('player')[0];
+    cell.x = x;
+    cell.y = y;
+    return cell;
+  };
+  const middleX = TUNING.width / 2;
+  const middleY = TUNING.height / 2;
+
   const small = new Pond({ ...TUNING, pellets: 0 });
-  small.bots = [];
-  const tiddler = small.cellsOf('player')[0];
+  const tiddler = clear(small, middleX, middleY);
   tiddler.mass = TUNING.spikeMass - 5;
-  tiddler.x = small.spikes[0].x;
-  tiddler.y = small.spikes[0].y;
   small.step(1 / 60, {});
   assert.equal(small.cellsOf('player').length, 1, 'a small cell was burst by a spike');
   assert.equal(small.spiked, 0);
@@ -276,11 +299,8 @@ test('SPIKES ARE HARMLESS SMALL AND RUINOUS LARGE', () => {
   // on node 22, because the difference was a few hundredths of a mass unit
   // against an exact comparison.
   const big = new Pond({ ...TUNING, pellets: 0 });
-  big.bots = [];
-  const whale = big.cellsOf('player')[0];
+  const whale = clear(big, middleX, middleY);
   whale.mass = 400;
-  whale.x = big.spikes[0].x;
-  whale.y = big.spikes[0].y;
   const before = big.playerMass;
   big.step(1 / 60, {});
   assert.ok(big.cellsOf('player').length > 1, 'a big cell walked through a spike');
@@ -363,9 +383,15 @@ test('THE SCORE IS THE AREA UNDER THE MASS CURVE', () => {
   // that spikes and dies scores the same as one that holds the same size for
   // minutes, which makes reckless growth optimal by construction and no amount
   // of tuning the risks can change it.
-  const pond = new Pond();
+  // Nothing in the water but the player, and nothing for it to eat: this is
+  // measuring the SCORE against a held mass, so anything that changes the mass
+  // is measuring something else. `pellets = []` does not starve a pond -- it
+  // tops them back up every frame -- and `bots = []` empties the list of bots
+  // while leaving their cells in the water for a five-hundred-mass player to
+  // hoover up. Both traps have now cost this file a day each.
+  const pond = new Pond({ ...TUNING, pellets: 0 });
   pond.bots = [];
-  pond.pellets = [];
+  pond.cells = pond.cells.filter((c) => c.owner === 'player');
   pond.spikes = [];
   pond.cellsOf('player')[0].mass = 500;
 
