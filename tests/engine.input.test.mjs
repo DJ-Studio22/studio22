@@ -27,7 +27,7 @@ import assert from 'node:assert/strict';
 import { installDom } from './helpers/dom.mjs';
 
 const uninstall = installDom();
-const { Input } = await import('../engine/input.js');
+const { Input, JOYSTICK_MAX_RADIUS_PX } = await import('../engine/input.js');
 
 test.after(() => uninstall());
 
@@ -327,3 +327,121 @@ test('get() hands back a copy — a game cannot corrupt the input state', () => 
   frame.x = -999;
   assert.notEqual(Input.get().x, -999, 'a game mutating its frame changed Input itself');
 });
+
+// --- Where a thumb actually finds a control -------------------------------
+//
+// Every fault in this section shipped, none of them was visible to any test in
+// the project, and all of them were ONE fault appearing in up to twelve games
+// at once. They are geometry, which is exactly the kind of thing a test is for
+// and exactly the kind of thing a screenshot of one game at one size does not
+// answer.
+
+// A play area with a letterbox bar down each side, which is what a 3:2 game
+// gets on a 932-wide phone in landscape.
+const PLAY_AREA = { left: 134, top: 0, width: 665, height: 430 };
+
+test('A PAD IS PLACED ON THE PLAY AREA, NOT ON THE WINDOW', () => {
+  reset();
+  Input.setControlBounds(PLAY_AREA);
+  Input.setTouchLayout([{ name: 'a', xRatio: 0.5, yRatio: 0.5, radius: 50, label: 'GO' }]);
+
+  const at = Input.touchButtonCenter({ name: 'a', xRatio: 0.5, yRatio: 0.5, radius: 50 });
+  // Half way across the PLAY AREA, which on this screen is not half way across
+  // the window. Placed against the window it landed at 466, thirty pixels off,
+  // and on a narrower game it landed in the black bar entirely -- off the
+  // canvas, so never drawn, and off the play area, so a thumb that found it
+  // was pressing scenery.
+  assert.ok(Math.abs(at.x - (134 + 665 / 2)) < 1, `pad at ${at.x}, not on the play area`);
+});
+
+test('THE WHOLE RING STAYS ON THE PLAY AREA, not just its centre', () => {
+  reset();
+  Input.setControlBounds(PLAY_AREA);
+  const pad = { name: 'a', xRatio: 0.97, yRatio: 0.95, radius: 55, label: 'TURN' };
+  Input.setTouchLayout([pad]);
+
+  const at = Input.touchButtonCenter(pad);
+  assert.ok(at.x + pad.radius <= PLAY_AREA.left + PLAY_AREA.width,
+    `the pad's right edge is at ${at.x + pad.radius}, past the play area`);
+  assert.ok(at.y + pad.radius <= PLAY_AREA.top + PLAY_AREA.height,
+    `the pad's bottom edge is at ${at.y + pad.radius}, past the play area`);
+  // Ballast declared exactly this and shipped a crescent: a ratio places a
+  // centre and says nothing at all about the radius around it.
+});
+
+test('PADS DO NOT OVERLAP EACH OTHER, whatever ratios a game declared', () => {
+  reset();
+  // A pair a comfortable distance apart in landscape...
+  const wide = { left: 0, top: 0, width: 932, height: 430 };
+  const a = { name: 'a', xRatio: 0.86, yRatio: 0.78, radius: 52, label: 'DROP' };
+  const b = { name: 'b', xRatio: 0.95, yRatio: 0.78, radius: 52, label: 'TURN' };
+  Input.setTouchLayout([a, b]);
+  Input.setControlBounds(wide);
+  const apart = (x, y) => Math.hypot(x.x - y.x, x.y - y.y);
+  assert.ok(apart(Input.touchButtonCenter(a), Input.touchButtonCenter(b)) >= 104);
+
+  // ...is the same pair 39 pixels apart in portrait, because the ratio shrinks
+  // with the box and the radius does not. Twelve of the twenty-three games had
+  // a pair like this. Both pads still respond to a tap, which is why nothing
+  // caught it; what they cannot do is tell a thumb which one it pressed.
+  Input.setControlBounds({ left: 0, top: 0, width: 430, height: 932 });
+  const gap = apart(Input.touchButtonCenter(a), Input.touchButtonCenter(b));
+  assert.ok(gap >= 104, `the pads are ${Math.round(gap)}px apart, so they are one blob`);
+});
+
+test('and two pads declared in exactly the same place still come apart', () => {
+  reset();
+  Input.setControlBounds(PLAY_AREA);
+  const a = { name: 'a', xRatio: 0.6, yRatio: 0.6, radius: 40 };
+  const b = { name: 'b', xRatio: 0.6, yRatio: 0.6, radius: 40 };
+  Input.setTouchLayout([a, b]);
+  const first = Input.touchButtonCenter(a);
+  const second = Input.touchButtonCenter(b);
+  assert.ok(Math.hypot(first.x - second.x, first.y - second.y) >= 80,
+    'coincident pads stayed coincident, so one of them can never be pressed');
+});
+
+test('A PAD IS NEVER LEFT SITTING ON THE RESTING STICK', () => {
+  reset();
+  Input.setControlBounds(PLAY_AREA);
+  Input.setDirectionalTouch(true);
+  // Bottom-left, which is exactly where the stick lives. Hangman, Beat Blocker
+  // and Gravity Well all declared a pad here.
+  const pad = { name: 'b', xRatio: 0.09, yRatio: 0.9, radius: 46, label: 'Hint' };
+  Input.setTouchLayout([pad]);
+
+  const at = Input.touchButtonCenter(pad);
+  const home = Input.stickHome();
+  const gap = Math.hypot(at.x - home.x, at.y - home.y);
+  assert.ok(gap >= 46 + JOYSTICK_MAX_RADIUS_PX,
+    `the pad is ${Math.round(gap)}px from the middle of the joystick`);
+  // And it went somewhere real, not off the edge to get away.
+  assert.ok(at.x - pad.radius >= PLAY_AREA.left - 1);
+  assert.ok(at.y + pad.radius <= PLAY_AREA.top + PLAY_AREA.height + 1);
+});
+
+test('a game that says it does not steer does not get an invisible joystick', () => {
+  reset();
+  Input.setControlBounds(PLAY_AREA);
+  Input.setTouchLayout([]);
+  Input.setDirectionalTouch(false);
+
+  // A drag in the left half, which is the stick's half.
+  const touch = { identifier: 1, clientX: 200, clientY: 300 };
+  window.dispatch('touchstart', { changedTouches: [touch], touches: [touch] });
+  window.dispatch('touchmove', {
+    changedTouches: [{ identifier: 1, clientX: 280, clientY: 300 }],
+    touches: [{ identifier: 1, clientX: 280, clientY: 300 }],
+  });
+  Input.update();
+  // The flag used to govern only whether the shell DREW the ring, so a game
+  // that declared it did not steer still had every touch in its left half
+  // swallowed by a joystick nobody could see. Hangman lost half its alphabet
+  // to it.
+  assert.equal(Input.get().x, 0, 'a game that does not steer is steering');
+  window.dispatch('touchend', { changedTouches: [{ identifier: 1, clientX: 280, clientY: 300 }], touches: [] });
+});
+
+// The two tests about what a touch MEANS live in
+// tests/engine.input.touch.test.mjs, because they need a DOM that claims to
+// be a touchscreen before engine/input.js is imported, and this file does not.

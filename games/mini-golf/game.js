@@ -566,18 +566,21 @@ function drawHud() {
   // gets the clearest readout on the screen.
   const bank = course.effectiveBank;
   ctx.textAlign = 'right';
+  // Right-aligned against what the shell leaves free, not against the canvas
+  // edge: on a phone there is a pause button in that corner. Zero on a desktop.
+  const hudRight = W - shell.rightInset();
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('STROKE BANK', W - 18, 12);
+  ctx.fillText('STROKE BANK', hudRight - 18, 12);
   ctx.fillStyle = bank <= 1 ? ART.hud.bankLow : ART.hud.bankGood;
   ctx.font = '800 26px system-ui, sans-serif';
-  ctx.fillText(String(bank), W - 18, 24);
+  ctx.fillText(String(bank), hudRight - 18, 24);
 
   if (bankFlash > 0) {
     ctx.globalAlpha = bankFlash;
     ctx.fillStyle = ART.hud.bankGood;
     ctx.font = '700 13px system-ui, sans-serif';
-    ctx.fillText('BANKED', W - 18, 54);
+    ctx.fillText('BANKED', hudRight - 18, 54);
     ctx.globalAlpha = 1;
   }
 

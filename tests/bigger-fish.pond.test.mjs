@@ -23,12 +23,25 @@ import { summarise, withSeed } from './helpers/seeded.mjs';
 test('MASS IS SPEED, SPENT — the line the whole game rests on', () => {
   assert.ok(speedOf(TUNING.startMass) > speedOf(100));
   assert.ok(speedOf(100) > speedOf(1000));
-  // And it is a real difference rather than a rounding one: a big cell moves at
-  // little more than a third of the pace of a small one, which is what makes
-  // prey outrun you exactly when you most want it.
-  assert.ok(speedOf(1000) < speedOf(TUNING.startMass) * 0.45,
-    `a thousand-mass cell moves at ${(speedOf(1000) / speedOf(TUNING.startMass)).toFixed(2)} `
-    + 'of a starting cell, which is not a penalty anybody would feel');
+  // And it is a real difference rather than a rounding one -- but a difference
+  // you can PLAY, which is the part this test used to have backwards. It
+  // asserted a big cell moved at under 0.45 of a small one, and the tuning that
+  // satisfied it (falloff 0.30) meant that from about two hundred mass onward
+  // you were crawling: prey escaped by existing, and being big was misery
+  // rather than a trade. The curve is now speedBase 150 over mass^0.08 --
+  //
+  //     mass    2  ->  142 a second
+  //     mass  100  ->  104
+  //     mass 1000  ->   86
+  //
+  // -- so the biggest thing in the pond still moves at three fifths of the pace
+  // of the smallest. The BAND is the claim, both ends of it: below the floor
+  // and size is a punishment, above the ceiling and size costs nothing at all.
+  const ratio = speedOf(1000) / speedOf(TUNING.startMass);
+  assert.ok(ratio > 0.5, `a thousand-mass cell moves at ${ratio.toFixed(2)} of a `
+    + 'starting cell, which is not slower, it is stuck');
+  assert.ok(ratio < 0.75, `a thousand-mass cell moves at ${ratio.toFixed(2)} of a `
+    + 'starting cell, which is not a penalty anybody would feel');
 });
 
 test('radius grows by area, so twice the mass is not twice the width', () => {
@@ -95,9 +108,18 @@ test('PUTTING YOURSELF BACK TOGETHER IS SOMETHING YOU DO', () => {
   assert.equal(pond.cellsOf('player').length, 2);
 
   // Held apart, they never merge however long you wait.
+  //
+  // The FIRST cell is pinned to the middle as well as the second being placed
+  // beside it. Only the second was, and over twenty-five seconds the pair
+  // drifted into the right-hand wall together: the pond clamps a cell inside
+  // its bounds, so the b this loop had just pushed forty units clear came back
+  // hard against a and the contact clock started. The test failed on a wall,
+  // not on the rule.
   for (let i = 0; i < 60 * (mergeContactSeconds() + 5); i++) {
     const [a, b] = pond.cellsOf('player');
     if (!b) break;
+    a.x = pond.t.width / 2;
+    a.y = pond.t.height / 2;
     b.x = a.x + radiusOf(a.mass) + radiusOf(b.mass) + 40;   // keep them off each other
     b.y = a.y;
     pond.step(1 / 60, {});
@@ -273,22 +295,58 @@ test('SPIKES ARE HARMLESS SMALL AND RUINOUS LARGE', () => {
 
 // --- The pond stays dangerous ---------------------------------------------
 
-test('NEW ARRIVALS COME IN YOUR OWN WEIGHT CLASS', () => {
-  // Without this the pond gets safer the longer you live: bots respawn tiny,
-  // you outgrow every one of them, and nothing in the water can touch you. It
-  // is also the title of the game.
-  const pond = new Pond();
-  pond.cellsOf('player')[0].mass = 1000;
-  for (const bot of pond.bots) {
-    for (const cell of pond.cellsOf(bot.id)) cell.mass = 0;
-  }
-  pond.cells = pond.cells.filter((c) => c.mass > 0);
-  for (let i = 0; i < 60 * (TUNING.botRespawnSeconds + 1); i++) pond.step(1 / 60, {});
+test('NOTHING IN THE POND IS SIZED AGAINST YOU', () => {
+  // THIS TEST USED TO ASSERT THE OPPOSITE, and that is the point of it.
+  //
+  // It was called NEW ARRIVALS COME IN YOUR OWN WEIGHT CLASS, and it required
+  // that a bot respawning against a thousand-mass player came back at more than
+  // four times a starting cell. The reasoning read well -- otherwise you outgrow
+  // the pond and nothing can touch you -- and it was wrong about what it felt
+  // like to be on the other end of it. Getting big summoned big opponents, so
+  // the reward for playing well was that the game quietly restocked the water
+  // with things that could eat you. Difficulty manufactured behind the player's
+  // back is not difficulty, it is the game arguing with you.
+  //
+  // So: EVERYTHING starts at startMass. The player, every bot, every respawn,
+  // for ever. A big fish is big because you watched it eat its way there, and
+  // the pond getting safer as you dominate it is the correct consequence of
+  // dominating it.
+  // Caught on the FRAME each bot comes back, not at the end of the wait. The
+  // pond is thick with pellets and a returning cell grazes immediately -- read
+  // a second later it is already at ten mass, which says nothing about what it
+  // arrived at. The question is the size it was DEALT.
+  const arrivalsUnder = (leaderMass) => {
+    const pond = new Pond();
+    pond.cellsOf('player')[0].mass = leaderMass;
+    for (const cell of pond.cells) if (cell.owner !== 'player') cell.mass = 0;
+    pond.cells = pond.cells.filter((c) => c.mass > 0);
 
-  const arrivals = pond.bots.map((b) => pond.massOf(b.id)).filter((m) => m > 0);
-  assert.ok(arrivals.length > 0, 'nothing came back');
-  assert.ok(Math.max(...arrivals) > TUNING.startMass * 4,
-    `the biggest new arrival was ${Math.max(...arrivals)} against a player of 1000`);
+    const seen = new Map();
+    for (let i = 0; i < 60 * (TUNING.botRespawnSeconds + 2); i++) {
+      pond.step(1 / 60, {});
+      for (const bot of pond.bots) {
+        const mass = pond.massOf(bot.id);
+        if (mass > 0 && !seen.has(bot.id)) seen.set(bot.id, mass);
+      }
+    }
+    return [...seen.values()];
+  };
+
+  const rich = arrivalsUnder(1000);
+  assert.ok(rich.length > 0, 'nothing came back');
+  for (const mass of rich) {
+    assert.equal(mass, TUNING.startMass,
+      `a new arrival came in at ${mass} against a player of 1000, so something is `
+      + 'still sizing the pond against the leader');
+  }
+
+  // And the same at the other end: a starving player is not handed smaller
+  // company either. The rule is that there is no rule.
+  for (const mass of arrivalsUnder(TUNING.startMass)) {
+    assert.equal(mass, TUNING.startMass,
+      'an arrival came in at a different size against a small player, which is a '
+      + 'scale by another name');
+  }
 });
 
 test('a run ends when the last of you is eaten, and says so', () => {
@@ -343,7 +401,7 @@ test('THE BOTS PLAY THE POND, NOT THE PLAYER', () => {
     const kills = [];
     const splits = [];
     const spiked = [];
-    for (let seed = 1; seed <= 3; seed++) {
+    for (let seed = 1; seed <= 6; seed++) {
       withSeed(seed, () => {
         const pond = new Pond(TUNING, { skill });
         for (let i = 0; i < 60 * 120; i++) pond.step(1 / 60, { x: 0.4, y: 0.2 });
@@ -367,13 +425,27 @@ test('THE BOTS PLAY THE POND, NOT THE PLAYER', () => {
 
   // And the ladder reads in what the pond LOOKS like, not only in the score: a
   // careless shoal is chaos, because it splits at anything in front of it and
-  // feeds the halves to whatever was standing behind. Measured 900-odd against
-  // 40-odd across the same three ponds.
+  // feeds the halves to whatever was standing behind.
+  //
+  // SIX SEEDS AND A FLOOR OF 1.6, both of which are the spread's doing. Across
+  // three disjoint six-seed blocks the kill ratio measured 3.5, 2.4 and 4.5;
+  // at three seeds it measured 2.2, 6.1 and 2.0, and the old floor of 3 sat
+  // inside that. It passed on the block it was written against and would have
+  // failed on either of the others -- convention 12, pinning a block rather
+  // than a property.
   const careless = life('careless');
-  assert.ok(careless.kills > steady.kills * 3,
+  assert.ok(careless.kills > steady.kills * 1.6,
     `a careless shoal (${careless.kills} kills) is no more chaotic than a steady one (${steady.kills})`);
-  assert.ok(careless.spiked > steady.spiked,
-    'careless bots do not blunder into spikes any more often than careful ones');
+
+  // The second half used to be about spikes: careless bots blundering into them
+  // more often. That was never the effect, only a correlate of it, and it does
+  // not survive -- the same three blocks measured 1.8, 0.9 and 4.3, so it is a
+  // coin flip dressed as a claim. What DOES survive is the cause itself, which
+  // is also the thing you can see happening: a careless shoal divides itself at
+  // anything. Ratios of 12.4, 4.2 and 11.1 over the same blocks.
+  assert.ok(careless.splits > steady.splits * 2,
+    `careless bots split ${careless.splits} times against a steady shoal's ${steady.splits}, `
+    + 'so recklessness does not read on the screen');
 });
 
 test('A BIGGER FISH IS ONLY A THREAT IF ITS HALVES COULD EAT YOU', () => {
@@ -402,21 +474,31 @@ test('A BIGGER FISH IS ONLY A THREAT IF ITS HALVES COULD EAT YOU', () => {
   assert.equal(threatens({ mass: mine * 0.5 }, mine, 1), false);
 });
 
-test('new arrivals come in a spread of sizes, so there is a ladder in the pond', () => {
-  // All arrivals at the same share of the leader means every bot is every other
-  // bot's size, nobody can eat anybody -- eating needs a clear quarter more
-  // mass -- and the only predator-prey pair in the water is you and them.
-  const pond = new Pond();
-  pond.cellsOf('player')[0].mass = 1000;
-  const sizes = [];
-  for (let i = 0; i < 200; i++) sizes.push(pond.arrivalMassForTest());
-  const low = Math.min(...sizes);
-  const high = Math.max(...sizes);
-  assert.ok(high > low * 2,
-    `arrivals run from ${Math.round(low)} to ${Math.round(high)}, which is not a ladder`);
-  // And the spread straddles what it takes to eat: some arrivals can eat
-  // others outright.
-  assert.ok(canEat(high, low), 'the biggest arrival cannot eat the smallest');
+test('the ladder in the pond is earned rather than dealt', () => {
+  // The companion to the test above, and the reason removing the spread of
+  // arrival sizes did not flatten the pond.
+  //
+  // Arrivals used to be dealt across a range so that some bot could always eat
+  // some other bot on the day it turned up. That produced a ladder immediately
+  // and meant nothing: the rungs were assigned rather than climbed. Now every
+  // bot enters at startMass and the spread has to come from play -- which it
+  // does, and quickly, because the bots hunt each other.
+  const spread = [];
+  for (let seed = 1; seed <= 3; seed++) {
+    withSeed(seed, () => {
+      const pond = new Pond(TUNING, { skill: 'steady' });
+      for (let i = 0; i < 60 * 90; i++) pond.step(1 / 60, { x: 0.4, y: 0.2 });
+      const sizes = pond.bots.map((b) => pond.massOf(b.id)).filter((m) => m > 0);
+      spread.push({ low: Math.min(...sizes), high: Math.max(...sizes) });
+    });
+  }
+  // On every pond, ninety seconds in, the shoal has sorted itself into
+  // something with a top and a bottom, and the top can eat the bottom.
+  for (const { low, high } of spread) {
+    assert.ok(canEat(high, low),
+      `after ninety seconds the shoal runs ${Math.round(low)} to ${Math.round(high)}, `
+      + 'which is not a ladder anybody could climb');
+  }
 });
 
 // --- The skill levels -----------------------------------------------------
@@ -474,84 +556,65 @@ test('and the ladder is real — the same player does far worse against better b
 
 // --- The claims -----------------------------------------------------------
 
-test('SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU', () => {
-  // What splitting is FOR, and it still does it: two policies identical but for
-  // whether they ever divide themselves, and the one that does catches
-  // substantially more. Across three disjoint blocks of forty seeds the ratio
-  // was 1.6, 3.9 and 2.3 times as many cells eaten.
-  //
-  // NOTE WHAT THIS TEST NO LONGER CLAIMS. It used to assert that splitting won
-  // on the SCORE -- 320 against 263, and 322 against 249. That died with the
-  // merge change, and deliberately: putting yourself back together now takes
-  // twenty seconds of unbroken contact that you can only earn by easing off the
-  // stick, and the cost of that cancels the gain. Measured over three disjoint
-  // blocks of sixty seeds, a never-splitting policy scores 3720 against 2925,
-  // 3839 against 3839, and 2359 against 2360 -- ahead, level, level.
-  //
-  // So splitting is a tool rather than a profit: it is how you reach something
-  // faster than you, and you pay for the reach. That is a better mechanic than
-  // the one that was there before, and it is not the claim that was there
-  // before, so the test says what is true instead.
-  // Twenty-four seeds at five minutes rather than sixty at eight: the effect is
-  // large enough that it does not need the sample the score claim below does.
-  // At sixty seeds and eight minutes the same comparison is 12.6 cells against
-  // 8.8, 11.4 against 8.8, and 8.7 against 4.9.
-  //
-  // The FLOOR is a seventh rather than a third, and the block-to-block spread is
-  // why: at these settings three disjoint blocks measured 1.64, 2.63 and 1.29.
-  // A third would fail on the third block on this machine, never mind another
-  // one -- the simulation is chaotic and the last bits of Math.hypot are not
-  // identical across V8 versions, so four minutes of pond turns a one-ulp
-  // difference into a different run. A threshold has to clear that, not sit in
-  // the middle of it.
-  const caught = (policy) => {
-    const eaten = [];
-    for (let seed = 1; seed <= 24; seed++) {
-      withSeed(seed, () => eaten.push(runOnce(policy, undefined, { seconds: 300 }).eaten));
-    }
-    return summarise(eaten).mean;
-  };
-  const splits = caught('selective');
-  const never = caught('noSplit');
-  assert.ok(splits > never * 1.15,
-    `splitting caught ${splits} against ${never} without it, which is noise`);
-});
+// SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU -- ALSO NOT ASSERTED.
+//
+// This one held under the old rules and does not hold under the new ones, for
+// the same reason the headline below does not: the rubber band was doing the
+// work. When arrivals were sized against the leader, the pond was full of
+// things too fast to swim down, and dividing yourself was the only way to reach
+// one. Everything now enters at startMass, so most of what is worth eating is
+// slower than you are and you can simply go and get it.
+//
+// Re-measured the same way as before -- mean cells eaten, selective against a
+// policy identical but for never splitting, three disjoint blocks of 24 seeds
+// at a 300-second cap:
+//
+//     seeds  1-24    selective 12.0    noSplit 17.3    ratio 0.69
+//     seeds 25-48    selective 19.4    noSplit 18.3    ratio 1.06
+//     seeds 49-72    selective 21.1    noSplit 15.1    ratio 1.40
+//
+// It flips, and the first block flips hard the wrong way. The old floor of
+// 1.15 passes on one block of three.
+//
+// What is still true is the MECHANIC rather than the strategy: a split covers
+// ground no amount of swimming covers at that size, which is asserted outright
+// in 'splitReach is where the launch actually gets you' above and is a fact
+// about the arithmetic rather than a hope about a sample. Splitting is a reach
+// tool with a real price -- twenty seconds of held contact to undo -- and
+// whether reaching is worth the price is the player's judgement, not a result
+// this file can claim on their behalf.
 
-test('CAUTION BEATS GREED — the claim the score was changed to make measurable', () => {
-  // The headline, and it took a change to the SCORE rather than to the tuning.
-  //
-  // On peak mass this was false and could not be made true: peak ignores how
-  // long you held it, so growing as fast as possible and dying is optimal by
-  // construction, and every risk added lowered a reckless player and a careful
-  // one together. Sixty seeds said 405 to 416 -- noise -- and I nearly shipped a
-  // twelve-seed sample that happened to say 455 to 637.
-  //
-  // Scored on the area under the mass curve, a selective player wins on three
-  // disjoint blocks of sixty seeds: 2925 to 1684, 3839 to 1942, 2360 to 2139.
-  // Between ten and ninety-eight per cent, ahead on the mean in all three as
-  // well, and the ordering never flips. The thin block is the reason the
-  // threshold below is a twentieth rather than a half: the effect is real and
-  // its size is not stable, and on top of that the same seeds give different
-  // runs on different V8 versions, because the pond is chaotic and the last
-  // bits of Math.hypot are not identical between them.
-  //
-  // THIS IS THE MOST EXPENSIVE TEST IN THE SUITE, about three minutes, and the
-  // sample size is load-bearing rather than cautious: at forty seeds and a
-  // three-hundred-second cap the same comparison comes out 0.86, 1.72 and 1.17
-  // across blocks -- it flips. The advantage IS survival time (median life 271
-  // seconds against 188), so a short cap truncates the thing being measured.
-  const median = (policy) => {
-    const scores = [];
-    for (let seed = 1; seed <= 60; seed++) {
-      withSeed(seed, () => scores.push(runOnce(policy, undefined, { seconds: 480 }).score));
-    }
-    return summarise(scores).median;
-  };
-  const greedy = median('greedy');
-  const selective = median('selective');
-  assert.ok(selective > greedy * 1.05,
-    `greed scores ${greedy} against judgement's ${selective} — the claim is back to unproven`);
-});
+// CAUTION BEATS GREED WAS THE HEADLINE, AND IT IS NOT ASSERTED HERE.
+//
+// It was true, and it was true because of the rubber band. Bots used to arrive
+// sized against the leader, so growing fast summoned bigger company and a
+// greedy player walked into a pond restocked to punish them. Remove that -- and
+// it had to go; a game that manufactures difficulty behind the player's back is
+// arguing with them rather than challenging them -- and the result goes with it.
+//
+// Re-measured after the change, exactly as before: median score, selective
+// against greedy, three disjoint blocks of sixty seeds at a 480-second cap.
+//
+//     seeds   1-60     selective 941    greedy  516     selective ahead
+//     seeds  61-120    selective 954    greedy 1436     GREEDY ahead
+//     seeds 121-180    selective 1122   greedy 1040     selective ahead
+//
+// The ordering flips. That is not a small effect measured imprecisely, it is
+// the absence of an effect: two of three blocks lean one way, the middle one
+// leans the other harder than either, and no threshold survives all three.
+//
+// There is a version of this file with a threshold that passes, and finding it
+// would have taken an afternoon of picking a cap and a seed count until a block
+// agreed. That is convention 12 with extra steps, and the instruction was
+// explicit: if it does not hold, say so rather than tuning it back into
+// existence. So it is written down and not asserted.
+//
+// What the game IS, on the evidence: splitting is a tool you pay for rather
+// than a profit (the test above), the danger comes from a shoal that hunts
+// itself rather than from arrivals aimed at you, and the skill ladder is real
+// and measured -- see 'the ladder is real' above, where the same player scores
+// far worse against better bots. Those are claims with samples behind them. The
+// headline was not, once the thing propping it up was gone.
 
 test('the policies differ in one thing: judgement about being big', () => {
   const keys = new Set(Object.values(POLICIES).flatMap((p) => Object.keys(p)));
@@ -571,15 +634,27 @@ test('TAKE THE TRADE AWAY AND THE TWO POLICIES PLAY THE SAME GAME', () => {
   // and do not divide yourself while something can eat the halves. So take the
   // danger away, and there should be nothing left to judge.
   //
-  // There is not. With the speed penalty and the spike threat set to nothing,
-  // 23 of 24 runs come out BIT-IDENTICAL: the same seeds, the same moves, the
-  // same final mass, because at no point did either policy find a reason to
-  // decide differently. In the real pond only 1 of 12 runs is identical.
+  // There is not, and this is now the only headline claim in the file that
+  // survived removing the rubber band -- which is why it is stated as a GAP
+  // rather than as a level.
   //
-  // (An earlier version of this asserted that ALL the flat runs matched, which
-  // passed for a while and then broke on a seed where the punish check did
-  // matter. That was convention 12 in its purest form -- pinning an accident.
-  // A share is the claim; identity was a coincidence that held for a while.)
+  // Three disjoint blocks of twelve seeds, share of runs coming out
+  // bit-identical between the two policies:
+  //
+  //     seeds  1-12    flat 0.67    real pond 0.17
+  //     seeds 13-24    flat 0.58    real pond 0.25
+  //     seeds 25-36    flat 0.50    real pond 0.17
+  //
+  // Take the danger away and the policies agree two to four times as often. The
+  // direction and the size of the gap hold on every block; the absolute share
+  // does not, and used to be asserted at 0.8 because the block it was written
+  // against happened to give 23 of 24. That was convention 12 -- pinning a
+  // block. Under the new rules the flat pond diverges more, because a shoal
+  // that all starts at startMass and hunts itself produces far more near-equal
+  // meetings, and a near-equal meeting is where one ulp becomes a different run.
+  //
+  // So the assertion is the RATIO, with floors either side of it so that a
+  // degenerate reading -- both zero, or both one -- cannot satisfy it.
   const flat = { ...TUNING, speedFalloff: 0, spikeMass: Infinity };
   const matches = (tuning, seeds) => {
     let same = 0;
@@ -595,12 +670,15 @@ test('TAKE THE TRADE AWAY AND THE TWO POLICIES PLAY THE SAME GAME', () => {
 
   const safe = matches(flat, 12);
   const dangerous = matches(TUNING, 12);
-  assert.ok(safe >= 0.8,
+  assert.ok(safe >= 0.4,
     `only ${(safe * 100).toFixed(0)}% of runs matched with the trade removed, so the `
     + 'policies differ in more than judgement about being big');
-  assert.ok(dangerous <= 0.4,
+  assert.ok(dangerous <= 0.35,
     `${(dangerous * 100).toFixed(0)}% of runs matched in the real pond, so the judgement `
     + 'almost never comes up and the trade is not biting');
+  assert.ok(safe > dangerous * 1.8,
+    `the policies agreed on ${(safe * 100).toFixed(0)}% of flat runs and `
+    + `${(dangerous * 100).toFixed(0)}% of real ones, which is not a gap`);
 });
 
 test('tuning is data a test can override', () => {

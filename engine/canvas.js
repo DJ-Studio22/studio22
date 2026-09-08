@@ -59,6 +59,15 @@ const DEFAULT_TV_UI_SCALE = 1.5;
 // 2 is the usual choice, 1.5 for fill-heavy games, 1 for pixel art.
 const DEFAULT_MAX_PIXEL_RATIO = Infinity;
 
+// The visible box and the safe-area insets. See engine/viewport.js: on a phone
+// the window is three different sizes and only one of them is the one the
+// player can see.
+import { Viewport } from './viewport.js';
+// The canvas is the only thing that knows where the play area ended up, and
+// engine/input.js is the only thing that decides where a thumb should find a
+// control. This is how the first tells the second.
+import { Input } from './input.js';
+
 export class GameCanvas {
   // --- Internal state -----------------------------------------------------
 
@@ -260,6 +269,10 @@ export class GameCanvas {
     // custom parent, fill that parent instead.
     const mountingToBody = this.#parent === document.body;
     this.#container.style.position = mountingToBody ? 'fixed' : 'absolute';
+    // inset:0 is the layout viewport, which on iOS Safari is the size the page
+    // gets once the toolbar has collapsed -- taller than what is on screen
+    // while it is still up. #applyLayout replaces this with the visible box on
+    // every layout; this is only the value before the first measurement.
     this.#container.style.inset = '0';
     this.#container.style.display = 'flex';
     this.#container.style.alignItems = 'center';
@@ -307,13 +320,18 @@ export class GameCanvas {
 
     this.#parent.appendChild(this.#container);
 
-    if (this.#requireOrientation) this.#buildOverlay(rotateMessage);
+    // Built for every game, because #updateOrientationOverlay can now decide
+    // to ask on its own -- see the note there.
+    this.#buildOverlay(rotateMessage);
   }
 
   // The "rotate your device" screen. Built once and shown/hidden, rather
   // than created on demand, so flipping a phone can't cost a layout hitch.
   #buildOverlay(message) {
     this.#overlay = document.createElement('div');
+    // Tagged so a test can ask whether the game is currently asking to be
+    // turned, rather than guessing from the text inside it.
+    this.#overlay.dataset.orientationOverlay = 'true';
     this.#overlay.style.position = 'absolute';
     this.#overlay.style.inset = '0';
     this.#overlay.style.display = 'none';
@@ -347,6 +365,19 @@ export class GameCanvas {
   // --- Layout -------------------------------------------------------------
 
   #applyLayout() {
+    // THE CONTAINER IS PINNED TO THE VISIBLE BOX, not to the layout viewport.
+    //
+    // Only when mounted to <body>: a game embedded in somebody else's element
+    // should fill that element, which is what inset:0 already does.
+    if (this.#parent === document.body) {
+      const box = Viewport.box;
+      this.#container.style.inset = 'auto';
+      this.#container.style.left = `${box.left}px`;
+      this.#container.style.top = `${box.top}px`;
+      this.#container.style.width = `${box.width}px`;
+      this.#container.style.height = `${box.height}px`;
+    }
+
     const availableWidth = this.#container.clientWidth;
     const availableHeight = this.#container.clientHeight;
 
@@ -416,22 +447,73 @@ export class GameCanvas {
     this.#ctx.imageSmoothingEnabled = !this.#pixelArt;
 
     this.#scale = displayWidth / this.#gameWidth;
+
+    // Touch controls belong on the play area, not on the letterbox bars beside
+    // it. Pushed rather than pulled because this is the moment the answer
+    // changes, and a control placed against a stale rectangle is a control in
+    // the wrong place.
+    const rect = this.#canvas.getBoundingClientRect();
+    Input.setControlBounds({
+      left: rect.left, top: rect.top, width: rect.width, height: rect.height,
+    });
   }
 
   #updateOrientationOverlay() {
-    if (!this.#requireOrientation || !this.#overlay) return;
+    if (!this.#overlay) return;
 
     // Comparing viewport dimensions rather than reading screen.orientation:
     // the orientation API reports the *device's* rotation, which is not the
     // same question as "is the window currently wider than it is tall" --
     // and it's the window shape that decides whether the game fits.
     const isLandscape = window.innerWidth >= window.innerHeight;
-    const blocked =
-      (this.#requireOrientation === 'landscape' && !isLandscape) ||
-      (this.#requireOrientation === 'portrait' && isLandscape);
+
+    let blocked = false;
+    if (this.#requireOrientation) {
+      blocked =
+        (this.#requireOrientation === 'landscape' && !isLandscape) ||
+        (this.#requireOrientation === 'portrait' && isLandscape);
+    } else {
+      blocked = this.#shouldAskToRotate();
+    }
 
     this.#orientationBlocked = blocked;
     this.#overlay.style.display = blocked ? 'flex' : 'none';
+  }
+
+  /**
+   * ASK THE PLAYER TO TURN THE PHONE, but only when turning it actually helps.
+   *
+   * No game in the arcade declared an orientation, so on a phone every one of
+   * them was playable in both -- and in the wrong one, unrecognisably. Measured
+   * across all twenty-three at iPhone-14-Pro-Max size, each game covers 63% to
+   * 92% of the screen in the orientation it was drawn for and 23% to 34% in the
+   * other: a postage stamp in the middle of a black field.
+   *
+   * The decision is made from the game's own shape rather than from a flag on
+   * every game, because the shape is the thing that decides it. If rotating the
+   * device would fit the play area appreciably better AND the current fit is
+   * poor, say so. Otherwise stay out of the way -- a 4:3 game on a laptop is
+   * letterboxed and nobody needs telling.
+   *
+   * Never on a desktop: a window that happens to be narrow is not a phone that
+   * can be turned, and telling somebody to rotate their monitor is absurd.
+   */
+  #shouldAskToRotate() {
+    const canRotate = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (!canRotate) return false;
+
+    const width = this.#container.clientWidth;
+    const height = this.#container.clientHeight;
+    if (!width || !height) return false;
+
+    const fit = (w, h) => Math.min(w / this.#gameWidth, h / this.#gameHeight);
+    const now = fit(width, height);
+    const turned = fit(height, width);
+    if (now <= 0) return false;
+
+    // How much of the screen the play area actually covers as things stand.
+    const covered = (this.#gameWidth * now * this.#gameHeight * now) / (width * height);
+    return covered < 0.45 && turned > now * 1.35;
   }
 
   // --- Events -------------------------------------------------------------
@@ -462,12 +544,12 @@ export class GameCanvas {
       this.#resizeObserver.observe(this.#container);
     }
 
-    // Belt and braces for mobile Safari, where the visual viewport can move
-    // under the layout viewport (URL bar, on-screen keyboard) without either
-    // a window resize or a container resize being reported.
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', () => this.resize());
-    }
+    // The visible box moving is its own event: a URL bar collapsing or an
+    // on-screen keyboard opening changes what is on screen without firing a
+    // window resize or a container resize at all. Viewport.onChange covers
+    // resize, orientationchange and both visualViewport events in one place, so
+    // this and engine/input.js cannot end up listening to different things.
+    Viewport.onChange(() => this.resize());
   }
 }
 

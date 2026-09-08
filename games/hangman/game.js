@@ -24,7 +24,11 @@
 //   touch      put a finger on the letter. Engine support for this was added
 //              for it — Input.tapped() reports a touch nothing else claimed,
 //              and GameCanvas.screenToGame() puts it in the same coordinates
-//              the grid is drawn in.
+//              the grid is drawn in. "Nothing else claimed" was doing more
+//              work than it looked: the virtual joystick claims the left half
+//              of the play area on sight, so half the alphabet was dead on a
+//              phone. Fixed twice over — this game declares that it does not
+//              steer, and the engine now hands back a touch that never moved.
 //
 // All three resolve to one action, `run.guess(letter)`, so the difficulty
 // measured in tests/ is true of every device rather than of whichever one was
@@ -94,8 +98,16 @@ const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 200 });
 
+// You tap the letter you want; there is nothing to steer. Without this the
+// virtual joystick claimed the left half of the play area and the left half of
+// the alphabet with it -- A, H, O and V were untappable on a phone.
+Input.setDirectionalTouch(false);
+
+// Top-left, which is the only part of the screen the grid and the gallows both
+// leave alone. At the bottom-left it sat on top of the letter P and took P's
+// taps, because a pad wins a touch before the grid ever sees it.
 Input.setTouchLayout([
-  { name: 'b', xRatio: 0.09, yRatio: 0.90, radius: 46, label: 'Hint' },
+  { name: 'b', xRatio: 0.07, yRatio: 0.12, radius: 46, label: 'Hint' },
 ]);
 
 Session.setScoreDirection(GAME_ID, 'high');
@@ -455,7 +467,10 @@ function drawGrid() {
 
 function drawHud() {
   ctx.fillStyle = ART.hud.panel;
-  ctx.beginPath(); ctx.roundRect(W - 268, 34, 234, 92, 10); ctx.fill();
+  // Right-aligned against what the shell leaves free, not against the canvas
+  // edge: on a phone there is a pause button in that corner. Zero on a desktop.
+  const hudRight = W - shell.rightInset();
+  ctx.beginPath(); ctx.roundRect(hudRight - 268, 34, 234, 92, 10); ctx.fill();
   ctx.strokeStyle = ART.hud.panelEdge;
   ctx.lineWidth = 1;
   ctx.stroke();
@@ -463,30 +478,30 @@ function drawHud() {
   ctx.textAlign = 'left';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('SOLVED', W - 250, 56);
+  ctx.fillText('SOLVED', hudRight - 250, 56);
   ctx.fillStyle = ART.hud.value;
   ctx.font = '800 26px system-ui, sans-serif';
-  ctx.fillText(String(run.solved), W - 250, 82);
+  ctx.fillText(String(run.solved), hudRight - 250, 82);
 
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('ROUND', W - 176, 56);
+  ctx.fillText('ROUND', hudRight - 176, 56);
   ctx.fillStyle = ART.hud.value;
   ctx.font = '800 26px system-ui, sans-serif';
-  ctx.fillText(String(run.round), W - 176, 82);
+  ctx.fillText(String(run.round), hudRight - 176, 82);
 
   // Lives as pips, guesses as a count — a life is a thing you have, a guess is
   // a thing you spend.
   for (let i = 0; i < TUNING.lives; i++) {
     ctx.fillStyle = i < run.lives ? ART.hud.good : 'rgba(226,232,238,.16)';
     ctx.beginPath();
-    ctx.arc(W - 108 + i * 22, 62, 7, 0, Math.PI * 2);
+    ctx.arc(hudRight - 108 + i * 22, 62, 7, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.textAlign = 'left';
   ctx.fillStyle = run.guessesLeft <= 2 ? ART.hud.bad : ART.hud.label;
   ctx.font = '700 13px system-ui, sans-serif';
-  ctx.fillText(`${run.guessesLeft} guesses left`, W - 250, 112);
+  ctx.fillText(`${run.guessesLeft} guesses left`, hudRight - 250, 112);
 
   // The hint, and what it will cost — always priced, never a mystery button.
   ctx.textAlign = 'left';

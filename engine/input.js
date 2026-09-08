@@ -50,6 +50,33 @@ const TRIGGER_THRESHOLD = 0.3;
 // the ring or runs past it.
 export const JOYSTICK_MAX_RADIUS_PX = 55;
 
+// Breathing room outside a pad's own radius, in CSS pixels. Rings that merely
+// touch still read as one shape, and a thumb is wider than a pixel.
+const PAD_AIR = 6;
+
+// How many times the pad cluster is relaxed. Three pads is the most any game
+// declares, so this is generous; a fixed count keeps the result deterministic,
+// which matters because it is recomputed every frame and a pad that settled to
+// a slightly different place each time would visibly crawl.
+const PAD_RELAX_PASSES = 12;
+
+// How finely the ring around the stick is sampled when a pad has to be moved
+// off it. Every 5.6 degrees, which is finer than the pixel difference it makes
+// on any phone.
+const STICK_RING_SAMPLES = 64;
+
+// How far a touch may wander, and how long it may last, and still count as a
+// tap rather than a stick drag. Eight pixels is under a third of the deadzone
+// the stick itself applies, so a touch this still was never steering anything;
+// 300ms is the usual line between a poke and a hold.
+const TAP_SLOP_PX = 8;
+const TAP_HOLD_MS = 300;
+
+// performance.now() where there is one. The tests import this module under
+// Node, where the global exists but has not always, and a clock is not worth
+// a crash.
+const now = () => (typeof performance === 'undefined' ? Date.now() : performance.now());
+
 // The full set of digital buttons in the normalized state object. Kept as a
 // list (rather than re-typing it everywhere) so merge/copy helpers below
 // can loop instead of repeating ten field names.
@@ -234,6 +261,9 @@ function makeZeroedFrame() {
   return frame;
 }
 
+// The visible box and the safe-area insets. See engine/viewport.js.
+import { Viewport } from './viewport.js';
+
 export class Input {
   // --- Internal state -----------------------------------------------------
   // Everything below is private: games only ever go through the static
@@ -281,6 +311,10 @@ export class Input {
   // stick and pads from firing underneath it.
   static #touchControlsEnabled = true;
   static #joystick = { active: false, touchId: null, originX: 0, originY: 0, x: 0, y: 0 };
+  // Whether this game steers at all -- see usesDirectionalTouch.
+  static #directionalTouch = true;
+  // The play area, in client coordinates. See setControlBounds.
+  static #controlBounds = null;
   // The second, optional stick. Off by default: most games steer and press,
   // and a game that doesn't aim should not have half its screen quietly
   // swallowing taps. Games that do aim turn it on with setAimStickEnabled().
@@ -412,7 +446,14 @@ export class Input {
     return Input.#heldKeys.has(code);
   }
 
-  /** The tap since the last update(), in viewport coordinates, or null. */
+  /**
+   * The tap since the last update(), in viewport coordinates, or null.
+   *
+   * A tap is a touch no action pad took, plus one a stick took and gave back:
+   * a press that moved less than eight pixels and lasted under 300ms was
+   * plainly a poke rather than a drag, whatever half of the screen it landed
+   * in. See the note in #onTouchEnd for why that rescue has to exist.
+   */
   static tapped() {
     return Input.#tap;
   }
@@ -507,15 +548,245 @@ export class Input {
     Input.#keyboardLayouts[playerIndex] = resolved;
   }
 
+  /**
+   * Does this game steer? Set by setDirectionalTouch(); true by default.
+   *
+   * The virtual stick claims half the play area whatever the game does with
+   * it, so a game that never reads x/y -- Tower Stack dropping a block, Gravity
+   * Flip flipping -- would otherwise advertise a joystick that steers nothing.
+   * engine/shell.js asks this before drawing the resting stick.
+   */
+  static get usesDirectionalTouch() {
+    return Input.#directionalTouch;
+  }
+
+  static setDirectionalTouch(enabled) {
+    Input.#directionalTouch = Boolean(enabled);
+  }
+
+  /**
+   * The box touch controls live in: the play area, minus anything behind the
+   * hardware. Set by engine/canvas.js on every layout.
+   *
+   * THIS IS THE PLAY AREA AND NOT THE WINDOW, and the difference is the whole
+   * point. A phone screen is 932 CSS pixels wide and a game drawn at 3:2 fills
+   * 665 of them, so the rest is letterbox bar. Placing a pad at "13% across the
+   * screen" put it in that bar: off the canvas, so it was never drawn at all,
+   * and off the play area, so a thumb that found it was pressing scenery.
+   *
+   * Falls back to the safe viewport box when nothing has set it, which is only
+   * the tests -- everything else has a GameCanvas.
+   */
+  static setControlBounds(rect) {
+    Input.#controlBounds = rect;
+  }
+
+  static get controlBounds() {
+    const safe = Viewport.safe;
+    const bounds = Input.#controlBounds;
+    if (!bounds || !bounds.width || !bounds.height) return safe;
+    // Clipped to the safe area: a play area that runs under the notch or the
+    // home indicator is fine to DRAW in and no place to put a button.
+    const left = Math.max(bounds.left, safe.left);
+    const top = Math.max(bounds.top, safe.top);
+    const right = Math.min(bounds.left + bounds.width, safe.left + safe.width);
+    const bottom = Math.min(bounds.top + bounds.height, safe.top + safe.height);
+    return {
+      left,
+      top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
+  }
+
+  /**
+   * Where the resting stick sits: bottom-left of the play area.
+   *
+   * Far enough in from the edge that the whole ring is on glass, and far enough
+   * up that it clears the home indicator. The live stick still appears wherever
+   * the thumb actually lands; this is only the hint that says one exists.
+   */
+  static stickHome() {
+    const box = Input.controlBounds;
+    // Never closer to an edge than the ring's own radius, whatever the box is:
+    // a 430-wide portrait play area gives 0.13 * 430 = 56, which put a
+    // 55-radius ring one pixel off the glass.
+    const margin = Math.min(96, Math.max(JOYSTICK_MAX_RADIUS_PX + 12, box.width * 0.13));
+    return {
+      x: box.left + margin,
+      y: box.top + box.height - margin,
+    };
+  }
+
+  /**
+   * WHERE A TOUCH PAD IS, in client coordinates. The only answer, used by the
+   * hit test below and by engine/shell.js to draw it.
+   *
+   * Both used to do this arithmetic themselves against window.innerWidth and
+   * window.innerHeight. They agreed with each other and were both wrong: that
+   * is the LAYOUT viewport, which on iOS Safari is the size the page gets once
+   * the toolbar has collapsed, so a pad at yRatio 0.9 was drawn and hit-tested
+   * below the visible area while the toolbar was still up.
+   */
+  static touchButtonCenter(button) {
+    const found = Input.touchButtonCenters().get(button.name);
+    if (found) return { x: found.x, y: found.y };
+    // A button that is not in the current layout: place it on its own ratio so
+    // the caller still gets an answer rather than a crash.
+    const box = Input.controlBounds;
+    return {
+      x: box.left + button.xRatio * box.width,
+      y: box.top + button.yRatio * box.height,
+    };
+  }
+
+  /**
+   * WHERE EVERY TOUCH PAD IS, resolved together. Keyed by button name, in
+   * client coordinates. Used by the hit test below and by engine/shell.js to
+   * draw them, so the pad on screen and the pad a thumb finds cannot drift.
+   *
+   * WHY THIS IS NOT JUST ratio * box, WHICH IS WHAT IT USED TO BE.
+   *
+   * A ratio places a CENTRE and says nothing about the ring around it, and the
+   * radius is in CSS pixels and does not shrink when the box does. So a pair of
+   * pads a comfortable 0.09 of the width apart -- 84 pixels on a 932-wide
+   * landscape play area -- are 39 pixels apart when the same game is played
+   * portrait, and two 55-pixel rings 39 pixels apart are one blob with an
+   * ambiguous middle. Measured across all twenty-three games at iPhone size,
+   * TWELVE had overlapping pads and four had a pad sitting on top of the
+   * resting joystick. Every one of them passed a tap test, because both pads
+   * respond; what they cannot do is tell a thumb which one it pressed.
+   *
+   * That is one fault with one cause in twelve places, so it is fixed here
+   * rather than by hand-tuning twelve pairs of ratios that would go wrong again
+   * on the next screen shape. A game says roughly where it wants its pads; this
+   * guarantees they are on the play area and clear of each other and of the
+   * stick. The relaxation runs a fixed number of passes on a fixed input, so
+   * the answer is deterministic and pads do not jitter between frames.
+   */
+  static touchButtonCenters() {
+    const box = Input.controlBounds;
+    const layout = Input.#touchLayout;
+    const pads = layout.map((button) => ({
+      name: button.name,
+      r: (button.radius ?? 0) + PAD_AIR,
+      x: box.left + button.xRatio * box.width,
+      y: box.top + button.yRatio * box.height,
+    }));
+
+    // The stick does not move -- a player reaches for it in the corner without
+    // looking, and a joystick that shuffles about to make room for a button is
+    // worse than a button in the wrong place. Pads move around it.
+    const stick = Input.#directionalTouch
+      ? { ...Input.stickHome(), r: JOYSTICK_MAX_RADIUS_PX + PAD_AIR }
+      : null;
+
+    const pin = (value, low, high) => (low > high
+      ? (low + high) / 2                     // box smaller than the pad itself
+      : Math.min(Math.max(value, low), high));
+    const clampAll = () => {
+      for (const p of pads) {
+        p.x = pin(p.x, box.left + p.r, box.left + box.width - p.r);
+        p.y = pin(p.y, box.top + p.r, box.top + box.height - p.r);
+      }
+    };
+    clampAll();
+
+    for (let pass = 0; pass < PAD_RELAX_PASSES; pass++) {
+      let moved = false;
+
+      for (let i = 0; i < pads.length; i++) {
+        for (let j = i + 1; j < pads.length; j++) {
+          const a = pads[i];
+          const b = pads[j];
+          let dx = b.x - a.x;
+          let dy = b.y - a.y;
+          let distance = Math.hypot(dx, dy);
+          if (distance < 1e-6) {
+            // Exactly coincident: pick a direction rather than divide by zero.
+            // Along x, so a pair declared at the same spot ends up side by side
+            // where a thumb expects two buttons to be.
+            dx = 1; dy = 0; distance = 1e-6;
+          }
+          const want = a.r + b.r;
+          if (distance >= want) continue;
+          const push = (want - distance) / 2;
+          const ux = dx / distance;
+          const uy = dy / distance;
+          a.x -= ux * push; a.y -= uy * push;
+          b.x += ux * push; b.y += uy * push;
+          moved = true;
+        }
+      }
+
+      if (stick) {
+        for (const p of pads) {
+          const want = p.r + stick.r;
+          if (Math.hypot(p.x - stick.x, p.y - stick.y) >= want) continue;
+          const spot = Input.#clearOfStick(p, stick, want, box);
+          if (!spot) continue;
+          p.x = spot.x;
+          p.y = spot.y;
+          moved = true;
+        }
+      }
+
+      clampAll();
+      if (!moved) break;
+    }
+
+    const out = new Map();
+    for (const p of pads) out.set(p.name, { x: p.x, y: p.y });
+    return out;
+  }
+
+  /**
+   * The nearest place a pad can sit that clears the resting stick AND stays on
+   * the play area. Returns null when there is nowhere.
+   *
+   * Pushing a pad straight away from the stick is the obvious move and it fails
+   * in the one case that matters. Both live in the bottom-left corner -- the
+   * stick because that is where a left thumb rests, the pad because that is
+   * where three games declared it -- so "away" points diagonally out of the
+   * box, and the clamp puts the pad straight back on top of the stick. Hangman
+   * sat in that deadlock for twelve passes and came out exactly where it went
+   * in, nineteen pixels from the middle of the joystick.
+   *
+   * So instead of a direction, a ring: every position at the required distance
+   * from the stick, keeping the one that fits on the play area and is closest to
+   * where the pad already was. Straight-away is one of the samples, so wherever
+   * the simple push already worked this picks the same answer.
+   */
+  static #clearOfStick(pad, stick, want, box) {
+    let best = null;
+    let bestDistance = Infinity;
+    for (let i = 0; i < STICK_RING_SAMPLES; i++) {
+      const angle = (i / STICK_RING_SAMPLES) * Math.PI * 2;
+      const x = stick.x + Math.cos(angle) * want;
+      const y = stick.y + Math.sin(angle) * want;
+      if (x - pad.r < box.left || x + pad.r > box.left + box.width) continue;
+      if (y - pad.r < box.top || y + pad.r > box.top + box.height) continue;
+      const moved = Math.hypot(x - pad.x, y - pad.y);
+      if (moved < bestDistance) {
+        bestDistance = moved;
+        best = { x, y };
+      }
+    }
+    return best;
+  }
+
   // Replaces the touch action-button cluster. `config` is an array of
   // { name, xRatio, yRatio, radius, label } describing each button as a
-  // fraction of the viewport (so layouts hold up across screen sizes) plus a
-  // touch radius in CSS pixels. `name` must be one of the button fields
-  // returned by get() (e.g. 'a', 'b', 'btnX', 'rb'...).
+  // fraction of the play area plus a touch radius in CSS pixels. `name` must
+  // be one of the button fields returned by get() (e.g. 'a', 'b', 'btnX'...).
   //
   // `label` is optional and is what engine/shell.js prints on the pad: give
   // it the verb ('BURN', 'JUMP') rather than leaving the player to work out
   // what the letter A does in this particular game. Falls back to `name`.
+  //
+  // THE RATIOS ARE A PREFERENCE, NOT A PROMISE. See touchButtonCenter: a game
+  // declares roughly where it wants each pad and the engine guarantees they
+  // end up on the play area and clear of each other.
   static setTouchLayout(config) {
     Input.#touchLayout = config;
     // Clear any buttons that were mid-press under the old layout so a
@@ -755,6 +1026,10 @@ export class Input {
   }
 
   // Plants a stick's base where the thumb landed and zeroes its deflection.
+  //
+  // startedAt and wandered are for the tap rescue in #onTouchEnd: a stick has
+  // to remember where and when it began to be able to say, on release, that
+  // nothing actually happened.
   static #beginStick(stick, touchId, x, y) {
     stick.active = true;
     stick.touchId = touchId;
@@ -762,10 +1037,20 @@ export class Input {
     stick.originY = y;
     stick.x = 0;
     stick.y = 0;
+    stick.startedAt = now();
+    stick.wandered = 0;
   }
 
   // Converts a thumb position into a stick deflection, shared by both sticks
   // so they can never drift apart in feel.
+  // Where the move stick's half of the screen ends. Measured on the visible
+  // box so that a phone with the toolbar up splits the screen a player can see
+  // rather than one they cannot.
+  static #stickZoneEdge() {
+    const box = Input.controlBounds;
+    return box.left + box.width / 2;
+  }
+
   static #dragStick(stick, clientX, clientY) {
     const dx = clientX - stick.originX;
     const dy = clientY - stick.originY;
@@ -784,10 +1069,14 @@ export class Input {
   }
 
   static #hitTestTouchButton(x, y) {
+    // The resolved cluster, asked for once: where a pad ends up depends on
+    // where the others did, so testing them one at a time would re-run the
+    // whole relaxation for every button.
+    const centers = Input.touchButtonCenters();
     for (const button of Input.#touchLayout) {
-      const bx = button.xRatio * window.innerWidth;
-      const by = button.yRatio * window.innerHeight;
-      if (Math.hypot(x - bx, y - by) <= button.radius) return button.name;
+      const at = centers.get(button.name);
+      if (!at) continue;
+      if (Math.hypot(x - at.x, y - at.y) <= button.radius) return button.name;
     }
     return null;
   }
@@ -821,15 +1110,25 @@ export class Input {
         Input.#touchButtonTouches.set(touch.identifier, buttonName);
         Input.#touchButtonState[buttonName] = true;
         claimed = true;
-      } else if (!Input.#joystick.active && x < window.innerWidth / 2) {
+      } else if (
+        Input.#directionalTouch
+        && !Input.#joystick.active
+        && x < Input.#stickZoneEdge()
+      ) {
         // Left half of the screen, and no stick running yet: this touch
         // spawns the virtual joystick right where the thumb landed.
+        //
+        // Only for a game that steers. The flag used to govern only whether
+        // engine/shell.js DREW the resting ring, so a game that declared it
+        // did not steer still had every touch in its left half swallowed by an
+        // invisible joystick -- the control was hidden, not absent, which is
+        // the worst of both.
         Input.#beginStick(Input.#joystick, touch.identifier, x, y);
         claimed = true;
       } else if (
         Input.#aimStickEnabled
         && !Input.#aimStick.active
-        && x >= window.innerWidth / 2
+        && x >= Input.#stickZoneEdge()
       ) {
         // Right half, same deal, for the aim stick. Reached only after the
         // action pads have had their say, so a button always wins the touch.
@@ -864,6 +1163,12 @@ export class Input {
       const stick = Input.#stickOwning(touch.identifier);
       if (!stick) continue;
       tracking = true;
+      // The FURTHEST it ever got, not where it ended up: a thumb that swung
+      // out and came back has plainly been steering, and must not be handed
+      // back as a tap.
+      stick.wandered = Math.max(stick.wandered ?? 0, Math.hypot(
+        touch.clientX - stick.originX, touch.clientY - stick.originY,
+      ));
       Input.#dragStick(stick, touch.clientX, touch.clientY);
     }
 
@@ -878,6 +1183,28 @@ export class Input {
     for (const touch of event.changedTouches) {
       const stick = Input.#stickOwning(touch.identifier);
       if (stick) {
+        // A TOUCH THAT NEVER MOVED IS A TAP, even though a stick claimed it.
+        //
+        // The stick spawns wherever a thumb lands in its half of the play
+        // area, which is right for steering and wrong for everything else: it
+        // means half the screen cannot be tapped. Hangman's letter grid fills
+        // the play area and the left-hand letters were unreachable on a phone;
+        // Number Crunch, Keystroke and Circuit Racer all draw a setup screen
+        // before the run starts and the left half of it was dead. That last
+        // one is what a player reports as "the menu doesn't respond", and it
+        // was never one game's bug.
+        //
+        // A game cannot fix this by declaring it does not steer, because these
+        // games DO steer -- afterwards. So the disambiguation is the ordinary
+        // one every touch UI makes: a press that goes nowhere and ends quickly
+        // was a poke, not a drag. The stick still ran for those few frames,
+        // deflected by less than a thumb's own width, which is inside the
+        // deadzone and moves nothing.
+        const wandered = stick.wandered ?? 0;
+        const held = now() - (stick.startedAt ?? 0);
+        if (wandered <= TAP_SLOP_PX && held <= TAP_HOLD_MS) {
+          Input.#pendingTap = { x: touch.clientX, y: touch.clientY };
+        }
         stick.active = false;
         stick.touchId = null;
         stick.x = 0;

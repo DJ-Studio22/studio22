@@ -604,13 +604,16 @@ function drawHud() {
     ctx.fill();
   }
 
-  // The shield, and how long until it is back.
+  // The shield, and how long until it is back. Right-aligned against what
+  // the shell leaves free, not against the canvas edge: on a phone there is a
+  // pause button in that corner. Zero on a desktop.
+  const hudRight = W - shell.rightInset();
   ctx.textAlign = 'right';
   ctx.fillStyle = p.shield ? ART.hud.good : ART.hud.label;
   ctx.font = '700 12px system-ui, sans-serif';
   ctx.fillText(
     p.shield ? 'SHIELD UP' : `SHIELD ${Math.ceil(p.shieldTimer)}s`,
-    W - 24, 36,
+    hudRight - 24, 36,
   );
 
   // How much of the wave is awake. The number that says whether you are
@@ -621,7 +624,7 @@ function drawHud() {
   ctx.font = '700 12px system-ui, sans-serif';
   ctx.fillText(
     awake === 0 ? 'NOBODY HAS SEEN YOU' : `${awake} of ${battle.enemies.length} HUNTING`,
-    W - 24, 56,
+    hudRight - 24, 56,
   );
 
   // The one line of teaching this game needs, shown until the player has

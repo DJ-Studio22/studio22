@@ -124,6 +124,11 @@ export function installDom({
   // those. With this on, the returned uninstall function carries a `clock`
   // with now/advance/frame on it; see the bottom of this file.
   manualClock = false,
+  // Pretend this is a touchscreen. engine/input.js decides ONCE, at module
+  // load, whether to attach its touch listeners at all -- a desktop should not
+  // pay for a virtual joystick -- so a test about touch has to say so before
+  // it imports the module, and cannot switch it on afterwards.
+  touch = false,
 } = {}) {
   const saved = {};
   const keys = ['window', 'document', 'navigator', 'ResizeObserver', 'requestAnimationFrame',
@@ -202,7 +207,13 @@ export function installDom({
 
   define("window", win);
   define("document", document);
-  define("navigator", { maxTouchPoints: 0, userAgent: "node", vibrate: () => false, getGamepads: () => [] });
+  if (touch) win.ontouchstart = null;      // the capability check reads 'in window'
+  define("navigator", {
+    maxTouchPoints: touch ? 5 : 0,
+    userAgent: "node",
+    vibrate: () => false,
+    getGamepads: () => [],
+  });
   define("sessionStorage", sessionStorage);
   define("matchMedia", win.matchMedia);
   define("requestAnimationFrame", win.requestAnimationFrame);

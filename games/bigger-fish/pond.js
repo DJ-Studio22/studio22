@@ -44,18 +44,27 @@ export const TUNING = {
   // Size. Radius from mass by area, so twice the mass is not twice the width --
   // which is what keeps a big cell's reach from growing out of hand.
   radiusPerRootMass: 5,
-  startMass: 12,
-  minMass: 8,
+  // EVERYTHING IN THE POND STARTS HERE. The player, every bot, every respawn,
+  // for ever. Nothing is scaled to anything.
+  startMass: 2,
+  minMass: 2,
 
   // SPEED FROM MASS. The line the game rests on.
   //
-  // speed = speedBase / mass^speedFalloff. At the starting mass that is about
-  // 81 a second, at a hundred 51, at a thousand 30 -- so a big cell moves at
-  // little more than a third of the pace of a small one. Fast enough to feel
-  // quick when you are small, slow enough that a big cell cannot simply run
-  // prey down, which is what makes SPLIT the answer and the split the risk.
-  speedBase: 140,
-  speedFalloff: 0.30,
+  // speed = speedBase / mass^speedFalloff.
+  //
+  //   mass     2  ->  142 a second   (the fastest anything ever moves)
+  //   mass   100  ->  100
+  //   mass  1000  ->   86
+  //
+  // So the biggest fish in the pond still moves at three fifths of the pace of
+  // the smallest. That is a real disadvantage and not a punishment: at the
+  // previous falloff of 0.30 a big cell crawled at a third of the speed, which
+  // did not make being big interesting, it made being big miserable. Smallest
+  // is fastest, largest is a little slower, and everything in between is
+  // comfortably playable.
+  speedBase: 150,
+  speedFalloff: 0.08,
 
   // Eating. You have to be meaningfully bigger, not a crumb bigger, or every
   // near-equal meeting is a coin flip nobody can read.
@@ -164,11 +173,10 @@ export const TUNING = {
   spikeFeedToSplit: 6,
   spikeShotSpeed: 150,
 
-  // What a big cell loses just for being big. Keeps a runaway leader from
-  // becoming the whole pond, and it is another reason not to hold mass you are
-  // not using.
-  decayAboveMass: 40,
-  decayPerSecond: 0.006,
+  // NOTHING DRAINS. Mass is spent by splitting and by ejecting, and in no
+  // other way: there is no decay on big cells and no cost to simply moving
+  // around. A game where existing costs you growth teaches the player that
+  // their progress is on loan.
 
   // The bots.
   botCount: 7,
@@ -184,28 +192,23 @@ export const TUNING = {
   //
   //   openingGraceSeconds -- nobody hunts you at all for this long
   //   startClear          -- and nobody starts within this far of you
-  //   botStartShare       -- and nobody starts big enough to eat you
+  //
+  // Nobody starts big enough to eat anybody now either, because everything in
+  // the pond starts at the same weight.
   openingGraceSeconds: 6,
   startClear: 420,
-  botStartShare: 0.95,
-  // WHAT A NEW ARRIVAL WEIGHS, as a share of whoever is currently biggest.
+  // NOTHING IN THIS POND IS SIZED AGAINST THE LEADER OR AGAINST THE PLAYER.
   //
-  // Without this the pond gets safer the longer you live: bots respawn tiny,
-  // you outgrow every one of them, and nothing in the water can touch you.
-  // Measured, a greedy player then beat a careful one 496 to 322 and was right
-  // to -- there was no risk to decline. With it, the pond keeps producing
-  // company in your own weight class, which is the whole premise: there is
-  // always a bigger fish, and if there is not yet, there shortly will be.
+  // Arrivals used to weigh a share of whoever was biggest, so growing summoned
+  // bigger opponents and the pond quietly cancelled out whatever you had just
+  // earned. That is the game manufacturing difficulty behind the player's back,
+  // and it makes growing feel pointless -- you cannot tell the difference
+  // between a pond you are winning and one you are not.
   //
-  // A RANGE RATHER THAN A FIGURE, and that is the difference between a pond and
-  // a queue. Arrivals all at the same share of the leader means every bot is
-  // roughly every other bot's size, nobody can eat anybody -- eating needs a
-  // clear quarter more mass -- and the only predator-prey pair in the water is
-  // you and them. Measured that way, seven bots managed seven meals between
-  // them in three minutes. A spread means there is always something in the pond
-  // that can eat something else in the pond.
-  respawnShare: 0.7,
-  respawnSpread: 0.6,
+  // Every arrival is startMass. If a bot is huge it is because it ate its way
+  // there, in front of you, and if you are the biggest thing in the water then
+  // you are simply the biggest thing in the water.
+
   // How often anybody -- bot or the test harness's player -- may change their
   // mind. Shared, so no skill level gets to think more often than another.
   decideSeconds: 0.15,
@@ -416,9 +419,7 @@ export class Pond {
   #spawnBot(index) {
     const at = this.#awayFromPlayer();
     const id = `bot${index}`;
-    // Nobody starts able to eat you. They grow into that soon enough.
-    const cell = this.#newCell(id, at.x, at.y,
-      this.t.startMass * this.t.botStartShare * (0.55 + Math.random() * 0.45));
+      const cell = this.#newCell(id, at.x, at.y, this.t.startMass);
     return {
       id,
       cells: [cell],
@@ -555,7 +556,6 @@ export class Pond {
     this.#drift(dt);
     this.#separate(dt);
     this.#merge(dt);
-    this.#decay(dt);
     this.#respawnBots(dt);
     this.#topUpPellets();
 
@@ -939,21 +939,6 @@ export class Pond {
     return best;
   }
 
-  /**
-   * What a big cell loses just for being big.
-   *
-   * Only the mass ABOVE the threshold decays, so a small cell never shrinks and
-   * a huge one bleeds steadily. It stops a runaway leader becoming the whole
-   * pond, and it is one more reason not to sit on mass you are not using.
-   */
-  #decay(dt) {
-    const t = this.t;
-    for (const cell of this.cells) {
-      if (cell.mass <= t.decayAboveMass) continue;
-      cell.mass -= (cell.mass - t.decayAboveMass) * t.decayPerSecond * dt;
-    }
-  }
-
   #respawnBots(dt) {
     for (const bot of this.bots) {
       const mine = this.cellsOf(bot.id);
@@ -963,33 +948,12 @@ export class Pond {
       if (bot.dead >= this.t.botRespawnSeconds) {
         bot.dead = 0;
         const at = this.#awayFromPlayer();
-        this.#newCell(bot.id, at.x, at.y, this.#arrivalMass());
+        // startMass, like everything else. A bot that comes back big is a
+        // bot the pond handed something to.
+        this.#newCell(bot.id, at.x, at.y, this.t.startMass);
       }
     }
   }
-
-  /**
-   * What a newly arriving bot weighs: a share of the biggest thing in the pond,
-   * drawn from a wide spread so the pond has a size ladder in it.
-   */
-  #arrivalMass() {
-    const t = this.t;
-    let leader = t.startMass;
-    const owners = new Set(this.cells.map((c) => c.owner));
-    for (const owner of owners) leader = Math.max(leader, this.massOf(owner));
-    const share = t.respawnShare * (1 - t.respawnSpread + Math.random() * t.respawnSpread * 2);
-    return Math.max(t.startMass, leader * share);
-  }
-
-  /**
-   * The arrival-mass draw, for tests.
-   *
-   * A seam rather than making #arrivalMass public: the spread of arrival sizes
-   * is a claim the pond makes -- there is a size ladder in the water -- and a
-   * claim needs to be checkable without running three minutes of simulation and
-   * hoping the right bots died.
-   */
-  arrivalMassForTest() { return this.#arrivalMass(); }
 
   #topUpPellets() {
     while (this.pellets.length < this.t.pellets) this.pellets.push(this.#randomPellet());

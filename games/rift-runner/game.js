@@ -120,6 +120,11 @@ const particles = new ParticleSystem({ max: 240 });
 // Three verbs, three pads. No joystick: there is nothing to steer, and a stick
 // sitting on screen doing nothing invites the wrong thumb.
 Input.clearTouchLayout();
+// No virtual stick: Rift Runner runs by itself. Jump, slide and dash are buttons; there is nothing to steer.
+// Without this the shell advertises a joystick in the corner that steers
+// nothing, which is worse than no joystick at all.
+Input.setDirectionalTouch(false);
+
 Input.setTouchLayout([
   { name: 'a', xRatio: 0.86, yRatio: 0.62, radius: 54, label: 'Jump' },
   { name: 'b', xRatio: 0.86, yRatio: 0.88, radius: 48, label: 'Slide' },

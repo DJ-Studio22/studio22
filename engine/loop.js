@@ -146,6 +146,12 @@ export class GameLoop {
 
   #update;
   #render;
+  // Callbacks that run after the game's own render, in registration order.
+  #afterRender = [];
+  // Frames rendered since the loop started. Read by engine/shell.js so a game
+  // that calls shell.render() itself and the loop's automatic call cannot both
+  // draw the overlay in the same frame.
+  #frameCount = 0;
   #onPause;
   #onResume;
 
@@ -182,6 +188,25 @@ export class GameLoop {
    * @param {() => void} [options.onResume]  Fired on resume().
    * @param {boolean} [options.showFps=false] Start with the FPS counter visible.
    */
+  /**
+   * Draw something over the game every frame, whatever the game itself does.
+   *
+   * This exists because twelve of twenty-three games never called
+   * shell.render(), so on a phone they drew no touch pads, no joystick and no
+   * pause button: the controls were there, listening, and completely invisible.
+   * A control a player cannot see is a control they do not have, and "every
+   * game must remember to call this" is not a mechanism, it is a hope.
+   */
+  get frameCount() { return this.#frameCount; }
+
+  onAfterRender(fn) {
+    this.#afterRender.push(fn);
+    return () => {
+      const i = this.#afterRender.indexOf(fn);
+      if (i >= 0) this.#afterRender.splice(i, 1);
+    };
+  }
+
   constructor(options = {}) {
     this.#update = options.update ?? (() => {});
     this.#render = options.render ?? (() => {});
@@ -318,7 +343,12 @@ export class GameLoop {
         this.#accumulatorMs %= STEP_MS;
       }
 
+      this.#frameCount++;
       this.#render(this.#accumulatorMs / STEP_MS);
+      // Anything that has to sit ON TOP of the game, every frame, whatever the
+      // game remembered to do. engine/shell.js registers here so that the pause
+      // button and the touch controls are not optional -- see #afterRender.
+      for (const after of this.#afterRender) after();
       this.#trackFps(nowMs);
     } catch (error) {
       // One bad frame is not survivable in practice: whatever state made this

@@ -441,10 +441,13 @@ function drawHud() {
   ctx.textAlign = 'right';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('NEXT', W - 18, 16);
+  // Right-aligned against what the shell leaves free, not against the canvas
+  // edge: on a phone there is a pause button in that corner. Zero on a desktop.
+  const hudRight = W - shell.rightInset();
+  ctx.fillText('NEXT', hudRight - 18, 16);
   ctx.fillStyle = ART.hud.value;
   ctx.font = '700 14px system-ui, sans-serif';
-  ctx.fillText(`${crateTonnes(next)} t`, W - 18, 30);
+  ctx.fillText(`${crateTonnes(next)} t`, hudRight - 18, 30);
 
   const c = crateColours(next.tonnes);
   for (const [cx, cy] of next.cells) {
