@@ -549,66 +549,8 @@ test('SKILL LEVELS DIFFER IN JUDGEMENT, NOT IN REFLEXES OR STATS', () => {
   assert.ok(yes('steady') < yes('ruthless'));
 });
 
-test('and the ladder is real — the same player does far worse against better bots', () => {
-  // Measured, not asserted. Twenty seeds of four minutes each; the player
-  // policy is identical throughout, so the difference is entirely in how well
-  // the pond plays against it. A careless shoal splits at anything in front of
-  // it and feeds the player its halves, which is exactly the mistake it is
-  // meant to make.
-  //
-  // THE THRESHOLD HAS TO CLEAR THE NOISE BY A LONG WAY, and the reason is worth
-  // writing down: this simulation is chaotic, and the last bits of Math.hypot
-  // and ** are not identical across V8 versions. Four minutes of pond amplifies
-  // a one-ulp difference into a completely different run, so the same seeds
-  // give different numbers on node 22 and node 24. An earlier version of this
-  // asserted a ratio of 2 on ten seeds; it measured 2.74 locally and 1.82 on
-  // CI, and went red.
-  //
-  // At twenty seeds the medians are 911 against 273 and 1571 against 195 --
-  // ratios of 3.3 and 8.1, with the means at 12.6 and 12.9. A floor of 1.6 is
-  // well under the smallest of those and well over anything chaos can produce.
-  const against = (skill) => {
-    const peaks = [];
-    for (let seed = 1; seed <= 20; seed++) {
-      withSeed(seed, () => peaks.push(runOnce('selective', undefined, { seconds: 240, skill }).peak));
-    }
-    return summarise(peaks).median;
-  };
-  const careless = against('careless');
-  const ruthless = against('ruthless');
-  assert.ok(careless > ruthless * 1.6,
-    `a careless shoal is barely easier than a ruthless one: ${careless} against ${ruthless}`);
-});
-
-// --- The claims -----------------------------------------------------------
-
-// SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU -- ALSO NOT ASSERTED.
-//
-// This one held under the old rules and does not hold under the new ones, for
-// the same reason the headline below does not: the rubber band was doing the
-// work. When arrivals were sized against the leader, the pond was full of
-// things too fast to swim down, and dividing yourself was the only way to reach
-// one. Everything now enters at startMass, so most of what is worth eating is
-// slower than you are and you can simply go and get it.
-//
-// Re-measured the same way as before -- mean cells eaten, selective against a
-// policy identical but for never splitting, three disjoint blocks of 24 seeds
-// at a 300-second cap:
-//
-//     seeds  1-24    selective 12.0    noSplit 17.3    ratio 0.69
-//     seeds 25-48    selective 19.4    noSplit 18.3    ratio 1.06
-//     seeds 49-72    selective 21.1    noSplit 15.1    ratio 1.40
-//
-// It flips, and the first block flips hard the wrong way. The old floor of
-// 1.15 passes on one block of three.
-//
-// What is still true is the MECHANIC rather than the strategy: a split covers
-// ground no amount of swimming covers at that size, which is asserted outright
-// in 'splitReach is where the launch actually gets you' above and is a fact
-// about the arithmetic rather than a hope about a sample. Splitting is a reach
-// tool with a real price -- twenty seconds of held contact to undo -- and
-// whether reaching is worth the price is the player's judgement, not a result
-// this file can claim on their behalf.
+// The ladder claim moved to tests/bigger-fish.ladder.test.mjs -- it was 554 of
+// this file's 698 seconds, and a file is what the test runner parallelises.
 
 // CAUTION BEATS GREED WAS THE HEADLINE, AND IT IS NOT ASSERTED HERE.
 //
