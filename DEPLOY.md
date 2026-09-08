@@ -3,9 +3,18 @@
 The site is a static build. `npm run build` writes `dist/`, Cloudflare Pages
 serves it. There is no server, no database and no environment to configure.
 
+**The site lives at https://studio22.games.** `www.studio22.games` serves it
+too. Every absolute URL in the build — canonical links, `og:url`, the sitemap,
+the `Sitemap:` line in robots.txt — is generated from `origin` in
+`site.config.json`, which is the only place the host is written down.
+
 ---
 
 ## Moving to a custom domain
+
+Done once already, in September 2026, from `studio22-anw.pages.dev` to
+`studio22.games`. The procedure below is what was followed and is what to
+follow again if the domain ever moves.
 
 Two halves: the bit only you can do (registrar and Cloudflare), and the bit
 in the repo (one file, two commands).
@@ -56,7 +65,7 @@ Edit `origin`:
 
 ```json
 {
-  "origin": "https://studio22.com",
+  "origin": "https://studio22.games",
   "siteName": "Studio 22"
 }
 ```
@@ -71,11 +80,19 @@ npm run build
 
 Commit and push; Pages deploys on push.
 
-**Verify nothing was missed** — this should print nothing:
+**Verify nothing was missed** — search for whatever the OLD host was. This
+should print nothing:
 
 ```bash
 grep -rl "pages.dev" --include="*.html" --include="*.xml" --include="*.txt" . \
   | grep -v node_modules | grep -v "^./dist"
+```
+
+And check the built output actually carries the new one, in both the pages and
+the sitemap:
+
+```bash
+grep -c "studio22.games" dist/index.html dist/sitemap.xml dist/robots.txt
 ```
 
 That was tested by actually doing it: changing `origin` to a placeholder and
@@ -85,7 +102,7 @@ outside the markdown notes.
 ### 3. Tell Google, if you care about search
 
 - Google Search Console → add the new domain as a property.
-- Submit `https://yourdomain.com/sitemap.xml`.
+- Submit `https://studio22.games/sitemap.xml`.
 - If the `pages.dev` address was ever indexed, the canonical tags now point
   at the custom domain, which is the signal to consolidate them.
 

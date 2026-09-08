@@ -1,6 +1,6 @@
 {
   "_comment": "The one place the deployed host is written down. tools/build-sitemap.mjs and tools/inject-meta.mjs both read it, so moving to a custom domain is this file plus re-running them. Nothing else in the repo should contain an absolute URL to the site.",
-  "origin": "https://studio22-anw.pages.dev",
+  "origin": "https://studio22.games",
   "siteName": "Studio 22",
   "socialCard": {
     "_comment": "Served from the site root, so the file itself lives in public/. Width and height are NOT written here on purpose -- tools/inject-meta.mjs reads them out of the PNG, so the tags can never disagree with the file.",

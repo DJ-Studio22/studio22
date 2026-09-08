@@ -1,4 +1,4 @@
-# Studio 22 — https://studio22-anw.pages.dev
+# Studio 22 — https://studio22.games
 #
 # Everything here is public and static. There is nothing to keep crawlers out
 # of: no accounts, no user content, no server. The one thing worth saying is
@@ -9,4 +9,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://studio22-anw.pages.dev/sitemap.xml
+Sitemap: https://studio22.games/sitemap.xml
