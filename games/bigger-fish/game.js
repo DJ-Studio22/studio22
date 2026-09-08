@@ -277,7 +277,10 @@ function drawWater() {
   g.addColorStop(0, ART.water.shallow);
   g.addColorStop(1, ART.water.deep);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // A grid, so the camera moving reads as the world scrolling rather than the
   // cells drifting. In a game where you are always in the middle of the screen
@@ -301,14 +304,29 @@ function drawWater() {
 }
 
 function drawPellets() {
-  for (const pellet of pond.pellets) {
-    const [x, y] = toScreen(pellet.x, pellet.y);
-    if (x < -10 || y < -10 || x > W + 10 || y > H + 10) continue;
-    ctx.fillStyle = ART.pellet[(Math.floor(pellet.x + pellet.y)) % ART.pellet.length];
-    ctx.beginPath();
-    ctx.arc(x, y, Math.max(1.6, 4 * camera.scale), 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // ASKED FOR THE ONES ON SCREEN, rather than told about all of them.
+  //
+  // The pond holds fifteen thousand pellets and the camera shows about two
+  // hundred of them. Walking the whole array to reject 98% of it was a
+  // fifteen-thousand-iteration loop, with a coordinate transform inside it,
+  // every frame -- the sort of thing that is free at 1500 and is the frame
+  // budget at 15360. pond.forEachPelletIn() looks only in the grid cells the
+  // camera actually covers.
+  const radius = Math.max(1.6, 4 * camera.scale);
+  const halfW = (W / 2 + screen.margin) / camera.scale;
+  const halfH = (H / 2) / camera.scale;
+  const pad = 12 / camera.scale;
+  pond.forEachPelletIn(
+    camera.x - halfW - pad, camera.y - halfH - pad,
+    camera.x + halfW + pad, camera.y + halfH + pad,
+    (pellet) => {
+      const [x, y] = toScreen(pellet.x, pellet.y);
+      ctx.fillStyle = ART.pellet[(Math.floor(pellet.x + pellet.y)) % ART.pellet.length];
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    },
+  );
 }
 
 function drawBlobs() {
@@ -407,8 +425,16 @@ function drawReach() {
 function drawMinimap() {
   const size = 118;
   const pad = 14;
-  const x0 = W - size - pad;
-  const y0 = H - size - pad;
+  // The real corner, not the corner of the game's own 960: on a wide screen
+  // those are 190 units apart, and the map was sitting in the middle of the
+  // right-hand side.
+  //
+  // TOP right rather than bottom right, because the bottom right is where the
+  // engine puts the action pads and a map under SPLIT is a map you cannot read
+  // and a pad you cannot see. Under the pause button, which is the one piece of
+  // that corner the shell has already claimed.
+  const x0 = screen.right - size - pad;
+  const y0 = 80;
   ctx.fillStyle = ART.hud.panel;
   ctx.fillRect(x0, y0, size, size);
   ctx.strokeStyle = 'rgba(255,255,255,0.12)';
@@ -434,10 +460,15 @@ function drawMinimap() {
 
 function drawHud() {
   const mass = pond.playerMass;
+  // Everything below is laid out from the left edge of the SCREEN rather than
+  // of the game, so the readout does not float a hundred and fifty pixels in
+  // from the side of the phone.
+  const x = screen.left + 22;
+  const barX = screen.left + 72;
   ctx.textAlign = 'left';
   ctx.fillStyle = ART.hud.text;
   ctx.font = '800 30px system-ui, sans-serif';
-  ctx.fillText(String(Math.round(mass)), 22, 44);
+  ctx.fillText(String(Math.round(mass)), x, 44);
   ctx.font = '600 13px system-ui, sans-serif';
   ctx.fillStyle = ART.hud.dim;
   // The score is mass-seconds -- how big, times how long you stayed that way --
@@ -446,18 +477,18 @@ function drawHud() {
   ctx.fillText(
     `SCORE ${pond.score}  ·  PEAK ${Math.round(pond.peakMass)}  ·  `
     + `${SKILL_NAMES[skillIndex].toUpperCase()} BOTS`,
-    22, 64,
+    x, 64,
   );
 
   // SPEED, as a share of what a starting cell does, because the trade is the
   // game and a number you can watch fall is the clearest way to say it.
   const share = speedOf(mass) / speedOf(TUNING.startMass);
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText('SPEED', 22, 88);
+  ctx.fillText('SPEED', x, 88);
   ctx.fillStyle = 'rgba(255,255,255,0.10)';
-  ctx.fillRect(72, 77, 120, 12);
+  ctx.fillRect(barX, 77, 120, 12);
   ctx.fillStyle = share < 0.55 ? ART.hud.warn : ART.hud.good;
-  ctx.fillRect(72, 77, 120 * clamp(share, 0, 1), 12);
+  ctx.fillRect(barX, 77, 120 * clamp(share, 0, 1), 12);
 
   // THE MERGE CLOCK, because it is a clock the player is running.
   //
@@ -469,16 +500,16 @@ function drawHud() {
     const full = mergeContactSeconds();
     ctx.fillStyle = ART.hud.dim;
     ctx.font = '600 13px system-ui, sans-serif';
-    ctx.fillText('MERGE', 22, 112);
+    ctx.fillText('MERGE', x, 112);
     ctx.fillStyle = 'rgba(255,255,255,0.10)';
-    ctx.fillRect(72, 101, 120, 12);
+    ctx.fillRect(barX, 101, 120, 12);
     ctx.fillStyle = held > 0 ? ART.me.body : ART.hud.warn;
-    ctx.fillRect(72, 101, 120 * clamp(held / full, 0, 1), 12);
+    ctx.fillRect(barX, 101, 120 * clamp(held / full, 0, 1), 12);
     ctx.fillStyle = ART.hud.dim;
     ctx.font = '600 12px system-ui, sans-serif';
     ctx.fillText(
       held > 0 ? `${Math.max(0, full - held).toFixed(0)}s OF CONTACT TO GO` : 'PIECES APART',
-      200, 112,
+      barX + 128, 112,
     );
   }
 

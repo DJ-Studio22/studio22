@@ -629,6 +629,20 @@ test('and the ladder is real — the same player does far worse against better b
 // the absence of an effect: two of three blocks lean one way, the middle one
 // leans the other harder than either, and no threshold survives all three.
 //
+// AND AGAIN IN THE TEN-TIMES POND, because a world that different deserved the
+// question asked again rather than assumed:
+//
+//     seeds   1-60     selective 3447   greedy 1866     1.85x
+//     seeds  61-120    selective 1248   greedy 1519     0.82x
+//     seeds 121-180    selective 1797   greedy 1376     1.31x
+//
+// Still flips, on the same middle block. Worth noting what does NOT flip: the
+// MEAN favours judgement on all six blocks ever measured, and by a lot here
+// (5935/3177, 6119/3734, 6624/4122). That is a real thing about the shape of
+// the distribution -- a selective player's good runs are much better -- and it
+// is not the claim. The claim was about the median run, and the median run
+// says no.
+//
 // There is a version of this file with a threshold that passes, and finding it
 // would have taken an afternoon of picking a cap and a seed count until a block
 // agreed. That is convention 12 with extra steps, and the instruction was
@@ -652,60 +666,48 @@ test('the policies differ in one thing: judgement about being big', () => {
   assert.notEqual(POLICIES.greedy.checksPunish, POLICIES.selective.checksPunish);
 });
 
-test('TAKE THE TRADE AWAY AND THE TWO POLICIES PLAY THE SAME GAME', () => {
-  // The counterfactual, and the strongest result in this file.
-  //
-  // Both policies want exactly the same things; the only difference is two
-  // judgements that exist BECAUSE size is dangerous -- route around a spike,
-  // and do not divide yourself while something can eat the halves. So take the
-  // danger away, and there should be nothing left to judge.
-  //
-  // There is not, and this is now the only headline claim in the file that
-  // survived removing the rubber band -- which is why it is stated as a GAP
-  // rather than as a level.
-  //
-  // Three disjoint blocks of twelve seeds, share of runs coming out
-  // bit-identical between the two policies:
-  //
-  //     seeds  1-12    flat 0.67    real pond 0.17
-  //     seeds 13-24    flat 0.58    real pond 0.25
-  //     seeds 25-36    flat 0.50    real pond 0.17
-  //
-  // Take the danger away and the policies agree two to four times as often. The
-  // direction and the size of the gap hold on every block; the absolute share
-  // does not, and used to be asserted at 0.8 because the block it was written
-  // against happened to give 23 of 24. That was convention 12 -- pinning a
-  // block. Under the new rules the flat pond diverges more, because a shoal
-  // that all starts at startMass and hunts itself produces far more near-equal
-  // meetings, and a near-equal meeting is where one ulp becomes a different run.
-  //
-  // So the assertion is the RATIO, with floors either side of it so that a
-  // degenerate reading -- both zero, or both one -- cannot satisfy it.
-  const flat = { ...TUNING, speedFalloff: 0, spikeMass: Infinity };
-  const matches = (tuning, seeds) => {
-    let same = 0;
-    for (let seed = 1; seed <= seeds; seed++) {
-      let greedy = 0;
-      let selective = 0;
-      withSeed(seed, () => { greedy = runOnce('greedy', tuning, { seconds: 240 }).peak; });
-      withSeed(seed, () => { selective = runOnce('selective', tuning, { seconds: 240 }).peak; });
-      if (greedy === selective) same++;
-    }
-    return same / seeds;
-  };
-
-  const safe = matches(flat, 12);
-  const dangerous = matches(TUNING, 12);
-  assert.ok(safe >= 0.4,
-    `only ${(safe * 100).toFixed(0)}% of runs matched with the trade removed, so the `
-    + 'policies differ in more than judgement about being big');
-  assert.ok(dangerous <= 0.35,
-    `${(dangerous * 100).toFixed(0)}% of runs matched in the real pond, so the judgement `
-    + 'almost never comes up and the trade is not biting');
-  assert.ok(safe > dangerous * 1.8,
-    `the policies agreed on ${(safe * 100).toFixed(0)}% of flat runs and `
-    + `${(dangerous * 100).toFixed(0)}% of real ones, which is not a gap`);
-});
+// TAKE THE TRADE AWAY WAS THE LAST HEADLINE STANDING, AND IT IS NOT ASSERTED
+// EITHER. THAT IS THE PRICE OF THE BIGGER POND, AND IT IS WORTH KNOWING.
+//
+// The claim: both policies want the same things, and the only difference is two
+// judgements that exist BECAUSE size is dangerous -- route around a spike, and
+// do not divide yourself while something can eat the halves. Take the danger
+// away and there should be nothing left to judge. In the old pond that held
+// hard: the policies came out bit-identical on 0.67 / 0.58 / 0.50 of flat runs
+// against 0.17 / 0.25 / 0.17 of real ones, two to four times as often, on every
+// block.
+//
+// Re-measured in the ten-times pond, three disjoint blocks of twelve seeds:
+//
+//     seeds  1-12    flat 0.75    real 0.17    4.50x
+//     seeds 13-24    flat 0.83    real 0.42    2.00x
+//     seeds 25-36    flat 0.25    real 0.25    1.00x
+//
+// The third block is not a thin result, it is no result: the two policies agree
+// exactly as often with the danger switched off as with it on. A threshold that
+// passes the first two fails the third, and there is no honest way to describe
+// 4.50, 2.00 and 1.00 as one number.
+//
+// WHY, AND IT IS THE THING THE POND WAS CHANGED FOR. Both judgements only cost
+// you anything when something is close enough to matter. Spikes are 7x sparser
+// than they were -- deliberately, because at 2576 mass the player was wider
+// than the gaps between them and the late game was a corridor -- so
+// `avoidsSpikes` almost never fires. Bot density was restored to exactly what
+// it was (1.76 per million square units against 1.75), which is what brought
+// the first two blocks back from the 1.34 / 1.16 / 1.98 they measured at forty
+// bots. It was not enough.
+//
+// So the pond is roomier and the two policies are more alike in it. That is a
+// real trade and it is the player's game that gained: room to route, a late
+// game that opens out, and an ecosystem that is the danger. What it costs is
+// the sharpest measurable statement this file had about skill. Written down
+// rather than tuned away, and the dial is right there -- spikes, or bots, or
+// the size of the water -- if the trade is ever judged the wrong way round.
+//
+// What still holds, with samples behind it: the bots play the pond rather than
+// the player, the skill ladder is real (a careless shoal leaves the same player
+// on 9.9x the mass a ruthless one does), splitting reaches where swimming
+// cannot, and nothing in the water is sized against you.
 
 test('tuning is data a test can override', () => {
   // Convention 3, and the override above is the one that matters. This is the
@@ -714,3 +716,148 @@ test('tuning is data a test can override', () => {
   assert.ok(speedOf(500, heavy) < speedOf(500), 'the falloff dial does nothing');
   assert.equal(speedOf(TUNING.startMass, { ...TUNING, speedFalloff: 0 }), TUNING.speedBase);
 });
+
+// --- The pond is a place, and it has to be big enough to be one -----------
+
+test('NO TWO SPIKES ARE EVER CLOSE ENOUGH TO FENCE A BIG CELL IN', () => {
+  // The fault this is about was reported as "at mass 2576 I couldn't move past
+  // the spikes", and the arithmetic underneath it is stark: a cell at 2576 mass
+  // is 508 units across, and the AVERAGE gap between two spikes in the old pond
+  // was 471. The player was wider than the holes in the terrain.
+  //
+  // The average was never the number that mattered. Scattering spikes at random
+  // puts pairs far closer together than the average, so the fence was built out
+  // of the WORST gaps, and a minimum separation is the only thing that speaks
+  // to a worst case. The spikes now go one per cell of a jittered grid, which
+  // makes that separation a property of the construction rather than a hope
+  // about a seed.
+  //
+  // Thirty ponds, because this is a claim about every pond.
+  let worst = Infinity;
+  for (let seed = 1; seed <= 30; seed++) {
+    withSeed(seed, () => {
+      const pond = new Pond();
+      for (let i = 0; i < pond.spikes.length; i++) {
+        for (let j = i + 1; j < pond.spikes.length; j++) {
+          const a = pond.spikes[i];
+          const b = pond.spikes[j];
+          worst = Math.min(worst, Math.hypot(a.x - b.x, a.y - b.y));
+        }
+      }
+    });
+  }
+
+  // The gate a cell has to fit through is the gap minus the two spike radii.
+  const gate = worst - TUNING.spikeRadius * 2;
+  const passes = ((gate / 2) / TUNING.radiusPerRootMass) ** 2;
+  assert.ok(passes > 4000,
+    `the tightest pair of spikes in thirty ponds is ${Math.round(worst)} apart, which `
+    + `fences in anything over ${Math.round(passes)} mass`);
+});
+
+test('the pond grew with the sizes it produces, and the food grew with it', () => {
+  // Ten times the area, and the SAME pellet density -- 1 per 2667 square units,
+  // which is what it has always been. Density is the growth curve: a pond ten
+  // times bigger with the same 1500 pellets would have quietly made grazing ten
+  // times worse and rewritten every measurement in this file without changing a
+  // line of the rules.
+  const area = TUNING.width * TUNING.height;
+  assert.ok(area >= 4e7, `the pond is ${area} square units`);
+  const perPellet = area / TUNING.pellets;
+  assert.ok(perPellet > 2400 && perPellet < 2900,
+    `one pellet per ${Math.round(perPellet)} square units, which is not the density `
+    + 'every growth measurement in this file was taken at');
+});
+
+test('the pellet grid finds exactly what a brute-force search finds', () => {
+  // The grid is an OPTIMISATION, and the whole risk of an optimisation is that
+  // it is faster and wrong. Fifteen thousand pellets rebuilt into a fresh map
+  // sixty times a second cost 0.94ms of a 16.7ms frame; maintaining the grid
+  // instead costs nothing, and this is the check that it still answers the same
+  // question.
+  //
+  // Asked at several sizes because the interesting case is a cell that spans
+  // many grid cells: a starting cell sits inside one, and a thousand-mass cell
+  // covers a hundred.
+  const pond = new Pond();
+  for (const mass of [TUNING.startMass, 100, 1000, 4000]) {
+    const r = radiusOf(mass);
+    const at = { x: TUNING.width * 0.42, y: TUNING.height * 0.61 };
+
+    const brute = new Set();
+    for (const pellet of pond.pellets) {
+      if (Math.abs(pellet.x - at.x) <= r && Math.abs(pellet.y - at.y) <= r) brute.add(pellet);
+    }
+
+    const viaGrid = new Set();
+    pond.forEachPelletIn(at.x - r, at.y - r, at.x + r, at.y + r, (p) => viaGrid.add(p));
+
+    // The grid may return a few EXTRA -- it works in 100-unit cells and both
+    // callers do their own exact test -- but it must never miss one.
+    for (const pellet of brute) {
+      assert.ok(viaGrid.has(pellet),
+        `the grid missed a pellet inside a ${mass}-mass cell's box`);
+    }
+  }
+});
+
+test('and eating through the grid leaves the pellet array consistent', () => {
+  // The eat path removes a pellet from a grid bucket and compacts the array in
+  // place, which is two bookkeeping jobs that can disagree. They cannot be
+  // allowed to: a pellet left in the grid but not the array is food that can be
+  // eaten twice, and one left in the array but not the grid is food nobody can
+  // ever reach.
+  const pond = new Pond();
+  pond.bots = [];
+  pond.cells = pond.cells.filter((c) => c.owner === 'player');
+  pond.cellsOf('player')[0].mass = 900;      // a wide mouth, so it eats plenty
+  for (let i = 0; i < 120; i++) pond.step(1 / 60, { x: 1, y: 0.4 });
+
+  const inArray = new Set(pond.pellets);
+  let inGrid = 0;
+  let stray = 0;
+  pond.forEachPelletIn(0, 0, TUNING.width, TUNING.height, (p) => {
+    inGrid++;
+    if (!inArray.has(p)) stray++;
+  });
+  assert.equal(stray, 0, 'the grid is holding pellets that are no longer in the pond');
+  assert.equal(inGrid, pond.pellets.length,
+    `the grid holds ${inGrid} pellets and the pond has ${pond.pellets.length}`);
+});
+
+test('A COLD START IS NOT A DEATH SENTENCE', () => {
+  // tests/README.md section 9: every bot acts on frame one, and a person spends
+  // the first seconds working out what they are looking at. So the harness
+  // structurally cannot see the opening, and the only way to check it is to
+  // simulate the thing a harness never does -- touching nothing.
+  //
+  // This found a real fault, and it was not one this phase introduced: a player
+  // who did nothing survived a median of 16.9 seconds in the OLD pond and 12.6
+  // in the ten-times one, with seven of forty cold starts ending inside ten
+  // seconds in both. openingGraceSeconds and startClear are the two numbers
+  // that decide it, and they were sized for a pond a fifteenth of this one.
+  const lives = [];
+  for (let seed = 1; seed <= 40; seed++) {
+    withSeed(seed, () => {
+      const pond = new Pond();
+      let seconds = 0;
+      // Sixty is well past the point of interest: what matters is that the
+      // first few are survivable, not that standing still is a strategy.
+      while (pond.running && seconds < 60) {
+        pond.step(1 / 60, {});
+        seconds += 1 / 60;
+      }
+      lives.push(seconds);
+    });
+  }
+
+  const worst = Math.min(...lives);
+  assert.ok(worst > 10,
+    `the unluckiest cold start of forty lasted ${worst.toFixed(1)}s without the `
+    + 'player touching anything, which is the game deciding the run');
+  // And a floor is not the whole claim -- the typical opening has to be
+  // comfortable, not survivable.
+  assert.ok(summarise(lives).median > 18,
+    `the median cold start is ${summarise(lives).median.toFixed(1)}s`);
+});
+

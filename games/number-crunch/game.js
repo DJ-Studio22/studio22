@@ -637,7 +637,10 @@ const SKY = (() => {
 
 function drawSky() {
   ctx.fillStyle = SKY;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   for (const planet of planets) {
     ctx.fillStyle = ART.planet;
@@ -699,7 +702,7 @@ function render() {
   if (flash > 0) {
     ctx.globalAlpha = flash * 0.28;
     ctx.fillStyle = ART.wrong;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(screen.left, 0, screen.stageWidth, H);
     ctx.globalAlpha = 1;
   }
 

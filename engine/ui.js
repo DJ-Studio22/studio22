@@ -172,12 +172,21 @@ export const UI = {
 
   // Full-area dim behind an overlay, so the frozen game stays readable as
   // context without competing with the menu on top of it.
-  scrim(ctx, w, h, alpha = 0.72) {
+  /**
+   * The dim behind an overlay.
+   *
+   * `x` and `y` default to the origin, which is what every caller meant when
+   * the canvas began at the origin. On a screen wider than the game it does
+   * not: the canvas extends to negative x (see engine/canvas.js), and a scrim
+   * that starts at zero leaves the left margin of the frozen game undimmed
+   * beside a dimmed one.
+   */
+  scrim(ctx, w, h, alpha = 0.72, x = 0, y = 0) {
     const t = UI.tokens();
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = t.bg0;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(x, y, w, h);
     ctx.restore();
   },
 

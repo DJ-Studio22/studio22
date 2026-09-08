@@ -954,7 +954,10 @@ function render() {
   const t = theme();
 
   ctx.fillStyle = sky();
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   ctx.save();
   if (shakeTime > 0) {

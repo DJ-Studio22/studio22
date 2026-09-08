@@ -126,3 +126,87 @@ test('the letterbox colour can be changed for a light game', () => {
   const screen = makeCanvas();
   assert.doesNotThrow(() => screen.setLetterboxColor('var(--color-shell-light-bg-0)'));
 });
+
+// --- A stage that fills the screen ---------------------------------------
+//
+// A phone in landscape is 2.17:1 and no game in the arcade is, so preserving
+// the aspect ratio meant playing inside black pillars -- 63% to 92% of the
+// screen, measured across all twenty-three games. The stage now widens to the
+// screen instead. These are the properties that has to keep.
+
+/** A canvas whose CONTAINER reports the viewport a test wants. */
+function onScreen(size, options = {}) {
+  const screen = new GameCanvas({ width: 960, height: 540, ...options });
+  const container = screen.canvas.parentNode;
+  container._rect = { left: 0, top: 0, ...size };
+  screen.resize();
+  return screen;
+}
+
+test('THE STAGE WIDENS TO THE SCREEN INSTEAD OF LEAVING BARS', () => {
+  // An iPhone 14 Pro Max in landscape: 2796x1290 device pixels, which is
+  // 932x430 CSS at a pixel ratio of 3.
+  const screen = onScreen({ width: 932, height: 430 });
+
+  // Scale comes from the HEIGHT, so every game unit is the size it would have
+  // been and the spare width buys game units rather than black.
+  const scale = 430 / 540;
+  assert.ok(Math.abs(screen.stageWidth * scale - 932) < 2,
+    `the stage covers ${Math.round(screen.stageWidth * scale)} of 932 CSS pixels`);
+  assert.ok(screen.margin > 0, 'the stage did not widen at all');
+  assert.equal(screen.left, -screen.margin);
+  assert.equal(screen.right, 960 + screen.margin);
+});
+
+test('and game coordinates do not move when it does', () => {
+  // The property the whole design rests on: a game needs no changes to keep
+  // working, because x=0 is still the left edge of its own 960 and everything
+  // it already draws lands exactly where it always did. Only the amount of
+  // canvas OUTSIDE that changed.
+  const narrow = onScreen({ width: 960, height: 540 });
+  const wide = onScreen({ width: 932, height: 430 });
+
+  assert.equal(narrow.width, 960);
+  assert.equal(wide.width, 960, 'the game width moved, so every layout in every game moved');
+  assert.equal(narrow.height, wide.height);
+  assert.equal(narrow.margin, 0, 'a screen the same shape as the game gained a margin');
+  assert.equal(narrow.left, 0);
+});
+
+test('a screen NARROWER than the game still letterboxes, as it always did', () => {
+  // Portrait. There is no spare width to spend, so this is the old behaviour
+  // exactly, and the margin has to stay at zero rather than going negative and
+  // cropping the game.
+  const screen = onScreen({ width: 430, height: 932 });
+  assert.equal(screen.margin, 0);
+  assert.equal(screen.stageWidth, 960);
+});
+
+test('the widening is CAPPED, because look-ahead is difficulty', () => {
+  // An ultra-wide monitor would otherwise hand a runner half a screen of extra
+  // warning, and that is not framing, it is an easier game.
+  const screen = onScreen({ width: 5120, height: 540 });
+  assert.ok(screen.stageWidth <= 960 * 1.7 + 1,
+    `the stage grew to ${Math.round(screen.stageWidth)}, past its own ceiling`);
+  // And a game can refuse entirely.
+  const pinned = onScreen({ width: 5120, height: 540 }, { maxStageMargin: 0 });
+  assert.equal(pinned.margin, 0);
+  assert.equal(pinned.stageWidth, 960);
+});
+
+test('screenToGame reads the margin, so a pad out there can be pressed', () => {
+  const screen = onScreen({ width: 932, height: 430 });
+  screen.canvas._rect = { left: 0, top: 0, width: 932, height: 430 };
+
+  // The far left of the SCREEN is negative game x now. A touch there used to
+  // be squashed into 0..width, which is how a control drawn in the margin
+  // becomes a control that cannot be hit.
+  const atLeftEdge = screen.screenToGame(0, 0);
+  assert.ok(Math.abs(atLeftEdge.x - screen.left) < 1,
+    `the left edge of the screen reads as game x ${atLeftEdge.x}, not ${screen.left}`);
+  const atRightEdge = screen.screenToGame(932, 0);
+  assert.ok(Math.abs(atRightEdge.x - screen.right) < 1,
+    `the right edge of the screen reads as game x ${atRightEdge.x}, not ${screen.right}`);
+  // And the middle is still the middle.
+  assert.ok(Math.abs(screen.screenToGame(466, 215).x - 480) < 1);
+});

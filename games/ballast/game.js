@@ -278,7 +278,10 @@ function drawSea() {
   g.addColorStop(0, ART.sea.top);
   g.addColorStop(1, ART.sea.bottom);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // The waterline. It stays level while the hull rolls, which is what sells
   // the roll as the hull moving rather than the camera.
@@ -443,7 +446,7 @@ function drawHud() {
   ctx.font = '600 10px system-ui, sans-serif';
   // Right-aligned against what the shell leaves free, not against the canvas
   // edge: on a phone there is a pause button in that corner. Zero on a desktop.
-  const hudRight = W - shell.rightInset();
+  const hudRight = screen.right - shell.rightInset();
   ctx.fillText('NEXT', hudRight - 18, 16);
   ctx.fillStyle = ART.hud.value;
   ctx.font = '700 14px system-ui, sans-serif';
@@ -515,7 +518,7 @@ function render() {
   if (stowFlash > 0) {
     ctx.globalAlpha = stowFlash * 0.22;
     ctx.fillStyle = ART.hull.deck;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(screen.left, 0, screen.stageWidth, H);
     ctx.globalAlpha = 1;
   }
 

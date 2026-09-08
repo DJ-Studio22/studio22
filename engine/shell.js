@@ -342,14 +342,19 @@ export class GameShell {
    * panel).
    *
    * It reads as a per-game bug and it is one fact about the shell, so the shell
-   * publishes the number and a game right-aligns against `W - shell.rightInset()`
-   * instead of `W`. The alternative -- moving the button -- only relocates the
-   * collision, because every corner belongs to somebody.
+   * publishes the number and a game right-aligns against
+   * `screen.right - shell.rightInset()` instead of `W`. The alternative --
+   * moving the button -- only relocates the collision, because every corner
+   * belongs to somebody.
+   *
+   * Measured back from screen.right rather than from the game's own width,
+   * because that is where the button is. On a screen no wider than the game
+   * those are the same number.
    */
   rightInset() {
     if (!this.#touchCapable) return 0;
     const rect = this.#touchPauseRect();
-    return this.#canvas.width - rect.x + TOUCH_PAUSE_MARGIN;
+    return this.#canvas.right - rect.x + TOUCH_PAUSE_MARGIN;
   }
 
   /**
@@ -361,16 +366,25 @@ export class GameShell {
    */
   drawHud(hud = {}) {
     const ctx = this.#canvas.ctx;
-    const w = this.#canvas.width;
+    // ANCHORED TO THE STAGE, not to the game's own width.
+    //
+    // On a screen wider than the game the canvas extends past both edges (see
+    // engine/canvas.js), so a score drawn at x=20 is twenty units in from a
+    // line that is no longer the edge of anything -- on an iPhone in landscape
+    // it floated about 150 real pixels inside the screen, which reads as a
+    // mistake rather than as a margin. `left` and `right` are the real edges
+    // and collapse to 0 and width on every screen that is not wider.
+    const left = this.#canvas.left;
+    const w = this.#canvas.right;
     const scale = this.#canvas.uiScale;
     const t = UI.tokens();
     const top = 14;
 
     if (hud.score !== undefined) {
-      UI.text(ctx, 'SCORE', 20, top + 4, {
+      UI.text(ctx, 'SCORE', left + 20, top + 4, {
         size: 11, color: t.textSecondary, font: 'display', align: 'left', baseline: 'top', scale,
       });
-      UI.text(ctx, hud.score, 20, top + 20, {
+      UI.text(ctx, hud.score, left + 20, top + 20, {
         size: 26, color: t.textPrimary, font: 'mono', weight: '700', align: 'left', baseline: 'top', scale,
       });
     }
@@ -821,11 +835,11 @@ export class GameShell {
     // the corner of the game.
     const size = Math.min(
       Math.max(TOUCH_PAUSE_SIZE, this.#minTouchUnits()),
-      this.#canvas.width / 8,
+      this.#canvas.stageWidth / 8,
     );
     const margin = Math.max(TOUCH_PAUSE_MARGIN, this.#minTouchUnits() * 0.25);
     return {
-      x: this.#canvas.width - margin - size,
+      x: this.#canvas.right - margin - size,
       y: margin,
       w: size,
       h: size,
@@ -907,19 +921,29 @@ export class GameShell {
 
   #drawOverlay() {
     const ctx = this.#canvas.ctx;
+    // The dim and the backdrop cover the STAGE; the panel is centred on the
+    // game, which is the same place because the margin is symmetric.
     const w = this.#canvas.width;
+    const stageLeft = this.#canvas.left;
+    const stageWidth = this.#canvas.stageWidth;
     const h = this.#canvas.height;
     const t = UI.tokens();
 
     // The frozen game, or a flat background when there was never a frame to
     // freeze (a loading screen shown before the first render).
     if (this.#hasSnapshot) {
-      ctx.drawImage(this.#snapshot, 0, 0, this.#snapshot.width, this.#snapshot.height, 0, 0, w, h);
+      // The snapshot is the whole BACKING STORE, which spans the stage. Drawn
+      // back into 0..width it would squeeze the frozen game into the middle of
+      // itself, which looked like the pause menu had zoomed the game out.
+      ctx.drawImage(
+        this.#snapshot, 0, 0, this.#snapshot.width, this.#snapshot.height,
+        stageLeft, 0, stageWidth, h,
+      );
     } else {
       ctx.fillStyle = t.bg0;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(stageLeft, 0, stageWidth, h);
     }
-    UI.scrim(ctx, w, h);
+    UI.scrim(ctx, stageWidth, h, 0.72, stageLeft, 0);
 
     switch (this.#screen) {
       case SCREEN.TITLE: this.#drawTitle(); break;

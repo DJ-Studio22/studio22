@@ -388,10 +388,12 @@ function drawHud() {
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('GEMS', 30, 36);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText('GEMS', hudLeft + 30, 36);
   ctx.fillStyle = ART.hud.value;
   ctx.font = '800 24px system-ui, sans-serif';
-  ctx.fillText(String(heist.gems), 30, 62);
+  ctx.fillText(String(heist.gems), hudLeft + 30, 62);
 
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
@@ -436,7 +438,10 @@ function drawHud() {
 
 function render() {
   ctx.fillStyle = ART.room.back;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   layout();
   ctx.save();

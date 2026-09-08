@@ -427,7 +427,10 @@ function drawSky() {
   g.addColorStop(0, mix(from.top, to.top, t));
   g.addColorStop(1, mix(from.bottom, to.bottom, t));
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // Stars fade in as the sky darkens; clouds fade out. Both are driven off the
   // same blend, so nothing has to be scheduled.

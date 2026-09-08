@@ -747,12 +747,21 @@ function render() {
 }
 
 function drawGrass() {
+  // From the stage edge, not from zero: on a wide screen the canvas extends
+  // past both sides of the game's own width and unpainted grass is a black bar.
+  // The extra twenty is the old overdraw, which is there so a screen shake
+  // never exposes bare canvas.
+  const from = screen.left - 20;
+  const across = screen.stageWidth + 40;
   ctx.fillStyle = ART.grass;
-  ctx.fillRect(-20, -20, W + 40, H + 40);
+  ctx.fillRect(from, -20, across, H + 40);
   // Mown stripes, the cheapest thing that stops a flat green field reading as
   // an empty canvas.
   ctx.fillStyle = ART.grassDark;
-  for (let x = -20; x < W + 40; x += 80) ctx.fillRect(x, -20, 40, H + 40);
+  // Stepped from a multiple of the stripe pitch so the pattern does not shift
+  // sideways as the stage width changes with the window.
+  const firstStripe = Math.floor(from / 80) * 80;
+  for (let x = firstStripe; x < from + across; x += 80) ctx.fillRect(x, -20, 40, H + 40);
 }
 
 function trackPath(center) {

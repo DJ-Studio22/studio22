@@ -690,7 +690,10 @@ const SKY = (() => {
 
 function drawScenery() {
   ctx.fillStyle = SKY;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   ctx.fillStyle = ART.night.star;
   for (const s of stars) {
