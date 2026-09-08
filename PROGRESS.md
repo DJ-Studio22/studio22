@@ -1,6 +1,15 @@
 # Studio 22 — Build Progress
 
 ## Done
+- Phase 39: the test suite back from 19m42s to 3m09s, all 500 still passing.
+  Three things, in the order they were found: the pond's per-owner grouping was
+  seventy-three array filters three times a frame (0.449 -> 0.318 ms), the skill
+  ladder was 554 of the suite's 653 seconds for ONE assertion, and a test file
+  is the unit `node --test` parallelises so one slow file is the floor for
+  everything. Ladder cut to 12 seeds at 150s -- measured across three disjoint
+  blocks BEFORE cutting, and 120s was rejected for leaving only 21% over the
+  floor -- and moved to its own file
+
 - Phase 38: LANDSCAPE FILLS THE SCREEN, and a pond ten times the size. A phone
   in landscape is 2.17:1 and no game in the arcade was, so every one of them
   played inside black pillars -- 63% to 92% of the screen, 72 to 348 pixels of

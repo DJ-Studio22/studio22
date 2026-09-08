@@ -488,3 +488,40 @@ So, for anything a finger has to find:
   a hint button sitting on the letter P, the pause button across the fuel
   gauge. Same instrument as the canvas-contrast sampling in section 9, used
   for layout instead of colour.
+
+## 14. A slow suite is a suite people stop running, and a FILE is the unit
+
+The suite reached 19 minutes 42 seconds, which is the point where "run the
+tests before pushing" stops happening. Getting it back to 3 minutes 9 seconds
+took three things, and the order they were found in is the lesson.
+
+**Measure per test, then per file.** `node --test` reports a duration for every
+test; sorting them said one assertion -- the Bigger Fish skill ladder -- was 554
+of the 653 seconds. Then measuring per FILE said the same thing louder: 582
+seconds in one file and 21 in the next slowest.
+
+**The runner parallelises files, not tests.** Tests inside a file run in series,
+so a suite can never finish faster than its slowest single file however many
+cores there are. Splitting the ladder into its own file was worth more than any
+optimisation, and cost nothing but an import block.
+
+**Cutting a sample is allowed, and it has to be earned.** The ladder was twenty
+seeds at 240 seconds, sized when the effect was 3.3x; in the bigger pond it is
+about 10x. The cheaper settings were measured across three DISJOINT blocks
+first:
+
+    12 seeds @ 120s    4.68   2.77   1.94     <- rejected
+    12 seeds @ 150s    3.58   3.81   2.63     <- taken
+
+Both pass a floor of 1.6. 120s was rejected because its worst block is only 21%
+clear, and this project has already had a ratio measure 2.74 locally and 1.82 on
+CI across node versions -- 21% is inside that. The rule is the same one as
+everywhere else in this file: the threshold has to clear the block-to-block
+spread, and you find out by measuring blocks, not by running it once and
+keeping the number that came out.
+
+**And profile before optimising.** Three rounds of tightening the bot decision
+moved 0.601ms to 0.535ms; `--cpu-prof` then put 3.7% of the frame there. The
+actual costs were two O(n squared) loops doing `Math.hypot` on every pair, and a
+per-owner `filter` called seventy-three times a frame. Intuition aimed three
+attempts and measurement aimed one.

@@ -645,6 +645,44 @@ export class Pond {
 
   cellsOf(owner) { return this.cells.filter((c) => c.owner === owner); }
 
+  /**
+   * Every cell, grouped by who owns it, in ONE pass.
+   *
+   * #drift, #separate and #merge each want "the cells belonging to each owner",
+   * and each of them was getting it by building a Set of owners and then
+   * calling cellsOf() once per owner -- seventy-three filters over a
+   * hundred-and-fifty-cell array, three times a frame, plus an array allocated
+   * for every one of them. That is about thirty-three thousand iterations a
+   * frame to answer a question that costs a hundred and fifty.
+   *
+   * A fresh Map each call rather than one cached on the instance, because all
+   * three of those functions run after something that can add or remove a cell,
+   * and a stale grouping here would be a cell that cannot be merged or a dead
+   * one that can.
+   */
+  #byOwner() {
+    const groups = new Map();
+    for (const cell of this.cells) {
+      const mine = groups.get(cell.owner);
+      if (mine) mine.push(cell);
+      else groups.set(cell.owner, [cell]);
+    }
+    return groups;
+  }
+
+  /** The mass-weighted centre of a group already in hand. */
+  static #centreOfCells(cells) {
+    let x = 0;
+    let y = 0;
+    let mass = 0;
+    for (const cell of cells) {
+      x += cell.x * cell.mass;
+      y += cell.y * cell.mass;
+      mass += cell.mass;
+    }
+    return mass ? { x: x / mass, y: y / mass, mass } : null;
+  }
+
   massOf(owner) {
     let total = 0;
     for (const cell of this.cells) if (cell.owner === owner) total += cell.mass;
@@ -1066,11 +1104,9 @@ export class Pond {
     // them. That is geometry rather than tuning, so the answer had to be a rule
     // rather than a number.
     const gather = Math.max(0, 1 - (this.effort ?? 0));
-    const owners = new Set(this.cells.map((c) => c.owner));
-    for (const owner of owners) {
-      const mine = this.cellsOf(owner);
+    for (const [owner, mine] of this.#byOwner()) {
       if (mine.length < 2) continue;
-      const centre = this.centreOf(owner);
+      const centre = Pond.#centreOfCells(mine);
       for (const cell of mine) {
         const dx = centre.x - cell.x;
         const dy = centre.y - cell.y;
@@ -1095,9 +1131,7 @@ export class Pond {
    */
   #separate(dt) {
     const t = this.t;
-    const owners = new Set(this.cells.map((c) => c.owner));
-    for (const owner of owners) {
-      const mine = this.cellsOf(owner);
+    for (const [owner, mine] of this.#byOwner()) {
       if (mine.length < 2) continue;
       for (let i = 0; i < mine.length; i++) {
         for (let j = i + 1; j < mine.length; j++) {
@@ -1132,10 +1166,8 @@ export class Pond {
   #merge(dt) {
     const t = this.t;
     const seen = new Set();
-    const owners = new Set(this.cells.map((c) => c.owner));
 
-    for (const owner of owners) {
-      const mine = this.cellsOf(owner);
+    for (const [owner, mine] of this.#byOwner()) {
       for (let i = 0; i < mine.length; i++) {
         for (let j = i + 1; j < mine.length; j++) {
           const a = mine[i];
