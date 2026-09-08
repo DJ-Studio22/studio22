@@ -1195,7 +1195,9 @@ function drawHud() {
   // and the gap in the wall out there is the same fact drawn on the ground.
   const ready = camp.readiness >= 0;
   const qw = 214;
-  const qx = W - 16 - qw;
+  // Right-aligned against what the shell leaves free, not against the canvas
+  // edge: on a phone there is a pause button in that corner. Zero on a desktop.
+  const qx = W - shell.rightInset() - 16 - qw;
   ctx.fillStyle = ART.hud.panel;
   ctx.beginPath(); ctx.roundRect(qx, py, qw, 84, 10); ctx.fill();
   ctx.strokeStyle = ART.hud.panelEdge;

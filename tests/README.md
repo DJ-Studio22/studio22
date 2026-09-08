@@ -448,3 +448,43 @@ So:
   measuring what it claimed". Half the time the change exposed a bad
   assertion, and half the time it broke something real; those need opposite
   responses and they look identical at the point of failure.
+
+## 13. A control that responds is not the same as a control a thumb can find
+
+Every touch fault in the phone pass passed every check that existed, and three
+of them passed a tap test that was specifically written to catch them.
+
+- **Twelve games drew no touch controls at all**, because they never called
+  `shell.render()`. The pads still WORKED — they were hit-tested from the same
+  numbers whether or not anything was painted — so a test that dispatched a
+  touch at the right coordinates found them every time. What a player found was
+  a game with no visible controls and no way to pause.
+- **Twelve games had pads overlapping each other** once a layout ratio met a
+  screen with a different aspect. Both pads respond. A tap test asks "did
+  something happen", and something did. What two 55px rings 39px apart cannot
+  do is tell a thumb which one it pressed.
+- **The virtual joystick claimed the left half of the play area**, so half of
+  Hangman's alphabet and the left half of three setup screens were dead. The
+  harness had been tapping the middle.
+
+The shape is always the same: the assertion is about the SYSTEM responding, and
+the fault is about the PLAYER being able to aim. That is section 11's
+"a window a person cannot hit" in space rather than in time.
+
+So, for anything a finger has to find:
+
+- **Assert the geometry, not the response.** Is the whole ring on the play
+  area, or only its centre? Is it clear of the other pads, and of the resting
+  stick? A ratio places a centre and says nothing about the radius around it,
+  and the radius is in CSS pixels and does not shrink when the box does. See
+  the section at the bottom of `tests/engine.input.test.mjs`.
+- **Measure at both orientations and at a real phone size.** Half of these
+  faults do not exist in landscape and all of them exist in portrait. 430x932
+  and 932x430 at dpr 2 is an iPhone 14 Pro Max, and it is where they show up.
+- **Ask what a passing tap proves.** If the answer is "one of the things under
+  my finger did something", it is not a control test.
+- **Look at the screen.** A screenshot at phone size answered in one glance
+  what none of the automated checks could: pads drawn in the letterbox bars,
+  a hint button sitting on the letter P, the pause button across the fuel
+  gauge. Same instrument as the canvas-contrast sampling in section 9, used
+  for layout instead of colour.

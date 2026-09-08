@@ -103,6 +103,11 @@ const particles = new ParticleSystem({ max: 200 });
 // One button and nothing to steer. The stick is cleared rather than left on
 // screen doing nothing, which is an invitation to press the wrong thing.
 Input.clearTouchLayout();
+// No virtual stick: Ember is one button: you jump, and that is the whole vocabulary.
+// Without this the shell advertises a joystick in the corner that steers
+// nothing, which is worse than no joystick at all.
+Input.setDirectionalTouch(false);
+
 Input.setTouchLayout([
   { name: 'a', xRatio: 0.5, yRatio: 0.86, radius: 66, label: 'Burn' },
 ]);

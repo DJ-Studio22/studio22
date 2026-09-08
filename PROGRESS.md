@@ -1,6 +1,22 @@
 # Studio 22 — Build Progress
 
 ## Done
+- Phase 37: THE PHONE PASS, and Bigger Fish rebuilt around what a player can
+  see. Every game audited at iPhone-14-Pro-Max size in both orientations
+  against a production build, and the faults that turned up were nearly all
+  ONE fault in twenty-three places, so they were fixed in engine/ rather than
+  patched per game: twelve games never called shell.render() and so drew no
+  touch controls at all; touch pads were placed against window.innerHeight
+  rather than the visible box; then against the whole viewport rather than the
+  play area, so they landed in the letterbox bars; twelve games had pads
+  overlapping each other once a ratio met a different screen shape; and the
+  virtual joystick claimed the left half of the play area on sight, which made
+  half of Hangman's alphabet and the left half of three setup screens dead to
+  touch. New engine/viewport.js is the single answer to "where is the screen".
+  Bigger Fish lost its rubber band -- everything in the pond now starts at mass
+  2, nothing is sized against the leader -- and its headline claim did not
+  survive the change and is written up as unproven rather than retuned
+
 - Phase 0: Node, Git, VS Code, Claude Code installed
 - Phase 1: Vite scaffold, GitHub repo, Cloudflare Pages auto-deploy live at studio22-anw.pages.dev
 - Phase 2: all eight engine modules — input.js, canvas.js, loop.js, session.js, ui.js, shell.js, audio.js, util.js. Verified on desktop keyboard, Xbox gamepad, and iPhone touch across input, canvas, loop, shell, and audio (iOS unlock confirmed on first tap). 60fps confirmed on device.
@@ -44,6 +60,132 @@
 ## Next
 - Nothing queued. Every entry in games.json is `live` — the arcade has no
   placeholder cards left for the first time.
+
+
+## Phase 37 — the phone pass
+
+Mobile was the priority: a phone is how most people find the site. Twenty-three
+games, both orientations, an iPhone 14 Pro Max viewport (430x932 / 932x430 at
+dpr 2), against a PRODUCTION build served from `vite preview` — not the dev
+server, because the dev server does not chunk and does not mind mistakes.
+
+### One fault in twenty-three places, five times over
+
+Almost nothing found here was a game's bug. The report that started it was
+"Bigger Fish's setup screen doesn't respond to touch", and the honest answer
+each time was that the same thing was wrong everywhere and only visible in one
+place.
+
+**1. Twelve games never drew their touch controls.** `shell.render()` is what
+paints the pads, the resting stick and the pause button, and eleven games
+called it. The other twelve — Asteroid Salvage, Ballast, Beat Blocker, Bigger
+Fish, Colour Heist, Ember, Gravity Well, Hangman, Mini Golf, Rift Runner, Tank
+Tactics, Winter — did not, so on a phone they had no visible controls and no
+way to pause at all. Nothing caught it because the buttons still WORKED; they
+were invisible, which is the same thing to a player and a different thing to
+a test. Fixed with `loop.onAfterRender()` in engine/loop.js, so the shell draws
+itself whether or not a game remembers to ask, with a frame counter so the
+eleven games that do ask are not drawn twice.
+
+**2. Controls were placed against the wrong rectangle, twice.** First against
+`window.innerHeight`, which on iOS Safari is the size the page gets AFTER the
+toolbar collapses — so with the toolbar up, the bottom row of pads was drawn
+and hit-tested below the visible area. Consistent with itself and unreachable.
+Then, once that was fixed, against the whole viewport — so on a 932-wide screen
+showing a 665-wide 3:2 game, pads were drawn in the black letterbox bars beside
+the play area, off the canvas entirely. New `engine/viewport.js` owns the first
+answer (visual viewport, safe-area insets, and one `onChange`); `Input.setControlBounds`,
+pushed from engine/canvas.js on every layout, owns the second.
+
+**3. Twelve games had overlapping pads.** A layout ratio places a CENTRE and
+says nothing about the ring around it, and the radius is in CSS pixels and does
+not shrink when the box does. Two pads a comfortable 84px apart in landscape
+are 39px apart in portrait, and two 55px rings 39px apart are one blob. Every
+one passed a tap test, because both pads respond — what they cannot do is tell
+a thumb which one it pressed. `Input.touchButtonCenters()` now resolves the
+whole cluster together: clamped onto the play area, separated from each other,
+and moved off the resting stick. A game still says roughly where it wants each
+pad; the engine guarantees the result is reachable.
+
+**4. The virtual joystick ate the left half of every game.** It spawns wherever
+a thumb lands in its half of the play area, which is right for steering and
+means half the screen cannot be tapped. Hangman's letter grid fills the play
+area, so A, H, O and V were untappable on a phone; Number Crunch, Keystroke and
+Circuit Racer each draw a setup screen before the run and the left half of it
+was dead — which is exactly the "the menu doesn't respond" report. Two fixes:
+`setDirectionalTouch(false)` now actually stops the stick claiming touches
+rather than only hiding it, and a touch that moves under 8px and ends under
+300ms is handed back as a tap even when a stick claimed it. That is the
+ordinary disambiguation every touch UI makes, and it fixes the setup screens
+without asking those games to stop steering.
+
+**5. The pause button sat on top of six games' HUDs.** A consequence of fixing
+(1): the corner had been empty in those twelve games because nothing was ever
+drawn there. `shell.rightInset()` publishes how much room the corner owes the
+shell — zero on a desktop — and Mini Golf, Gravity Well, Tank Tactics, Winter,
+Ballast and Hangman right-align against it.
+
+### Landscape, and the black bars
+
+The page itself covers the display: no row of the audit scrolls past the
+viewport in either orientation, `viewport-fit=cover` is on every page, and the
+container is pinned to the VISUAL viewport rather than the layout one so a
+collapsing address bar cannot leave a band.
+
+What is left is each game's own aspect ratio, and that is not a bug to fix but
+a shape to respect: measured across all twenty-three, a game covers 63% to 92%
+of the screen in the orientation it was drawn for and 23% to 34% in the other —
+a postage stamp in a black field. So engine/canvas.js now asks the player to
+turn the phone, and decides from the game's own shape rather than from a flag
+somebody has to remember: if the play area covers under 45% of the screen and
+rotating would fit it 1.35x better, say so. Never on a desktop, where a narrow
+window is not a phone that can be turned.
+
+Safe-area insets are verified end to end rather than assumed. Headless Chrome
+always reports zero for `env(safe-area-inset-*)`, so the check forces a padding
+onto the probe element engine/viewport.js reads and confirms the whole chain
+moves: insets 200 left / 40 bottom -> safe box left 200, height 390 -> control
+bounds clipped to the play area's intersection with it -> the resting stick
+57.9px right and 31.4px up, still inside both.
+
+### Bigger Fish: the rubber band, and what died with it
+
+Everything in the pond now starts at mass 2 — the player, every bot, every
+respawn, for ever — and nothing is scaled to anything. Mass no longer drains
+while moving; it is spent by splitting and ejecting. The speed curve went from
+`150 / mass^0.30` to `150 / mass^0.08`:
+
+    mass    2  ->  142 a second
+    mass  100  ->  104
+    mass 1000  ->   86
+
+so the biggest thing in the pond moves at three fifths of the pace of the
+smallest instead of a third. Being big is a trade, not a punishment.
+
+Two claims did not survive that, and both are now written up in
+tests/bigger-fish.pond.test.mjs rather than asserted:
+
+- **CAUTION BEATS GREED.** Median score, selective against greedy, three
+  disjoint blocks of sixty seeds at a 480s cap: 941/516, 954/1436, 1122/1040.
+  The ordering flips, and the middle block flips harder than either of the
+  others leans. It was true because of the rubber band: growing fast summoned
+  bigger company, so greed walked into a pond restocked to punish it.
+- **SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU.** Mean cells eaten,
+  three disjoint blocks of 24 seeds: 0.69, 1.06, 1.40. Same cause — when
+  arrivals were sized against the leader the pond was full of things too fast
+  to swim down. What is still true is the arithmetic: a split covers ground no
+  amount of swimming covers at that size, which is asserted outright.
+
+There is a version of that file with thresholds that pass, and finding it would
+have taken an afternoon of picking a seed count until a block agreed. That is
+convention 12 with extra steps.
+
+What DID survive is the counterfactual, which is the strongest result in the
+file: take the danger away — speed penalty zero, spikes harmless — and the two
+policies agree on 0.67 / 0.58 / 0.50 of runs against 0.17 / 0.25 / 0.17 in the
+real pond. Two to four times as often, on every block. It is asserted as that
+gap rather than as an absolute share, because the share was the block it was
+written against.
 
 
 ## Phase 9 — the two production bugs

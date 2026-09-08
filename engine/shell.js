@@ -142,6 +142,13 @@ export class GameShell {
   // behind it and closing begins play.
   #howToReturn = null;
 
+  // The last loop frame this shell drew its overlay on, so the game's own
+  // call and the loop's automatic one cannot both land in the same frame.
+  #renderedFrame = -1;
+
+  // Extra title-screen rows a game asked for. See showTitle().
+  #titleItems = [];
+
   // Title screen copy, set by showTitle().
   #titleName = '';
   #titleTagline = '';
@@ -241,6 +248,13 @@ export class GameShell {
     this.#touchCapable = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
     this.#canvas.canvas.addEventListener('pointerdown', this.#onPointerDown);
+
+    // DRAW THE OVERLAY WHETHER OR NOT THE GAME ASKS.
+    //
+    // render() is still public and eleven games still call it; this makes the
+    // other twelve work too. Drawing twice in one frame is prevented below
+    // rather than by asking anybody to remove their call.
+    this.#loop?.onAfterRender?.(() => this.render());
   }
 
   #loadTournament() {
@@ -303,11 +317,39 @@ export class GameShell {
    * running while one is open.
    */
   render() {
+    // Once per frame, however many callers there are. A game that calls this
+    // itself gets its own call; the loop's automatic one then does nothing.
+    const frame = this.#loop?.frameCount ?? -1;
+    if (frame >= 0 && frame === this.#renderedFrame) return;
+    this.#renderedFrame = frame;
+
     if (this.#screen !== null) return;
     if (this.#touchCapable) {
       this.#drawTouchControls();
       this.#drawTouchPauseButton();
     }
+  }
+
+  /**
+   * HOW MUCH ROOM THE TOP-RIGHT CORNER OWES THE SHELL, in game units.
+   *
+   * Zero on a desktop, where there is no pause button drawn on the canvas --
+   * Escape is the pause button. On a touch screen the shell puts one in the
+   * top-right corner, and a game that right-aligns anything up there is drawing
+   * underneath it: measured on a phone, six games had a readout half-covered
+   * by it (Mini Golf's stroke bank, Gravity Well's fuel gauge, Tank Tactics'
+   * alert line, Winter's wolf count, Ballast's next piece, Hangman's round
+   * panel).
+   *
+   * It reads as a per-game bug and it is one fact about the shell, so the shell
+   * publishes the number and a game right-aligns against `W - shell.rightInset()`
+   * instead of `W`. The alternative -- moving the button -- only relocates the
+   * collision, because every corner belongs to somebody.
+   */
+  rightInset() {
+    if (!this.#touchCapable) return 0;
+    const rect = this.#touchPauseRect();
+    return this.#canvas.width - rect.x + TOUCH_PAUSE_MARGIN;
   }
 
   /**
@@ -440,7 +482,28 @@ export class GameShell {
    * @param {string} options.name     The game's title, shown large.
    * @param {string} [options.tagline] One line under it.
    */
-  showTitle({ name, tagline = '' } = {}) {
+  /**
+   * @param {object}   [options]
+   * @param {string}   [options.name]     Big line on the title screen.
+   * @param {string}   [options.tagline]  Small line under it.
+   * @param {Array}    [options.items]    Extra menu rows, between Start and
+   *                                      How to Play. Each is
+   *                                      { label, run }, where label may be a
+   *                                      function so it can show current state,
+   *                                      and run() leaves the screen up unless
+   *                                      it says otherwise.
+   *
+   * The items exist because a game with a SETTING had nowhere to put it.
+   * Bigger Fish needed to ask how good the other fish should be, so it drew its
+   * own screen and read the stick and a face button directly -- which on a
+   * phone was a screen saying "SPLIT BUTTON TO DIVE IN" with no button on it
+   * and nothing tappable anywhere. Every hand-rolled menu is a menu that has to
+   * reimplement touch, gamepad and keyboard, and that one reimplemented none of
+   * them. A row here is tappable, navigable and readable because the shell's
+   * menu already is.
+   */
+  showTitle({ name, tagline = '', items = [] } = {}) {
+    this.#titleItems = items;
     this.#titleName = name ?? this.#title;
     this.#titleTagline = tagline;
     this.#openScreen(SCREEN.TITLE);
@@ -608,8 +671,15 @@ export class GameShell {
   // depend on state (the sound toggle) can never go stale.
   #currentItems() {
     if (this.#screen === SCREEN.TITLE) {
+      // Game-supplied rows sit between Start and How to Play: after the thing
+      // most players want, before the things most players do not.
+      const extra = this.#titleItems.map((item) => ({
+        label: typeof item.label === 'function' ? item.label() : item.label,
+        run: item.run,
+      }));
       return [
         { label: 'Start', run: () => this.#closeScreen() },
+        ...extra,
         { label: 'How to Play', run: () => this.showHowToPlay() },
         { label: 'Back to Arcade', run: () => this.#backToArcade() },
       ];
@@ -1073,10 +1143,12 @@ export class GameShell {
     // Action pads. Faint until pressed: they have to be findable without
     // becoming the most prominent thing on top of the game.
     for (const button of Input.getTouchLayout()) {
-      const center = toGame(
-        button.xRatio * window.innerWidth,
-        button.yRatio * window.innerHeight,
-      );
+      // Input owns where a pad is; this only renders it. Asking rather than
+      // recomputing is what stops the drawn pad and the tappable pad drifting
+      // apart, which is exactly what happened when both did their own
+      // arithmetic against window.innerHeight.
+      const at = Input.touchButtonCenter(button);
+      const center = toGame(at.x, at.y);
       const radius = button.radius * unitsPerPx;
       const held = Input.get()[button.name];
 
@@ -1101,9 +1173,44 @@ export class GameShell {
       });
     }
 
-    // Sticks, drawn only while a thumb is down, because each one appears
-    // wherever the player put it rather than at a fixed spot on the screen.
+    // A RESTING STICK, so the player can see there is one.
+    //
+    // The stick appears wherever a thumb lands, which is the right behaviour
+    // and a terrible advertisement: until this was added the control was drawn
+    // ONLY while it was already being used, so a player who did not happen to
+    // try dragging the left side of the screen never found out the game had a
+    // joystick at all. On a phone that is indistinguishable from a game with no
+    // controls.
+    //
+    // Drawn faintly, in the bottom-left of the SAFE box, only for games that
+    // asked for directional input, and only while nothing is being dragged --
+    // the moment a thumb goes down the live stick below takes over from it.
     const sticks = Input.getTouchSticks();
+    if (Input.usesDirectionalTouch && !sticks.move.active) {
+      const home = Input.stickHome();
+      const base = toGame(home.x, home.y);
+      const baseRadius = JOYSTICK_MAX_RADIUS_PX * unitsPerPx;
+
+      ctx.globalAlpha = 0.16;
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, baseRadius, 0, Math.PI * 2);
+      ctx.fillStyle = t.bg1;
+      ctx.fill();
+      ctx.lineWidth = 2 * unitsPerPx;
+      ctx.strokeStyle = t.textSecondary;
+      ctx.stroke();
+
+      // The knob, centred: a ring on its own reads as a target rather than a
+      // stick, and a player has to know it is a thing you push.
+      ctx.globalAlpha = 0.24;
+      ctx.beginPath();
+      ctx.arc(base.x, base.y, baseRadius * 0.42, 0, Math.PI * 2);
+      ctx.fillStyle = t.textSecondary;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Sticks, drawn wherever the thumb actually is once one is down.
     for (const stick of [sticks.move, sticks.aim]) {
       if (!stick.active) continue;
 

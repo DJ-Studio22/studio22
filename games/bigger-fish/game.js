@@ -130,9 +130,10 @@ audio.define({
 
 let pond = new Pond(TUNING, { skill: 'steady' });
 let running = false;
-let choosing = true;              // the skill picker, before the run
 let skillIndex = 1;               // 'steady'
-let navLatch = 0;
+// The pond is rebuilt the moment play actually begins, so that the skill
+// chosen on the title screen is the skill in the water.
+let dived = false;
 let camera = { x: 0, y: 0, scale: 1 };
 let shake = 0;
 let flash = null;
@@ -143,7 +144,7 @@ let lastMass = 0;
 function reset() {
   pond = new Pond(TUNING, { skill: SKILL_NAMES[skillIndex] });
   running = true;
-  choosing = true;
+  dived = false;
   shake = 0;
   flash = null;
   lastEaten = 0;
@@ -184,25 +185,22 @@ function update(dt) {
 
   const pad = Input.get();
 
-  // THE SKILL PICKER, before anything moves. Chosen with the same stick and
-  // button the game is played with, so it needs no separate input story.
-  if (choosing) {
-    const dir = Math.abs(pad.x) > 0.5 ? Math.sign(pad.x) : 0;
-    if (dir !== 0 && navLatch === 0) {
-      skillIndex = (skillIndex + dir + SKILL_NAMES.length) % SKILL_NAMES.length;
-      audio.play('move');
-    }
-    navLatch = dir;
-    if (Input.pressed('a') || Input.pressed('start')) {
-      pond = new Pond(TUNING, { skill: SKILL_NAMES[skillIndex] });
-      const centre = pond.centreOf('player');
-      camera = { x: centre.x, y: centre.y, scale: 1 };
-      choosing = false;
-      say(`${SKILL_NAMES[skillIndex].toUpperCase()} SHOAL`, ART.hud.good);
-    }
-    return;
+  // FIRST FRAME OF ACTUAL PLAY. shell.update() returns false while any of its
+  // screens is up, so the first time we get here the player has pressed Start
+  // and whatever they chose on the title screen is what they meant.
+  //
+  // The skill used to be picked on a screen this file drew itself, which read
+  // the stick and a face button directly. On a phone that was a screen saying
+  // "SPLIT BUTTON TO DIVE IN" with no button drawn on it and nothing tappable
+  // anywhere -- a setup screen that could not be used at all. It is a row on
+  // the shell's own menu now, which is tappable because that menu already is.
+  if (!dived) {
+    dived = true;
+    pond = new Pond(TUNING, { skill: SKILL_NAMES[skillIndex] });
+    const centre = pond.centreOf('player');
+    camera = { x: centre.x, y: centre.y, scale: 1 };
+    say(`${SKILL_NAMES[skillIndex].toUpperCase()} SHOAL`, ART.hud.good);
   }
-  navLatch = 0;
 
   const split = Input.pressed('a');
   const eject = Input.pressed('b');
@@ -501,46 +499,6 @@ function drawHud() {
   }
 }
 
-function drawPicker() {
-  ctx.fillStyle = 'rgba(4,18,26,0.86)';
-  ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = ART.hud.text;
-  ctx.font = '800 34px system-ui, sans-serif';
-  ctx.fillText('HOW GOOD ARE THE OTHER FISH?', W / 2, 150);
-
-  const blurbs = {
-    careless: 'Splits at anything in front of it and pays for it. Ignores spikes.',
-    steady: 'Splits only when it will land, and not while it can be punished.',
-    ruthless: 'All of that, and it will herd you onto a spike to get you.',
-  };
-
-  for (let i = 0; i < SKILL_NAMES.length; i++) {
-    const name = SKILL_NAMES[i];
-    const y = 230 + i * 82;
-    const on = i === skillIndex;
-    ctx.fillStyle = on ? 'rgba(255,194,71,0.16)' : 'rgba(255,255,255,0.04)';
-    ctx.fillRect(W / 2 - 320, y - 34, 640, 66);
-    ctx.strokeStyle = on ? ART.me.body : 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = on ? 3 : 1;
-    ctx.strokeRect(W / 2 - 320, y - 34, 640, 66);
-    ctx.fillStyle = on ? ART.me.body : ART.hud.text;
-    ctx.font = '800 24px system-ui, sans-serif';
-    ctx.fillText(name.toUpperCase(), W / 2, y - 6);
-    ctx.fillStyle = ART.hud.dim;
-    ctx.font = '600 14px system-ui, sans-serif';
-    ctx.fillText(blurbs[name], W / 2, y + 18);
-  }
-
-  ctx.fillStyle = ART.hud.dim;
-  ctx.font = '600 15px system-ui, sans-serif';
-  ctx.fillText('They all move and think at the same speed as each other.', W / 2, H - 92);
-  ctx.fillText('What changes is how well they choose.', W / 2, H - 70);
-  ctx.fillStyle = ART.hud.text;
-  ctx.font = '700 17px system-ui, sans-serif';
-  ctx.fillText('LEFT / RIGHT TO CHOOSE  ·  SPLIT BUTTON TO DIVE IN', W / 2, H - 36);
-}
-
 function render() {
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - 0.5) * shake * 10, (Math.random() - 0.5) * shake * 10);
@@ -555,7 +513,6 @@ function render() {
 
   drawHud();
   drawMinimap();
-  if (choosing) drawPicker();
 }
 
 // --- Boot ----------------------------------------------------------------
@@ -590,7 +547,31 @@ shell = new GameShell({
 reset();
 loop.start();
 
+// WHAT THE OTHER FISH ARE LIKE, as a row on the title menu.
+//
+// A label that reads its own state and a run() that cycles it: the same shape
+// as the shell's sound toggle, so it is tappable, navigable with a stick or the
+// arrow keys, and readable without a tutorial -- none of which the screen this
+// replaced managed on a touchscreen.
+const SHOAL_BLURB = {
+  careless: 'splits at anything and pays for it',
+  steady: 'splits only when it will land',
+  ruthless: 'and it will herd you onto a spike',
+};
+
 shell.showTitle({
   name: 'Bigger Fish',
-  tagline: 'Mass is speed, spent.',
+  tagline: 'Mass is speed, spent. Everything in the pond starts at 2.',
+  items: [
+    {
+      label: () => {
+        const name = SKILL_NAMES[skillIndex];
+        return `Other fish: ${name[0].toUpperCase()}${name.slice(1)} — ${SHOAL_BLURB[name]}`;
+      },
+      run: () => {
+        skillIndex = (skillIndex + 1) % SKILL_NAMES.length;
+        audio.play('move');
+      },
+    },
+  ],
 });

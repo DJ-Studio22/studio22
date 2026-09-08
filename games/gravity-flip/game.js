@@ -38,7 +38,13 @@ import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, clamp, randRange } from '../../engine/util.js';
-import { ROOM_COLS, pickRoom } from './rooms.js';
+// ROOM_ROWS is imported because the saw-extraction loop below walks the room
+// grid by row. It was missing, so the first time a room was placed the loop
+// threw ReferenceError and the game stopped dead -- on every device, not just
+// on a phone. Nothing caught it: the rules module is covered by its own tests,
+// the build does not run the game, and the crash needs somebody to actually
+// press Start.
+import { ROOM_COLS, ROOM_ROWS, pickRoom } from './rooms.js';
 import {
   BASE_GRAVITY, BASE_SPEED, FLIP_COLUMNS, GRID_ROWS, MAX_STEP_FRACTION,
   PLAYER_H, PLAYER_W, TILE, flipColumns, gravityAt, maxFallAt, speedAt,
@@ -123,6 +129,11 @@ const particles = new ParticleSystem({ max: 240 });
 // One button and nothing to steer. The joystick is cleared so it is not
 // sitting on a phone screen doing nothing.
 Input.clearTouchLayout();
+// No virtual stick: Gravity Flip is one button: the only control is which way down is.
+// Without this the shell advertises a joystick in the corner that steers
+// nothing, which is worse than no joystick at all.
+Input.setDirectionalTouch(false);
+
 Input.setTouchLayout([
   { name: 'a', xRatio: 0.5, yRatio: 0.86, radius: 66, label: 'Flip' },
 ]);

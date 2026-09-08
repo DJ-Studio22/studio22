@@ -445,11 +445,14 @@ function drawHud() {
   // Fuel.
   const fuel = flight.craft.fuel / TUNING.fuel;
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText('FUEL', W - 210, 30);
+  // Right-aligned against what the shell leaves free, not against the canvas
+  // edge: on a phone there is a pause button in that corner. Zero on a desktop.
+  const hudRight = W - shell.rightInset();
+  ctx.fillText('FUEL', hudRight - 210, 30);
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.fillRect(W - 168, 18, 146, 15);
+  ctx.fillRect(hudRight - 168, 18, 146, 15);
   ctx.fillStyle = fuel < 0.25 ? ART.hud.fuelLow : ART.hud.fuel;
-  ctx.fillRect(W - 168, 18, 146 * fuel, 15);
+  ctx.fillRect(hudRight - 168, 18, 146 * fuel, 15);
 
   // HOW FAR THE NEAREST FUEL IS, which is the question a dry tank asks.
   let nearest = null;
@@ -458,10 +461,10 @@ function drawHud() {
     if (!nearest || d < nearest) nearest = d;
   }
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText('FUEL AHEAD', W - 210, 56);
+  ctx.fillText('FUEL AHEAD', hudRight - 210, 56);
   ctx.fillStyle = nearest === null ? ART.hud.dim : ART.hud.good;
   ctx.font = '700 15px system-ui, sans-serif';
-  ctx.fillText(nearest === null ? '—' : `${Math.round(nearest)}`, W - 130, 56);
+  ctx.fillText(nearest === null ? '—' : `${Math.round(nearest)}`, hudRight - 130, 56);
 
   if (flash) {
     ctx.globalAlpha = clamp(flash.life, 0, 1);

@@ -139,6 +139,11 @@ const particles = new ParticleSystem({ max: 220 });
 // too: there is nothing to steer, and a stick sitting on screen doing nothing
 // is an invitation to press the wrong thing.
 Input.clearTouchLayout();
+// No virtual stick: Tower Stack is one button: the block is already moving, and all you do is drop it.
+// Without this the shell advertises a joystick in the corner that steers
+// nothing, which is worse than no joystick at all.
+Input.setDirectionalTouch(false);
+
 Input.setTouchLayout([
   { name: 'a', xRatio: 0.5, yRatio: 0.88, radius: 62, label: 'Drop' },
 ]);
