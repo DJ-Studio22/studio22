@@ -298,7 +298,10 @@ function drawSky(p) {
   g.addColorStop(0, p.skyTop);
   g.addColorStop(1, p.skyLow);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // Parallax slabs. Depth only, never anything that reads as terrain.
   for (const b of bands) {
@@ -590,10 +593,12 @@ function drawHud(p) {
   ctx.textBaseline = 'top';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('METRES', 20, 16);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText('METRES', hudLeft + 20, 16);
   ctx.fillStyle = ART.hud.metres;
   ctx.font = '800 30px system-ui, sans-serif';
-  ctx.fillText(String(course.metres), 20, 28);
+  ctx.fillText(String(course.metres), hudLeft + 20, 28);
 
   // Which realm, and therefore which rules.
   ctx.textAlign = 'center';
@@ -635,7 +640,7 @@ function render() {
   if (gateFlash > 0) {
     ctx.globalAlpha = gateFlash * 0.5;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(screen.left, 0, screen.stageWidth, H);
     ctx.globalAlpha = 1;
   }
 

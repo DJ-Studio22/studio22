@@ -548,10 +548,12 @@ function drawHud() {
   ctx.textBaseline = 'top';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('HOLES', 18, 12);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText('HOLES', hudLeft + 18, 12);
   ctx.fillStyle = ART.hud.value;
   ctx.font = '800 26px system-ui, sans-serif';
-  ctx.fillText(String(course.completed), 18, 24);
+  ctx.fillText(String(course.completed), hudLeft + 18, 24);
 
   // Par and strokes on this hole.
   ctx.textAlign = 'center';
@@ -568,7 +570,7 @@ function drawHud() {
   ctx.textAlign = 'right';
   // Right-aligned against what the shell leaves free, not against the canvas
   // edge: on a phone there is a pause button in that corner. Zero on a desktop.
-  const hudRight = W - shell.rightInset();
+  const hudRight = screen.right - shell.rightInset();
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
   ctx.fillText('STROKE BANK', hudRight - 18, 12);
@@ -612,7 +614,10 @@ function render() {
   const view = viewOf(hole);
 
   ctx.fillStyle = ART.table;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // Everything below is drawn in HOLE coordinates. One transform rather than
   // an origin added to every call.
@@ -628,7 +633,7 @@ function render() {
   if (sinkFlash > 0) {
     ctx.globalAlpha = sinkFlash * 0.25;
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(screen.left, 0, screen.stageWidth, H);
     ctx.globalAlpha = 1;
   }
 

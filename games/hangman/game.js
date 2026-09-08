@@ -342,7 +342,10 @@ function askHint() {
 
 function drawBoard() {
   ctx.fillStyle = ART.board.back;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
   ctx.fillStyle = ART.board.slate;
   ctx.fillRect(18, 18, W - 36, H - 36);
   ctx.strokeStyle = ART.board.frame;
@@ -469,7 +472,7 @@ function drawHud() {
   ctx.fillStyle = ART.hud.panel;
   // Right-aligned against what the shell leaves free, not against the canvas
   // edge: on a phone there is a pause button in that corner. Zero on a desktop.
-  const hudRight = W - shell.rightInset();
+  const hudRight = screen.right - shell.rightInset();
   ctx.beginPath(); ctx.roundRect(hudRight - 268, 34, 234, 92, 10); ctx.fill();
   ctx.strokeStyle = ART.hud.panelEdge;
   ctx.lineWidth = 1;
@@ -530,7 +533,7 @@ function drawRoundEnd() {
   if (!run.roundOver) return;
   const won = run.roundOver === 'won';
   ctx.fillStyle = 'rgba(10,14,18,.82)';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = won ? ART.hud.good : ART.hud.bad;

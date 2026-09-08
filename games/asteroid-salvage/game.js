@@ -227,7 +227,10 @@ function drawSpace() {
   g.addColorStop(0, ART.space.far);
   g.addColorStop(1, ART.space.near);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
   for (const star of stars) {
     ctx.fillStyle = star.z > 0.6 ? ART.space.star : ART.space.dust;
     ctx.beginPath();
@@ -350,10 +353,12 @@ function drawHud() {
   ctx.textAlign = 'left';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('SALVAGE', 30, 36);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText('SALVAGE', hudLeft + 30, 36);
   ctx.fillStyle = ART.hud.good;
   ctx.font = '800 24px system-ui, sans-serif';
-  ctx.fillText(String(flight.banked), 30, 62);
+  ctx.fillText(String(flight.banked), hudLeft + 30, 62);
 
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
@@ -398,7 +403,7 @@ function drawHud() {
 function drawShop() {
   if (!flight.shopOpen) return;
   ctx.fillStyle = 'rgba(5,8,14,.90)';
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   ctx.textAlign = 'center';
   ctx.fillStyle = ART.hud.value;

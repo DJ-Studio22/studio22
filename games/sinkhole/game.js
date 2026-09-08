@@ -428,8 +428,10 @@ function render() {
   ctx.save();
   if (shake > 0.02) ctx.translate(R(-shake * 6, shake * 6), R(-shake * 6, shake * 6));
 
+  // From the stage edge: the overdraw is for the shake, the stage is for a
+  // screen wider than the game.
   ctx.fillStyle = SKY;
-  ctx.fillRect(-20, -20, W + 40, H + 40);
+  ctx.fillRect(screen.left - 20, -20, screen.stageWidth + 40, H + 40);
 
   for (const speck of grit) {
     ctx.globalAlpha = speck.a;

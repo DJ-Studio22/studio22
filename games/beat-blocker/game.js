@@ -119,10 +119,29 @@ const particles = new ParticleSystem({ max: 260 });
 // three fixed positions, and stepping onto one is a different gesture from
 // steering — a thumb dragging a stick lands between lanes, which is exactly the
 // place where a press does not count.
+// BOTH LANE PADS ON THE LEFT, and stacked rather than side by side.
+//
+// They used to sit at 0.13 and 0.34 across, which was clear of the note lane
+// when the canvas was the same shape as the game. It is not any more: on a wide
+// screen the canvas extends past both sides of the game (see engine/canvas.js)
+// and a pad placed at a third of the way across the SCREEN landed on top of the
+// lane, which is the one thing on this screen a player has to watch.
+//
+// The margin either side is exactly the right home for a control -- it is
+// backdrop rather than play area -- so the pair moves into it.
+// And no virtual stick, for the reason written directly above: a thumb
+// dragging a stick lands between lanes. The flag is touch-only, so a gamepad
+// stick still moves the shield.
+//
+// It also frees the whole left-hand side for the two lane pads, which would
+// otherwise be shoved apart by the engine keeping them clear of a joystick this
+// game does not want.
+Input.setDirectionalTouch(false);
+
 Input.setTouchLayout([
-  { name: 'lb', xRatio: 0.13, yRatio: 0.80, radius: 46, label: '◀' },
-  { name: 'rb', xRatio: 0.34, yRatio: 0.80, radius: 46, label: '▶' },
-  { name: 'a', xRatio: 0.86, yRatio: 0.74, radius: 58, label: 'BLOCK' },
+  { name: 'lb', xRatio: 0.05, yRatio: 0.52, radius: 48, label: '◀' },
+  { name: 'rb', xRatio: 0.05, yRatio: 0.84, radius: 48, label: '▶' },
+  { name: 'a', xRatio: 0.95, yRatio: 0.72, radius: 58, label: 'BLOCK' },
 ]);
 
 Scores.setScoreDirection(GAME_ID, 'high');
@@ -295,7 +314,10 @@ function drawStage() {
   g.addColorStop(0, ART.stage.far);
   g.addColorStop(1, ART.stage.near);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // The lanes. Lit under the shield so the covered lane is never in doubt.
   const covered = session.coveredLane();
@@ -399,11 +421,13 @@ function drawHud() {
   ctx.textAlign = 'left';
   ctx.fillStyle = ART.hud.text;
   ctx.font = '800 30px system-ui, sans-serif';
-  ctx.fillText(String(session.score), 26, 46);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText(String(session.score), hudLeft + 26, 46);
 
   ctx.font = '600 14px system-ui, sans-serif';
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText(`PHRASE ${session.phrase}  ·  ${Math.round(session.bpm)} BPM`, 26, 68);
+  ctx.fillText(`PHRASE ${session.phrase}  ·  ${Math.round(session.bpm)} BPM`, hudLeft + 26, 68);
 
   // THE CEILING, SAID OUT LOUD.
   //
@@ -417,7 +441,7 @@ function drawHud() {
   if (atCeiling(session.phrase)) {
     ctx.fillStyle = ART.hud.perfect;
     ctx.font = '800 13px system-ui, sans-serif';
-    ctx.fillText('TOP OF THE CHART — IT GETS NO HARDER FROM HERE', 26, 88);
+    ctx.fillText('TOP OF THE CHART — IT GETS NO HARDER FROM HERE', hudLeft + 26, 88);
   }
 
   // Hearts.

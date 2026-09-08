@@ -492,9 +492,10 @@ function render() {
   // transform, so it is not worth applying.
   if (shake > 0.4) ctx.translate(R(-shake, shake), R(-shake, shake));
 
-  // Overdrawn past the edges so the shake never exposes bare canvas.
+  // Overdrawn past the edges so the shake never exposes bare canvas, and
+  // measured from the stage so a screen wider than the game is still space.
   ctx.fillStyle = ART.void;
-  ctx.fillRect(-40, -40, W + 80, H + 80);
+  ctx.fillRect(screen.left - 40, -40, screen.stageWidth + 80, H + 80);
 
   for (const s of stars) {
     ctx.globalAlpha = s.z * 0.7;

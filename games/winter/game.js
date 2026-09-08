@@ -621,7 +621,10 @@ function drawSky() {
   g.addColorStop(0, mixRgb(ART.sky.dayTop, ART.sky.duskTop, d));
   g.addColorStop(1, mixRgb(ART.sky.dayLow, ART.sky.duskLow, d));
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 }
 
 function drawGround() {
@@ -1197,7 +1200,7 @@ function drawHud() {
   const qw = 214;
   // Right-aligned against what the shell leaves free, not against the canvas
   // edge: on a phone there is a pause button in that corner. Zero on a desktop.
-  const qx = W - shell.rightInset() - 16 - qw;
+  const qx = screen.right - shell.rightInset() - 16 - qw;
   ctx.fillStyle = ART.hud.panel;
   ctx.beginPath(); ctx.roundRect(qx, py, qw, 84, 10); ctx.fill();
   ctx.strokeStyle = ART.hud.panelEdge;
@@ -1273,7 +1276,7 @@ function drawNightPanel() {
   const y = (H - h) / 2;
 
   ctx.fillStyle = ART.hud.scrim;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
   ctx.fillStyle = ART.hud.panel;
   ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
   ctx.strokeStyle = ART.hud.panelEdge;

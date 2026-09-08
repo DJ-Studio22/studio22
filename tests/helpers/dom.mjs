@@ -97,6 +97,11 @@ function makeElement(tag) {
       const r = this._rect;
       return { ...r, right: r.left + r.width, bottom: r.top + r.height, x: r.left, y: r.top };
     },
+    // The layout in engine/canvas.js measures its container with these, so a
+    // stub without them makes every sum in it NaN -- quietly, because NaN
+    // compares false against the cached size and the code carries on.
+    get clientWidth() { return this._rect.width; },
+    get clientHeight() { return this._rect.height; },
     getContext() {
       this._ctx ??= stubContext();
       this._ctx.canvas = this;

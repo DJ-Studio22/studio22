@@ -1,6 +1,16 @@
 # Studio 22 — Build Progress
 
 ## Done
+- Phase 38: LANDSCAPE FILLS THE SCREEN, and a pond ten times the size. A phone
+  in landscape is 2.17:1 and no game in the arcade was, so every one of them
+  played inside black pillars -- 63% to 92% of the screen, 72 to 348 pixels of
+  bar. engine/canvas.js now WIDENS the stage to the screen instead of shrinking
+  the game to fit it: the extra arrives as margin at negative x, game
+  coordinates do not move, and the sixteen landscape games went from 63-92%
+  coverage to 100%. Bigger Fish's pond went from 2000x2000 to 6400x6400 with a
+  pellet grid to pay for it, spikes on a jittered grid so a big cell can never
+  be fenced in, and forty bots instead of seven
+
 - Phase 37: THE PHONE PASS, and Bigger Fish rebuilt around what a player can
   see. Every game audited at iPhone-14-Pro-Max size in both orientations
   against a production build, and the faults that turned up were nearly all
@@ -60,6 +70,172 @@
 ## Next
 - Nothing queued. Every entry in games.json is `live` — the arcade has no
   placeholder cards left for the first time.
+
+
+## Phase 38 — the shape of a phone
+
+### A 16:9 stage on a 2.17:1 screen
+
+The whole arcade drew into a fixed stage and scaled it to fit, preserving the
+aspect ratio and letterboxing the remainder. That is the correct thing to do
+and it was throwing away a third of the display, because an iPhone 14 Pro Max
+in landscape is 932x430 CSS pixels and nothing in the arcade is that shape.
+
+Measured at that viewport before the change:
+
+    game               stage      aspect   drawn      bars   cover
+    mini-golf          760x560    1.36     584x430    348    0.63
+    winter             820x560    1.46     630x430    302    0.68
+    gravity-well       960x645    1.49     640x430    292    0.69
+    bigger-fish        960x620    1.55     666x430    266    0.71
+    comet              960x600    1.60     688x430    244    0.74
+    ember              880x500    1.76     757x430    175    0.81
+    gravity-flip       880x440    2.00     860x430     72     0.92
+
+Every landscape game, and the best of them still lost 72 pixels.
+
+### Widen the stage, do not stretch the game
+
+engine/canvas.js gained a fourth size. GAME SIZE is what a game draws in and it
+has not changed; STAGE SIZE is that width WIDENED to whatever the screen is,
+with the extra arriving as a margin on each side -- `screen.left` goes
+negative, `screen.right` goes past the game's width, and `screen.margin` is
+how much. The scale then comes from the height alone, so every unit is exactly
+the size it would have been and the extra screen buys extra game units instead
+of black.
+
+The property that made this affordable: GAME COORDINATES DO NOT MOVE. x=0 is
+still the left edge of the game's own 960, so nothing any game already draws
+lands anywhere new, and a game needs no changes to keep working. It needs one
+change to fill the screen -- painting its backdrop across the margin -- and
+that was `fillRect(0, 0, W, H)` becoming `fillRect(screen.left, 0,
+screen.stageWidth, H)` in twenty-eight places across twenty games, plus three
+backdrops that already overdrew for a screen shake and needed the same idea
+applied to their overdraw.
+
+The margin is CAPPED at 0.35 of the game's width on each side. Uncapped, an
+ultra-wide monitor would hand a runner half a screen of extra look-ahead, and
+that is not framing, it is a difficulty change.
+
+Result at 932x430: all sixteen landscape games at 0.999-1.0 coverage, zero
+bars, and every outer edge verified PAINTED rather than merely covered -- a
+canvas can span the screen and still show a band if the game only filled its
+own width, so the check samples the rendered pixels down both edges.
+
+### What filling the screen moved
+
+Two consequences, both of them the same shape: something anchored to the game's
+own width is no longer anchored to anything the player can see.
+
+**Edge-anchored HUD.** A score drawn at x=20 is twenty units in from a line
+that is now 150 real pixels inside the screen. The shell's own `drawHud` and
+pause button anchor to the stage; `shell.rightInset()` is measured back from
+`screen.right`; and the twelve games that draw their own HUD anchor their left
+and right readouts to `screen.left` and `screen.right`. Bigger Fish's minimap
+moved from the bottom-right corner of the game to the top-right of the screen,
+because the bottom-right corner of the SCREEN is where the engine puts the
+action pads and the map had landed on top of EJECT.
+
+**Pads placed at mid-screen ratios.** Touch pads are positioned as a fraction
+of the canvas and game content in game units, so on a wider stage the two
+diverge. Colour Heist got better -- its NEXT and BACK pads moved off the maze
+and into the margin. Beat Blocker got worse: its lane pads sat at 0.13 and 0.34
+across, and 0.34 of a widened screen is on top of the note lane. Both lane pads
+now live in the left margin, and the game declares
+`setDirectionalTouch(false)` -- which its own comment had been arguing for
+since it was written, because a thumb dragging a stick lands between lanes.
+
+### Portrait is not fixed, deliberately
+
+The seven portrait games in portrait cover 0.69 to 0.84 with the bars at top and
+bottom rather than at the sides. The same mechanism would close that, and it
+would mean showing more of the world VERTICALLY in a set of games -- a faller, a
+climber, a stacker -- where how far you can see coming IS the difficulty. That
+is a design change wearing a layout change's clothes, so it is written down here
+rather than made quietly.
+
+### Bigger Fish: ten times the pond, and the last headline retired
+
+Reported from play: "at mass 2576 I had nothing to do and couldn't move past
+the spikes". The arithmetic underneath it is stark. A cell at 2576 mass is 508
+units across. The average gap between two spikes in the 2000x2000 pond was 471.
+The player was wider than the holes in the terrain.
+
+- **The pond is 6400x6400**, forty-one million square units against four.
+- **Pellets scale with the area** -- 15360, which is the same one-per-2667 it
+  has always been. A count picked for feel would have quietly rewritten the
+  growth curve and with it every measurement in the file. Verified: mass at ten
+  seconds is unchanged.
+- **Spikes go on a jittered grid**, 25 of them, one per cell of a 5x5 grid
+  jittered within 40% of its cell. The average was never the number that
+  mattered; random placement puts pairs far closer than the average, and the
+  fence was built out of the worst gaps. Rejection sampling cannot fix that
+  here -- the excluded disks saturate the pond at about sixteen spikes and
+  everything after falls back to "anywhere", measured worst gap 384. The grid
+  makes it a property of the construction: measured worst gap over 300 ponds is
+  773, which is a gate a cell of 5300 mass can swim through.
+- **Seventy-two bots instead of seven**, which is the same DENSITY as before:
+  1.76 per million square units against 1.75. Forty was tried first and forty
+  is 0.98 -- half the encounters, and it showed. The two bot policies in
+  tests/ agreed on 50% of runs instead of 20%, because a pond where nothing
+  comes near you is a pond with nothing to judge. Danger here is meant to come
+  from a live ecosystem rather than from things aimed at the player, so the
+  ecosystem is where it was put back. Bot-on-bot kills over three six-seed
+  blocks went from 126/169/150 to 388/428/412 at forty, and further again at
+  seventy-two.
+
+**And the last claim in the file went with it.** TAKE THE TRADE AWAY was the
+one headline that survived removing the rubber band, and it does not survive
+this. Three disjoint blocks of twelve seeds: flat 0.75/0.83/0.25 against real
+0.17/0.42/0.25 -- ratios of 4.50, 2.00 and 1.00. The third block is not a thin
+result, it is no result. Both judgements only cost you anything when something
+is near, and spikes are 7x sparser on purpose. CAUTION BEATS GREED was asked
+again too and still flips (1.85, 0.82, 1.31), though its MEAN favours judgement
+on all six blocks ever measured, which is a real fact about the shape of the
+distribution and not the claim.
+
+The pond is roomier and the two policies are more alike in it. That is the
+trade, it is written down rather than tuned away, and the dial -- spikes, bots,
+or the size of the water -- is right there if it is ever judged the wrong way
+round.
+
+- **The opening was already wrong, and this made it worse.** A player who
+  touches nothing survived a median of 16.9 seconds in the OLD pond and 12.6 in
+  the new one, with SEVEN of forty cold starts ending inside ten seconds in
+  both. That is the fault class CLAUDE.md says has already shipped twice: every
+  bot acts on frame one and a person spends the first seconds working out what
+  they are looking at, so no bot harness can see it. `openingGraceSeconds` 6 ->
+  12 and `startClear` 420 -> 800 (a fifth of the old pond's width; a fifteenth
+  of this one's) puts the unluckiest of forty cold starts at 14.9 seconds and
+  none inside ten. There is now a test that simulates touching nothing.
+
+**And a pellet grid, because 15360 of anything is a lot to touch every frame.**
+The eat check bucketed the pellets and REBUILT that bucket map every frame,
+which was the largest single cost in the simulation and was affordable at 1500.
+At 15360 it measured 0.94ms of a 16.7ms frame on a desktop -- call it five on a
+phone, before anything is drawn. Pellets never move, so the grid is now built
+once and told about eats and top-ups. The renderer culls through it too, having
+been walking all 15360 to draw about 200.
+
+And the bots' grazing samples the water AROUND them rather than the whole pond
+-- forty-eight darts thrown at a pond ten times bigger land a crumb three times
+further away, and every bot would have stayed small for a reason that had
+nothing to do with the design. The darts are thrown at the GRID rather than at
+a collected list, which is the same behaviour without materialising 375 pellets
+per bot per rethink.
+
+**Then the profile said the bots were not the problem.** Three rounds of
+tightening the bot decision -- one pass instead of two, no per-bot array, a
+squared-distance rejection -- moved 0.601ms to 0.535ms, and `--cpu-prof` then
+put 3.7% of the frame in `#decide` and 41% in the two eat loops. Both are
+O(cells squared) and both did `canEat` and then `Math.hypot` on every pair in
+the pond. Rejecting on a squared distance first, before either, is the whole
+fix. It is a small lesson and an expensive one: the optimisation was aimed by
+intuition for three attempts and by measurement for one.
+
+    simulation, ms per frame                       before      after
+    2000x2000, 7 bots, 1500 pellets (the old pond)  0.114       --
+    6400x6400, 72 bots, 15360 pellets               ~3.5        0.449
 
 
 ## Phase 37 — the phone pass

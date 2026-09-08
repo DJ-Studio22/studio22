@@ -264,7 +264,10 @@ function drawSky() {
   g.addColorStop(0.5, ART.sky.mid);
   g.addColorStop(1, ART.sky.low);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   ctx.fillStyle = ART.sky.sun;
   ctx.beginPath();
@@ -429,11 +432,13 @@ function drawHud() {
   ctx.textBaseline = 'top';
   ctx.fillStyle = ART.hud.label;
   ctx.font = '600 10px system-ui, sans-serif';
-  ctx.fillText('METRES', 20, 16);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText('METRES', hudLeft + 20, 16);
 
   ctx.fillStyle = ART.hud.metres;
   ctx.font = '800 30px system-ui, sans-serif';
-  ctx.fillText(String(flight.metres), 20, 28);
+  ctx.fillText(String(flight.metres), hudLeft + 20, 28);
 
   // The crosswind, shown as an arrow, because a force the player cannot see
   // is not a skill — and gorge.js already pays for it in the contract.

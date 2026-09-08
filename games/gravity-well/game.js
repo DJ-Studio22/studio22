@@ -279,7 +279,10 @@ function drawSpace() {
   g.addColorStop(0, ART.space.far);
   g.addColorStop(1, ART.space.near);
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // Across the STAGE, not across W: on a screen wider than the game the canvas
+  // extends past both edges (see engine/canvas.js) and an unpainted margin is
+  // just a black bar the game chose not to fill.
+  ctx.fillRect(screen.left, 0, screen.stageWidth, H);
 
   // Parallax stars, recycled once they fall behind. Two depths, so there is
   // something to read speed from when the corridor is empty.
@@ -436,18 +439,20 @@ function drawHud() {
   ctx.textAlign = 'left';
   ctx.fillStyle = ART.hud.text;
   ctx.font = '800 26px system-ui, sans-serif';
-  ctx.fillText(String(flight.score), 22, 40);
+  // Anchored to the left edge of the SCREEN, not of the game. See screen.left.
+  const hudLeft = screen.left;
+  ctx.fillText(String(flight.score), hudLeft + 22, 40);
 
   ctx.font = '600 13px system-ui, sans-serif';
   ctx.fillStyle = ART.hud.dim;
-  ctx.fillText(`${Math.round(flight.distance)} UNITS  ·  ${flight.ringsTaken} RINGS`, 22, 60);
+  ctx.fillText(`${Math.round(flight.distance)} UNITS  ·  ${flight.ringsTaken} RINGS`, hudLeft + 22, 60);
 
   // Fuel.
   const fuel = flight.craft.fuel / TUNING.fuel;
   ctx.fillStyle = ART.hud.dim;
   // Right-aligned against what the shell leaves free, not against the canvas
   // edge: on a phone there is a pause button in that corner. Zero on a desktop.
-  const hudRight = W - shell.rightInset();
+  const hudRight = screen.right - shell.rightInset();
   ctx.fillText('FUEL', hudRight - 210, 30);
   ctx.fillStyle = 'rgba(255,255,255,0.08)';
   ctx.fillRect(hudRight - 168, 18, 146, 15);

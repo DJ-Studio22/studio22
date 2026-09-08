@@ -29,6 +29,38 @@
 // the two axis ratios and centered, so any leftover space shows up as
 // letterbox bars (top/bottom) or pillarbox bars (left/right). Games never
 // stretch.
+//
+// EXCEPT THAT A PHONE IS NOT 16:9, and preserving an aspect ratio nothing on
+// the device shares means throwing away a third of the screen.
+//
+// An iPhone 14 Pro Max in landscape is 932x430 CSS pixels: an aspect of 2.17,
+// far wider than any stage in the arcade. Measured across all twenty-three
+// games at that viewport, the play area covered between 63% and 92% of the
+// screen, with 72 to 348 pixels of black bar down the sides. Mini Golf drew
+// into 584 pixels of a 932-pixel screen. The framing was correct and the game
+// was playing in a strip.
+//
+// So there is a fourth size, and it is the one this file now exists to
+// produce:
+//
+//   4. STAGE SIZE -- the game size, WIDENED to whatever the screen actually
+//                    is. The extra arrives as a MARGIN on each side, in game
+//                    units, at negative x on the left and beyond width on the
+//                    right. Game coordinates do not move: x=0 is still the
+//                    left edge of the game's own 960, and everything a game
+//                    already draws lands exactly where it always did.
+//
+// That last property is the whole design. A game needs no changes to keep
+// working; it needs one change -- painting its background across the margin --
+// to fill the screen. For a game with a camera that is all it needs, because
+// the extra margin then shows more world. For a game with a fixed board the
+// board stays centred and the margin becomes backdrop, which is the honest
+// answer: a golf hole is a fixed shape and the alternative to framing it is
+// stretching it.
+//
+// The margin is CAPPED (see MAX_STAGE_MARGIN). An ultra-wide desktop monitor
+// would otherwise hand a runner half a screen of extra look-ahead, which is
+// not framing, it is a difficulty change.
 
 // --- Tunables -----------------------------------------------------------
 
@@ -42,6 +74,14 @@ const DEFAULT_GAME_HEIGHT = 540;
 // to grow 3x to stay readable -- 1.5x is the point where HUD text stops
 // being a squint without eating the play area.
 const DEFAULT_TV_UI_SCALE = 1.5;
+
+// How far the stage may widen, as a fraction of the game's own width, on each
+// side. 0.35 each side is 1.7x overall, which takes a 16:9 game to 3.02:1 --
+// past every phone in landscape (an iPhone 14 Pro Max is 2.17) and short of
+// the point where a game is showing so much extra world that the difficulty
+// moved. Games that want a different ceiling pass maxStageMargin; a game that
+// must never widen passes 0.
+const MAX_STAGE_MARGIN = 0.35;
 
 // Optional ceiling on devicePixelRatio. OFF by default -- see below.
 //
@@ -88,6 +128,7 @@ export class GameCanvas {
   #lastWidth = 0;
   #lastHeight = 0;
   #lastPixelRatio = 0;
+  #lastMargin = -1;
 
   #resizeObserver = null;
 
@@ -110,6 +151,11 @@ export class GameCanvas {
   // reason about things like touch target sizes in real screen terms.
   #scale = 1;
 
+  // Extra game units visible on EACH side of the game's own width. Zero on a
+  // screen no wider than the game. See the note at the top of this file.
+  #margin = 0;
+  #maxStageMargin;
+
   /**
    * @param {object} options
    * @param {number}  [options.width=960]        Fixed internal width, in game units.
@@ -118,6 +164,10 @@ export class GameCanvas {
    * @param {boolean} [options.pixelArt=false]   Disable image smoothing for crisp sprites.
    * @param {boolean} [options.tvMode=false]     Scale UI up for couch viewing distance.
    * @param {number}  [options.tvUiScale=1.5]    Multiplier used when tvMode is on.
+   * @param {number}  [options.maxStageMargin=0.35]  How far the stage may widen on
+   *                                             each side, as a fraction of width, on
+   *                                             a screen wider than the game. 0 pins
+   *                                             the stage and restores pillarboxing.
    * @param {number}  [options.maxPixelRatio=Infinity]  Ceiling on devicePixelRatio.
    *                                             Uncapped by default; set 2 (or 1.5,
    *                                             or 1 for pixel art) only once fill
@@ -137,6 +187,7 @@ export class GameCanvas {
     this.#tvMode = options.tvMode ?? false;
     this.#tvUiScale = options.tvUiScale ?? DEFAULT_TV_UI_SCALE;
     this.#maxPixelRatio = options.maxPixelRatio ?? DEFAULT_MAX_PIXEL_RATIO;
+    this.#maxStageMargin = options.maxStageMargin ?? MAX_STAGE_MARGIN;
     this.#requireOrientation = options.requireOrientation ?? null;
     this.#label = options.label ?? document.title ?? 'Game';
 
@@ -164,12 +215,47 @@ export class GameCanvas {
 
   // Fixed game-space dimensions. These never change for the life of the
   // page, which is the entire point of this class.
+  //
+  // `width` stays the game's OWN width even when the stage is wider, because
+  // every layout a game has ever written is expressed against it and moving it
+  // would move all of them. What changed is that there is now visible canvas
+  // outside 0..width; see `margin`, `left` and `right`.
   get width() {
     return this.#gameWidth;
   }
 
   get height() {
     return this.#gameHeight;
+  }
+
+  /**
+   * Extra game units visible on each side of 0..width. Zero on a screen no
+   * wider than the game, and on a desktop window that is not especially wide.
+   *
+   * A game paints its backdrop across `left..right` instead of `0..width` and
+   * that is normally the entire change. Anything drawn with a camera transform
+   * already lands correctly in the margin without being asked.
+   */
+  get margin() {
+    return this.#margin;
+  }
+
+  /** Leftmost visible game x. Negative when the stage is wider than the game. */
+  get left() {
+    // Not `-this.#margin`: negating zero gives -0, which is equal to 0 under ==
+    // and ===, and NOT equal to it under Object.is or assert.equal. So it reads
+    // as zero everywhere a human looks and fails a test. Cheaper not to make it.
+    return this.#margin === 0 ? 0 : -this.#margin;
+  }
+
+  /** Rightmost visible game x. */
+  get right() {
+    return this.#gameWidth + this.#margin;
+  }
+
+  /** Total visible width in game units: right - left. */
+  get stageWidth() {
+    return this.#gameWidth + this.#margin * 2;
   }
 
   // Display size / game size -- i.e. how many CSS pixels one game unit
@@ -214,8 +300,11 @@ export class GameCanvas {
     // out inside a collapsed parent). Return the origin rather than NaN.
     if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
 
+    // Across the STAGE and then back into game coordinates, so a touch on the
+    // left margin reports a negative x rather than being squashed into 0..width.
+    // A pad drawn out there has to hit-test out there.
     return {
-      x: ((clientX - rect.left) / rect.width) * this.#gameWidth,
+      x: ((clientX - rect.left) / rect.width) * this.stageWidth - this.#margin,
       y: ((clientY - rect.top) / rect.height) * this.#gameHeight,
     };
   }
@@ -394,11 +483,32 @@ export class GameCanvas {
       availableHeight / this.#gameHeight,
     );
 
+    // WIDEN THE STAGE RATHER THAN BAR IT, when the screen is wider than the
+    // game and the game allows it.
+    //
+    // Height is what sets the scale in that case: the game keeps every unit
+    // the size it would have been, and the screen's extra width buys extra
+    // game units instead of black. On a screen that is NOT wider than the
+    // game -- a portrait phone, a tall window -- fitScale already came from
+    // the width, there is no spare width to spend, and this leaves everything
+    // exactly as it was.
+    const heightScale = availableHeight / this.#gameHeight;
+    const wantedStage = availableWidth / heightScale;
+    const ceiling = this.#gameWidth * (1 + this.#maxStageMargin * 2);
+    const stageWidth = Math.max(
+      this.#gameWidth,
+      Math.min(wantedStage, ceiling),
+    );
+    this.#margin = (stageWidth - this.#gameWidth) / 2;
+    // Only the widened case gets to leave fitScale behind. Past the ceiling
+    // the leftover really is a bar again, and it is scaled to fit like always.
+    const scale = this.#margin > 0 ? heightScale : fitScale;
+
     // Floor to whole CSS pixels: a fractional display size makes the browser
     // resample the canvas an extra time, which shows up as shimmer along
     // sprite edges.
-    const displayWidth = Math.floor(this.#gameWidth * fitScale);
-    const displayHeight = Math.floor(this.#gameHeight * fitScale);
+    const displayWidth = Math.floor(stageWidth * scale);
+    const displayHeight = Math.floor(this.#gameHeight * scale);
 
     // Capped, not raw -- see DEFAULT_MAX_PIXEL_RATIO. This is the single
     // biggest lever on frame rate for a phone, because every pixel here is
@@ -409,13 +519,20 @@ export class GameCanvas {
     // ResizeObserver fires for every layout change, not just meaningful
     // ones, and reassigning canvas.width below throws away the pixel buffer
     // and every piece of context state along with it.
+    // The margin is part of the cache key. Two different stage widths can floor
+    // to the same display width, and skipping the transform then would leave the
+    // canvas drawing against the previous stage -- a half-pixel class of bug
+    // that shows up as everything being shifted sideways by a hair after a
+    // resize, which is the kind of thing nobody finds on purpose.
     if (displayWidth === this.#lastWidth
       && displayHeight === this.#lastHeight
+      && this.#margin === this.#lastMargin
       && dpr === this.#lastPixelRatio) {
       return;
     }
     this.#lastWidth = displayWidth;
     this.#lastHeight = displayHeight;
+    this.#lastMargin = this.#margin;
     this.#lastPixelRatio = dpr;
 
     const backingWidth = Math.round(displayWidth * dpr);
@@ -436,17 +553,23 @@ export class GameCanvas {
     // The one transform that makes the whole abstraction work: game units in,
     // device pixels out. Set (not multiplied) every layout so repeated
     // resizes can't compound.
+    //
+    // The translate is what keeps the promise made at the top of this file:
+    // the stage may be wider, but game x=0 still lands where the game's own
+    // left edge has always been, so nothing a game already draws moves. The
+    // margin is simply canvas that exists at negative x.
+    const unitsAcross = this.stageWidth;
     this.#ctx.setTransform(
-      backingWidth / this.#gameWidth, 0,
+      backingWidth / unitsAcross, 0,
       0, backingHeight / this.#gameHeight,
-      0, 0,
+      (this.#margin * backingWidth) / unitsAcross, 0,
     );
 
     // Re-applied here because the canvas.width assignment above may have
     // just cleared it.
     this.#ctx.imageSmoothingEnabled = !this.#pixelArt;
 
-    this.#scale = displayWidth / this.#gameWidth;
+    this.#scale = displayWidth / this.stageWidth;
 
     // Touch controls belong on the play area, not on the letterbox bars beside
     // it. Pushed rather than pulled because this is the moment the answer
@@ -506,14 +629,26 @@ export class GameCanvas {
     const height = this.#container.clientHeight;
     if (!width || !height) return false;
 
-    const fit = (w, h) => Math.min(w / this.#gameWidth, h / this.#gameHeight);
-    const now = fit(width, height);
-    const turned = fit(height, width);
+    // What share of the screen the play area covers held THIS way against
+    // held the other way, both computed the way #applyLayout would -- widening
+    // included, because a stage that widens to fill the screen is not asking
+    // anybody to rotate anything.
+    const covered = (w, h) => {
+      const heightScale = h / this.#gameHeight;
+      const ceiling = this.#gameWidth * (1 + this.#maxStageMargin * 2);
+      const stage = Math.max(this.#gameWidth, Math.min(w / heightScale, ceiling));
+      const scale = stage > this.#gameWidth
+        ? heightScale
+        : Math.min(w / this.#gameWidth, h / this.#gameHeight);
+      return (stage * scale * this.#gameHeight * scale) / (w * h);
+    };
+    const now = covered(width, height);
+    const turned = covered(height, width);
     if (now <= 0) return false;
-
-    // How much of the screen the play area actually covers as things stand.
-    const covered = (this.#gameWidth * now * this.#gameHeight * now) / (width * height);
-    return covered < 0.45 && turned > now * 1.35;
+    // 0.6 rather than 0.45: with the stage widening, a portrait game held
+    // landscape now covers 43-52% instead of 25-31%, and half the screen is
+    // still a strip. The old threshold would have quietly stopped asking.
+    return now < 0.6 && turned > now * 1.35;
   }
 
   // --- Events -------------------------------------------------------------
