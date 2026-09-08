@@ -145,14 +145,26 @@ now live in the left margin, and the game declares
 `setDirectionalTouch(false)` -- which its own comment had been arguing for
 since it was written, because a thumb dragging a stick lands between lanes.
 
-### Portrait is not fixed, deliberately
+### DECIDED: portrait keeps its bars. Do not reopen this.
 
-The seven portrait games in portrait cover 0.69 to 0.84 with the bars at top and
-bottom rather than at the sides. The same mechanism would close that, and it
-would mean showing more of the world VERTICALLY in a set of games -- a faller, a
-climber, a stacker -- where how far you can see coming IS the difficulty. That
-is a design change wearing a layout change's clothes, so it is written down here
-rather than made quietly.
+The seven portrait games in portrait cover 0.69 to 0.84 of the screen, with the
+bars at top and bottom rather than at the sides. The stage-widening mechanism
+would close them, and this is a decision NOT to use it.
+
+Widening vertically means showing more of the world above and below in a faller,
+a climber and a stacker -- the three genres where how far you can see coming is
+precisely the difficulty. Updraft, Sinkhole, Tower Stack, Block Buster, Ballast,
+Neon Drift and Number Crunch would all get quietly easier, and none of the
+numbers in tests/ would notice, because they measure the rules and not the view.
+
+So: **bars are preferred to a quietly easier game.** Asked and answered, on
+2026-09-08. Anybody reopening it is proposing a difficulty change and should
+re-measure every affected game's ladder before touching a pixel.
+
+The horizontal case is different and is why it was done: widening sideways in a
+LANDSCAPE game shows more of the same corridor a player is already travelling
+along, and the capped margin (0.35 of the width each side) keeps even that from
+turning into meaningful extra warning.
 
 ### Bigger Fish: ten times the pond, and the last headline retired
 
@@ -183,6 +195,13 @@ The player was wider than the holes in the terrain.
   ecosystem is where it was put back. Bot-on-bot kills over three six-seed
   blocks went from 126/169/150 to 388/428/412 at forty, and further again at
   seventy-two.
+
+**DECIDED: both claims are dead, and the pond stays as it is.** The bigger pond
+is the better game, and a documented unproven claim about a roomy pond beats a
+proven one about a cramped one. The density dial does not get turned back to buy
+the result: 72 bots is the same fish-per-water as the original pond and it stays
+there because that is what the pond should feel like, not because of what it
+does to a measurement. Asked and answered, on 2026-09-08.
 
 **And the last claim in the file went with it.** TAKE THE TRADE AWAY was the
 one headline that survived removing the rubber band, and it does not survive

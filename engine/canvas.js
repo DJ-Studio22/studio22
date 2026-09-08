@@ -83,6 +83,16 @@ const DEFAULT_TV_UI_SCALE = 1.5;
 // must never widen passes 0.
 const MAX_STAGE_MARGIN = 0.35;
 
+// How much better the OTHER orientation has to be before the player is asked to
+// turn the device. 1.2, and the fifteen per cent it came down from is a real
+// bug rather than a rounding: Number Crunch, Sinkhole and Neon Drift cover 0.523
+// held landscape and 0.692 held portrait -- a third more screen, plainly worth
+// turning for -- and 0.692 is just under 0.523 x 1.35, so all three sat in a
+// strip with bars down both sides and no prompt to fix it. Measured across all
+// twenty-three games in both orientations: at 1.2 every game that bars asks, and
+// no game that fills does.
+const TURN_IS_WORTH_IT = 1.2;
+
 // Optional ceiling on devicePixelRatio. OFF by default -- see below.
 //
 // Phones report ratios of 3 and up, so a full-screen landscape canvas can
@@ -648,7 +658,7 @@ export class GameCanvas {
     // 0.6 rather than 0.45: with the stage widening, a portrait game held
     // landscape now covers 43-52% instead of 25-31%, and half the screen is
     // still a strip. The old threshold would have quietly stopped asking.
-    return now < 0.6 && turned > now * 1.35;
+    return now < 0.6 && turned > now * TURN_IS_WORTH_IT;
   }
 
   // --- Events -------------------------------------------------------------
