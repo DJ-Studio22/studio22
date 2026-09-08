@@ -12,8 +12,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  END, Pond, SKILLS, SKILL_NAMES, TUNING, canEat, radiusOf, recombineDelay,
-  speedOf, splitReach,
+  END, Pond, SKILLS, SKILL_NAMES, TUNING, canEat, mergeContactSeconds, radiusOf,
+  speedOf, splitReach, threatens,
 } from '../games/bigger-fish/pond.js';
 import { POLICIES, runOnce } from './helpers/fish-bot.mjs';
 import { summarise, withSeed } from './helpers/seeded.mjs';
@@ -68,14 +68,131 @@ test('splitting halves you and throws one half forward', () => {
   assert.ok(mine.some((c) => c.vx > 0), 'nothing was launched');
 });
 
-test('and it is a commitment: the halves will not merge for a while', () => {
-  const pond = new Pond();
+test('PUTTING YOURSELF BACK TOGETHER IS SOMETHING YOU DO', () => {
+  // Not a timer. The pieces merge only after twenty seconds of unbroken
+  // contact, and breaking contact resets the clock to nothing -- so the
+  // post-split window is a stretch you are managing rather than waiting out.
+  // STARVED: no pellets in the TUNING, rather than an emptied array. The pond
+  // tops its pellets back up every frame, so clearing the array only skipped one
+  // frame of grazing -- the pieces ate their way from 100 mass to 125 while this
+  // test was measuring distances against their radii.
+  const pond = new Pond({ ...TUNING, pellets: 0 });
+  pond.bots = [];
+  pond.cells = pond.cells.filter((c) => c.owner === 'player');
+  // No terrain and no food: a two-hundred-mass cell is well over the spike
+  // threshold, so a spike would burst it and this would be measuring that
+  // instead. Both of these tests failed that way first.
+  pond.spikes = [];
+  // And put the cell in the middle of the pond. Spawns are random, and a cell
+  // near the right wall has its pieces CLAMPED back inside when this test moves
+  // them apart -- which quietly puts them back in contact and made the reset
+  // assertion fail every other run.
+  pond.cellsOf('player')[0].x = pond.t.width / 2;
+  pond.cellsOf('player')[0].y = pond.t.height / 2;
   const cell = pond.cellsOf('player')[0];
   cell.mass = 200;
   pond.split('player', cell.x + 100, cell.y);
-  const delay = recombineDelay(100);
-  assert.ok(delay > 10, 'the halves merge back almost immediately, so splitting risks nothing');
-  for (const piece of pond.cellsOf('player')) assert.ok(piece.splitUntil >= delay - 1e-6);
+  assert.equal(pond.cellsOf('player').length, 2);
+
+  // Held apart, they never merge however long you wait.
+  for (let i = 0; i < 60 * (mergeContactSeconds() + 5); i++) {
+    const [a, b] = pond.cellsOf('player');
+    if (!b) break;
+    b.x = a.x + radiusOf(a.mass) + radiusOf(b.mass) + 40;   // keep them off each other
+    b.y = a.y;
+    pond.step(1 / 60, {});
+  }
+  assert.equal(pond.cellsOf('player').length, 2, 'the pieces merged while held apart');
+  assert.equal(pond.contactHeld, 0);
+
+  // Let them touch and they merge — but only after the full twenty seconds.
+  // Velocity zeroed as well as position: a launched half still travelling eats
+  // the first seconds of the window, which makes the timing of this test a
+  // matter of how much drag has already happened rather than of the rule.
+  const [a, b] = pond.cellsOf('player');
+  b.x = a.x;
+  b.y = a.y;
+  a.vx = 0; a.vy = 0; b.vx = 0; b.vy = 0;
+  for (let i = 0; i < 60 * (mergeContactSeconds() - 1); i++) pond.step(1 / 60, {});
+  assert.equal(pond.cellsOf('player').length, 2, 'they merged early');
+  assert.ok(pond.contactHeld > mergeContactSeconds() - 2);
+  for (let i = 0; i < 60 * 2; i++) pond.step(1 / 60, {});
+  assert.equal(pond.cellsOf('player').length, 1, 'they never merged');
+  assert.equal(pond.merges, 1);
+});
+
+test('and breaking contact starts the clock again from nothing', () => {
+  // The reset is the point: holding your pieces together through a fight is
+  // the work, and letting them apart to cover ground is the decision.
+  // STARVED: no pellets in the TUNING, rather than an emptied array. The pond
+  // tops its pellets back up every frame, so clearing the array only skipped one
+  // frame of grazing -- the pieces ate their way from 100 mass to 125 while this
+  // test was measuring distances against their radii.
+  const pond = new Pond({ ...TUNING, pellets: 0 });
+  pond.bots = [];
+  pond.cells = pond.cells.filter((c) => c.owner === 'player');
+  // No terrain and no food: a two-hundred-mass cell is well over the spike
+  // threshold, so a spike would burst it and this would be measuring that
+  // instead. Both of these tests failed that way first.
+  pond.spikes = [];
+  // And put the cell in the middle of the pond. Spawns are random, and a cell
+  // near the right wall has its pieces CLAMPED back inside when this test moves
+  // them apart -- which quietly puts them back in contact and made the reset
+  // assertion fail every other run.
+  pond.cellsOf('player')[0].x = pond.t.width / 2;
+  pond.cellsOf('player')[0].y = pond.t.height / 2;
+  const cell = pond.cellsOf('player')[0];
+  cell.mass = 200;
+  pond.split('player', cell.x + 100, cell.y);
+  const [a, b] = pond.cellsOf('player');
+  b.x = a.x;
+  b.y = a.y;
+  // And stop it: the launched half is still travelling at six hundred a second,
+  // so left alone it flies out of contact for the first three seconds and the
+  // clock this test is about would not start until it came back.
+  b.vx = 0;
+  b.vy = 0;
+  for (let i = 0; i < 60 * 10; i++) pond.step(1 / 60, {});
+  assert.ok(pond.contactHeld > 9, 'the contact clock is not running');
+
+  // One frame apart is enough.
+  b.x = a.x + radiusOf(a.mass) + radiusOf(b.mass) + 60;
+  pond.step(1 / 60, {});
+  assert.equal(pond.contactHeld, 0, 'breaking contact did not reset the clock');
+});
+
+test('the pieces drift back towards each other on their own', () => {
+  // A tendency rather than a tractor beam: it closes a split if you let it, and
+  // you can pull them apart by steering, because two cells cover twice the
+  // ground.
+  // STARVED: no pellets in the TUNING, rather than an emptied array. The pond
+  // tops its pellets back up every frame, so clearing the array only skipped one
+  // frame of grazing -- the pieces ate their way from 100 mass to 125 while this
+  // test was measuring distances against their radii.
+  const pond = new Pond({ ...TUNING, pellets: 0 });
+  pond.bots = [];
+  pond.cells = pond.cells.filter((c) => c.owner === 'player');
+  // No terrain and no food: a two-hundred-mass cell is well over the spike
+  // threshold, so a spike would burst it and this would be measuring that
+  // instead. Both of these tests failed that way first.
+  pond.spikes = [];
+  // And put the cell in the middle of the pond. Spawns are random, and a cell
+  // near the right wall has its pieces CLAMPED back inside when this test moves
+  // them apart -- which quietly puts them back in contact and made the reset
+  // assertion fail every other run.
+  pond.cellsOf('player')[0].x = pond.t.width / 2;
+  pond.cellsOf('player')[0].y = pond.t.height / 2;
+  const cell = pond.cellsOf('player')[0];
+  cell.mass = 200;
+  pond.split('player', cell.x + 100, cell.y);
+  const gapAt = () => {
+    const [a, b] = pond.cellsOf('player');
+    return b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+  };
+  for (let i = 0; i < 60; i++) pond.step(1 / 60, {});    // let the launch bleed off
+  const wide = gapAt();
+  for (let i = 0; i < 60 * 2; i++) pond.step(1 / 60, {});
+  assert.ok(gapAt() < wide, `the pieces are not closing: ${wide} then ${gapAt()}`);
 });
 
 test('a small cell cannot split, and nobody exceeds the cell cap', () => {
@@ -179,14 +296,124 @@ test('a run ends when the last of you is eaten, and says so', () => {
   assert.equal(pond.reason, END.EATEN);
 });
 
-test('the score is peak mass, and what you held is reported beside it', () => {
-  // Held mass was tried as the score on the strength of a twelve-seed
-  // measurement that did not survive sixty seeds. See the note in pond.js.
+test('THE SCORE IS THE AREA UNDER THE MASS CURVE', () => {
+  // How big you were multiplied by how long you stayed that way. Peak mass was
+  // the first answer and it is the wrong shape: peak ignores duration, so a run
+  // that spikes and dies scores the same as one that holds the same size for
+  // minutes, which makes reckless growth optimal by construction and no amount
+  // of tuning the risks can change it.
   const pond = new Pond();
+  pond.bots = [];
+  pond.pellets = [];
+  pond.spikes = [];
   pond.cellsOf('player')[0].mass = 500;
-  pond.step(1 / 60, {});
-  assert.equal(pond.score, Math.round(pond.peakMass));
+
+  const after = (seconds) => {
+    for (let i = 0; i < 60 * seconds; i++) pond.step(1 / 60, {});
+    return pond.score;
+  };
+  const early = after(2);
+  const later = after(2);
+  assert.ok(early > 0, 'the score never moves');
+  assert.ok(later > early * 1.8,
+    `holding the same mass twice as long scored ${later} against ${early}`);
+
+  // Peak and held are still tracked and reported; they are just not scored.
+  assert.ok(pond.peakMass >= 400);
   assert.ok(pond.heldMass <= pond.peakMass);
+});
+
+// --- The pond has its own life --------------------------------------------
+
+test('THE BOTS PLAY THE POND, NOT THE PLAYER', () => {
+  // The pond should be an ecosystem you are in rather than seven things aimed
+  // at you: bots pursuing each other, eating each other, splitting on each
+  // other and blundering into spikes doing it. Measured over two minutes with
+  // the player swimming in a straight line and otherwise ignored.
+  //
+  // Three seeds and a median, because the variance between ponds is enormous --
+  // steady bots managed 12, 41 and 30 kills on three consecutive seeds, and
+  // across eight seeds the range was 0 to 92. A single unseeded run drew a 1
+  // and failed this test, which is what a single run of anything in here is
+  // worth.
+  const life = (skill) => {
+    const kills = [];
+    const splits = [];
+    const spiked = [];
+    for (let seed = 1; seed <= 3; seed++) {
+      withSeed(seed, () => {
+        const pond = new Pond(TUNING, { skill });
+        for (let i = 0; i < 60 * 120; i++) pond.step(1 / 60, { x: 0.4, y: 0.2 });
+        kills.push(pond.botKills);
+        splits.push(pond.botSplits);
+        spiked.push(pond.botSpiked);
+      });
+    }
+    // Summed across the ponds rather than averaged over them. The spread
+    // between ponds is enormous -- steady bots managed 6, 6, 25, 0 and 7 kills
+    // on five consecutive seeds -- so a median can be a zero that says nothing
+    // about the design, while a total over the same seeds is steady.
+    const total = (list) => list.reduce((sum, n) => sum + n, 0);
+    return { kills: total(kills), splits: total(splits), spiked: total(spiked) };
+  };
+
+  const steady = life('steady');
+  assert.ok(steady.kills > 10,
+    `the bots ate each other ${steady.kills} times across three ponds`);
+  assert.ok(steady.splits > 2, 'the bots never split at each other');
+
+  // And the ladder reads in what the pond LOOKS like, not only in the score: a
+  // careless shoal is chaos, because it splits at anything in front of it and
+  // feeds the halves to whatever was standing behind. Measured 900-odd against
+  // 40-odd across the same three ponds.
+  const careless = life('careless');
+  assert.ok(careless.kills > steady.kills * 3,
+    `a careless shoal (${careless.kills} kills) is no more chaotic than a steady one (${steady.kills})`);
+  assert.ok(careless.spiked > steady.spiked,
+    'careless bots do not blunder into spikes any more often than careful ones');
+});
+
+test('A BIGGER FISH IS ONLY A THREAT IF ITS HALVES COULD EAT YOU', () => {
+  // The rule that brought the pond to life, and it is a correctness fix rather
+  // than a liveliness one. A cell catches something faster than it by
+  // splitting, and splitting halves it -- so a fish thirty per cent bigger than
+  // you is no threat at range at all, because the halves it would arrive as
+  // could not eat you.
+  //
+  // Treating every bigger cell as a split-threat had good bots fleeing
+  // continuously and never engaging: seven steady bots managed two meals
+  // between them in three minutes, against three hundred for a careless shoal.
+  const mine = 100;
+  const slightlyBigger = { mass: mine * 1.4 };
+  const muchBigger = { mass: mine * 3 };
+
+  // At range, only the one whose halves could still eat you is a threat.
+  const far = splitReach(muchBigger.mass) - 10;
+  assert.equal(threatens(muchBigger, mine, far), true);
+  assert.equal(threatens(slightlyBigger, mine, far), false,
+    'a fish that would arrive in harmless halves is treated as a threat at range');
+
+  // Up close, anything that can eat you is a threat.
+  assert.equal(threatens(slightlyBigger, mine, 1), true);
+  // And something smaller never is.
+  assert.equal(threatens({ mass: mine * 0.5 }, mine, 1), false);
+});
+
+test('new arrivals come in a spread of sizes, so there is a ladder in the pond', () => {
+  // All arrivals at the same share of the leader means every bot is every other
+  // bot's size, nobody can eat anybody -- eating needs a clear quarter more
+  // mass -- and the only predator-prey pair in the water is you and them.
+  const pond = new Pond();
+  pond.cellsOf('player')[0].mass = 1000;
+  const sizes = [];
+  for (let i = 0; i < 200; i++) sizes.push(pond.arrivalMassForTest());
+  const low = Math.min(...sizes);
+  const high = Math.max(...sizes);
+  assert.ok(high > low * 2,
+    `arrivals run from ${Math.round(low)} to ${Math.round(high)}, which is not a ladder`);
+  // And the spread straddles what it takes to eat: some arrivals can eat
+  // others outright.
+  assert.ok(canEat(high, low), 'the biggest arrival cannot eat the smallest');
 });
 
 // --- The skill levels -----------------------------------------------------
@@ -234,24 +461,74 @@ test('and the ladder is real — the same player does far worse against better b
 
 // --- The claims -----------------------------------------------------------
 
-test('SPLITTING PAYS — the mechanic is not decoration', () => {
-  // Two policies identical in every respect but one: whether they ever divide
-  // themselves to catch something faster.
+test('SPLITTING CATCHES WHAT WOULD OTHERWISE OUTRUN YOU', () => {
+  // What splitting is FOR, and it still does it: two policies identical but for
+  // whether they ever divide themselves, and the one that does catches
+  // substantially more. Across three disjoint blocks of forty seeds the ratio
+  // was 1.6, 3.9 and 2.3 times as many cells eaten.
   //
-  // Twenty-four seeds of four minutes. Across two disjoint blocks of that size
-  // the ratio came out 1.21 and 1.29, so the floor here is well under what was
-  // measured and well over noise.
-  const median = (policy) => {
-    const peaks = [];
+  // NOTE WHAT THIS TEST NO LONGER CLAIMS. It used to assert that splitting won
+  // on the SCORE -- 320 against 263, and 322 against 249. That died with the
+  // merge change, and deliberately: putting yourself back together now takes
+  // twenty seconds of unbroken contact that you can only earn by easing off the
+  // stick, and the cost of that cancels the gain. Measured over three disjoint
+  // blocks of sixty seeds, a never-splitting policy scores 3720 against 2925,
+  // 3839 against 3839, and 2359 against 2360 -- ahead, level, level.
+  //
+  // So splitting is a tool rather than a profit: it is how you reach something
+  // faster than you, and you pay for the reach. That is a better mechanic than
+  // the one that was there before, and it is not the claim that was there
+  // before, so the test says what is true instead.
+  // Twenty-four seeds at five minutes rather than sixty at eight: the effect is
+  // large enough that it does not need the sample the score claim below does.
+  // At sixty seeds and eight minutes the same comparison is 12.6 cells against
+  // 8.8, 11.4 against 8.8, and 8.7 against 4.9 -- between a third and four
+  // fifths more, on every block.
+  const caught = (policy) => {
+    const eaten = [];
     for (let seed = 1; seed <= 24; seed++) {
-      withSeed(seed, () => peaks.push(runOnce(policy, undefined, { seconds: 240 }).peak));
+      withSeed(seed, () => eaten.push(runOnce(policy, undefined, { seconds: 300 }).eaten));
     }
-    return summarise(peaks).mean;
+    return summarise(eaten).mean;
   };
-  const splits = median('selective');
-  const never = median('noSplit');
-  assert.ok(splits > never * 1.1,
-    `never splitting costs almost nothing: ${never} against ${splits}`);
+  const splits = caught('selective');
+  const never = caught('noSplit');
+  assert.ok(splits > never * 1.3,
+    `splitting caught ${splits} against ${never} without it, which is noise`);
+});
+
+test('CAUTION BEATS GREED — the claim the score was changed to make measurable', () => {
+  // The headline, and it took a change to the SCORE rather than to the tuning.
+  //
+  // On peak mass this was false and could not be made true: peak ignores how
+  // long you held it, so growing as fast as possible and dying is optimal by
+  // construction, and every risk added lowered a reckless player and a careful
+  // one together. Sixty seeds said 405 to 416 -- noise -- and I nearly shipped a
+  // twelve-seed sample that happened to say 455 to 637.
+  //
+  // Scored on the area under the mass curve, a selective player wins on three
+  // disjoint blocks of sixty seeds: 2925 to 1684, 3839 to 1942, 2360 to 2139.
+  // Between ten and ninety-eight per cent, ahead on the mean in all three as
+  // well, and the ordering never flips. The thin block is the reason the
+  // threshold below is a tenth rather than a half: the effect is real and its
+  // size is not stable.
+  //
+  // THIS IS THE MOST EXPENSIVE TEST IN THE SUITE, about three minutes, and the
+  // sample size is load-bearing rather than cautious: at forty seeds and a
+  // three-hundred-second cap the same comparison comes out 0.86, 1.72 and 1.17
+  // across blocks -- it flips. The advantage IS survival time (median life 271
+  // seconds against 188), so a short cap truncates the thing being measured.
+  const median = (policy) => {
+    const scores = [];
+    for (let seed = 1; seed <= 60; seed++) {
+      withSeed(seed, () => scores.push(runOnce(policy, undefined, { seconds: 480 }).score));
+    }
+    return summarise(scores).median;
+  };
+  const greedy = median('greedy');
+  const selective = median('selective');
+  assert.ok(selective > greedy * 1.05,
+    `greed scores ${greedy} against judgement's ${selective} — the claim is back to unproven`);
 });
 
 test('the policies differ in one thing: judgement about being big', () => {
