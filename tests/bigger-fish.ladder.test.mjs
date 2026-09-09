@@ -132,7 +132,9 @@ test('and the difference is the arithmetic, not the appetite', () => {
   //
   // Neither declines the MEAL — appetite is not what separates them, and a
   // level that ate less would be a worse opponent rather than a better one.
-  const spec = { hunterMass: 600, mealMass: 60, gap: 400 };
+  // The gap follows the tuning: beyond what a 600-mass split reaches, by a
+  // margin. It was a literal 400, and the launch was lengthened past it.
+  const spec = { hunterMass: 600, mealMass: 60, gap: Math.round(splitReach(600, TUNING) + 60) };
   assert.ok(spec.gap > splitReach(spec.hunterMass, TUNING), 'the meal is within reach');
 
   const total = (skill) => [1, 2, 3, 4, 5, 6]
