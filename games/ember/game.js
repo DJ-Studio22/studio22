@@ -34,7 +34,8 @@ import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, clamp, randRange } from '../../engine/util.js';
 
-import { Flight, TUNING, WORLD_H, difficultyAt, wallsAt } from './gorge.js';
+import { Flight, PIXELS_PER_METRE, TUNING, WORLD_H, difficultyAt, wallsAt } from './gorge.js';
+import { BestMarker } from '../../engine/best-marker.js';
 
 const GAME_ID = 'ember';
 
@@ -99,6 +100,8 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 200 });
+// The session-best line across the gorge, and the confetti for passing it.
+const best = new BestMarker();
 
 // One button and nothing to steer. The stick is cleared rather than left on
 // screen doing nothing, which is an invitation to press the wrong thing.
@@ -122,6 +125,7 @@ audio.define({
   pass: { beep: { freq: 720, duration: 0.06, type: 'triangle', volume: 0.13 } },
   near: { beep: { freq: 300, duration: 0.05, type: 'square', volume: 0.09 } },
   crash: { beep: { freq: 84, duration: 0.6, type: 'triangle', volume: 0.28 } },
+  best: { beep: { freq: 990, duration: 0.16, type: 'triangle', volume: 0.16 } },
 });
 
 // --- State ---------------------------------------------------------------
@@ -185,6 +189,7 @@ function reset() {
   bestClearance = Infinity;
   particles.clear();
   for (const e of embers) e.active = false;
+  best.reset(Session.getBest(GAME_ID));
 }
 
 function crash() {
@@ -255,6 +260,9 @@ function update(dt) {
       }
     }
   }
+
+  // Past the best? The burst is in screen space, at the balloon.
+  if (best.update(flight.metres, dt, { burstX: BALLOON_X, burstY: flight.y })) audio.play('best');
 
   if (!flight.running) crash();
 }
@@ -491,9 +499,24 @@ function render() {
   drawSky();
   drawHaze();
   drawGorge();
+  // The best as a place in the gorge: a metre is PIXELS_PER_METRE of world,
+  // and the world scrolls past a balloon fixed at BALLOON_X.
+  if (best.visible) {
+    best.drawLine(ctx, {
+      orientation: 'vertical',
+      at: best.best * PIXELS_PER_METRE - flight.x + BALLOON_X,
+      from: 0,
+      to: H,
+      min: screen.left - 10,
+      max: screen.left + screen.stageWidth + 10,
+      label: `BEST ${best.best} m`,
+      scale: screen.uiScale,
+    });
+  }
   drawEmbers();
   if (running || shake > 0.02) drawBalloon();
   particles.draw(ctx);
+  best.drawBurst(ctx);
 
   ctx.restore();
   drawHud();

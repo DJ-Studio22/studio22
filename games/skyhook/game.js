@@ -46,6 +46,7 @@ import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, clamp, randRange } from '../../engine/util.js';
+import { BestMarker } from '../../engine/best-marker.js';
 import { anchorOf, difficultyAt } from './city.js';
 import { HOOK, Swing } from './swing.js';
 
@@ -127,6 +128,8 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 260 });
+// The session-best line across the city, and the confetti for passing it.
+const best = new BestMarker();
 
 Input.setTouchLayout([
   { name: 'a', xRatio: 0.90, yRatio: 0.80, radius: 54, label: 'Hook' },
@@ -144,6 +147,7 @@ audio.define({
   dive: { beep: { freq: 200, duration: 0.1, type: 'sawtooth', volume: 0.1 } },
   crash: { beep: { freq: 100, duration: 0.45, type: 'sawtooth', volume: 0.3 } },
   fall: { beep: { freq: 130, duration: 0.6, type: 'triangle', volume: 0.26 } },
+  best: { beep: { freq: 990, duration: 0.16, type: 'triangle', volume: 0.16 } },
 });
 
 // --- State ---------------------------------------------------------------
@@ -224,6 +228,7 @@ function reset() {
   swing.reset();
   particles.clear();
   shakeTime = 0;
+  best.reset(Session.getBest(GAME_ID));
 
   camX = swing.hero.x - W * 0.32;
   camY = swing.hero.y - H * 0.5;
@@ -271,6 +276,9 @@ function update(dt) {
 
   if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
   particles.update(dt);
+
+  // Past the best? The burst is in screen space, at the hero.
+  if (best.update(swing.metres, dt, { burstX: hero.x - camX, burstY: hero.y - camY })) audio.play('best');
 }
 
 // --- Draw ----------------------------------------------------------------
@@ -522,10 +530,29 @@ function render() {
   }
 
   for (const b of swing.buildings) drawBuilding(b);
+
+  // The best as a place: metres are distance plus what rings have paid, so
+  // the line stands where the DISTANCE part would reach the best given the
+  // rings already taken. It steps nearer when a ring is collected, which is
+  // what the ring did.
+  if (best.visible) {
+    const worldX = (best.best - swing.bonusMetres) * swing.t.unitsPerMetre;
+    best.drawLine(ctx, {
+      orientation: 'vertical',
+      at: worldX - camX,
+      from: 0,
+      to: H,
+      min: screen.left - 10,
+      max: screen.left + screen.stageWidth + 10,
+      label: `BEST ${best.best} m`,
+      scale: screen.uiScale,
+    });
+  }
   drawRings();
   drawTarget();
   particles.draw(ctx);
   if (swing.running) drawHero();
+  best.drawBurst(ctx);
 
   ctx.restore();
 
