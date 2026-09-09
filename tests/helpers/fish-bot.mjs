@@ -53,11 +53,6 @@ export const POLICIES = {
 
 const STEP = 1 / 60;
 
-// How far off the stick a player comes to knit their pieces back together.
-// Enough to let the drift win, slow enough to be a real cost in a pond that has
-// just watched you divide yourself.
-const EASE_THROTTLE = 0.25;
-
 /** Nearest of `items` to (x, y), or null. */
 function nearest(items, x, y, filter = () => true) {
   let best = null;
@@ -127,13 +122,18 @@ function decide(pond, policy, t) {
     return { x: prey.item.x - head.x, y: prey.item.y - head.y, split };
   }
 
-  // 2b. KNITTING BACK TOGETHER. With nothing to run from and nothing worth
-  // chasing, a split player eases off so the pieces gather -- which is the only
-  // way to merge, and costs speed while it happens.
-  if (mine.length > 1) {
-    const centre = pond.centreOf('player');
-    return { x: centre.x - head.x || 0.001, y: centre.y - head.y || 0.001, ease: true };
-  }
+  // 2b. THERE IS NO LONGER A "PUT YOURSELF BACK TOGETHER" MOVE, and this is
+  // where one used to be.
+  //
+  // Under the old steering the pieces only gathered while the stick was eased
+  // off, so a split player had to stop playing to merge and the bot had a whole
+  // branch for it: swim at your own centre of mass at a quarter speed. The
+  // player now drives one cell and the others chase it whatever the stick is
+  // doing, so that branch was a bot handicapping itself for a rule that no
+  // longer exists -- a quarter speed, in a pond, for nothing.
+  //
+  // What merging still costs is the twenty seconds of unbroken contact, which
+  // is a cost you pay by not being flung apart rather than by standing still.
 
   // 3. GRAZING, and routing round the terrain if it is dangerous to you.
   // Sampled rather than searched, for the same reason the bots sample: the
@@ -170,7 +170,6 @@ export function runOnce(policyName, tuning = TUNING, options = {}) {
   let sinceDecision = tuning.decideSeconds;
   let want = { x: 0, y: 0 };
   let split = false;
-  let ease = false;
   while (pond.running && pond.time < seconds) {
     sinceDecision += STEP;
     if (sinceDecision >= tuning.decideSeconds) {
@@ -178,20 +177,19 @@ export function runOnce(policyName, tuning = TUNING, options = {}) {
       const choice = decide(pond, policy, tuning);
       want = { x: choice.x, y: choice.y };
       split = Boolean(choice.split);
-      ease = Boolean(choice.ease);
     } else {
       split = false;
     }
 
-    // A STICK, NOT A VECTOR. The pond reads how hard the stick is pushed --
-    // easing off is what lets split pieces gather, and full stick strings them
-    // out -- so a harness handing it raw goal offsets is holding the stick
-    // flat out for ever and can never put itself back together.
+    // A STICK, NOT A VECTOR. A harness handing the pond raw goal offsets is
+    // pushing the stick a hundred units in one frame and a thousand in the
+    // next, which is not an input any controller can produce. Normalised, so
+    // this is a direction held at full deflection -- the same thing a thumb
+    // does.
     const mag = Math.hypot(want.x, want.y) || 1;
-    const throttle = ease ? EASE_THROTTLE : 1;
     pond.step(STEP, {
-      x: (want.x / mag) * throttle,
-      y: (want.y / mag) * throttle,
+      x: want.x / mag,
+      y: want.y / mag,
       split,
     });
   }

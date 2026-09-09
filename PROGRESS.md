@@ -3475,3 +3475,49 @@ regression. The probe measures the head, because the head is what the player is
 steering.
 
 Suite 517 → 532.
+
+### And a claim that could not cross a V8 version
+
+The skill-ladder assertion went red on node 22 and green on node 24. Not a
+regression — a measurement that was never portable. Same twelve seeds, same
+code:
+
+|  | careless | ruthless | ratio |
+|---|---|---|---|
+| node 22 (CI) | 768 | 488 | 1.57 |
+| node 24 (local) | 1613 | 537 | 3.00 |
+
+The pond is chaotic and a hundred and fifty seconds turns a one-ulp difference
+in `Math.hypot` into a different run, so the same seeds are not the same runs
+and a median of twelve of them is not a stable quantity. The file had already
+been bitten once at a floor of 2 — 2.74 local, 1.82 on CI. The floor moved to
+1.6 and the sample was resized, and it failed again at 1.573. **Moving it a
+third time would be fitting a threshold to whatever CI last happened to draw.**
+
+Measured properly before retiring it, thirty-six seeds at ninety seconds: the
+player peaked higher against a careless shoal on **9, 7 and 8 of twelve** across
+three disjoint blocks. Twenty-four of thirty-six.
+
+So the effect is real and in the right direction, and nothing like as clean as
+"9.9x" made it sound. What the numbers actually show is a difference in
+**spread** rather than in level: against a careless shoal the player peaked at
+5444 where a ruthless one held them to 290, and also at 13 where a ruthless one
+allowed 87. **A careless shoal is chaos, and chaos is not the same as easy.**
+
+**What is asserted instead is the judgement itself**, on a pond built to ask one
+question: a meal that is edible whole but is more than half of you. A careless
+bot splits at it; a ruthless one never does, because each half would be too
+small to eat what it lands on. And the mirror — a meal out past the launch,
+where the careless level splits at nothing and the checked levels swim there
+first — with both still eating, because appetite is not what separates them.
+
+Deterministic, no chaos in the path, and it cannot come out differently on
+another V8. The file went from 120 seconds to 0.23.
+
+One more leftover found on the way: **the bot still had a branch that eased off
+to a quarter speed to knit its pieces back together.** That was required by the
+steering model this phase replaced. With the followers chasing the head whatever
+the stick is doing, it was a bot handicapping itself for a rule that no longer
+exists.
+
+Suite 532 → 533.
