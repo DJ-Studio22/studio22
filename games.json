@@ -26,7 +26,7 @@
     "id": "bigger-fish",
     "title": "Bigger Fish",
     "tagline": "Mass is speed, spent.",
-    "description": "A pond far larger than the screen, scattered with pellets and with other fish who want the same ones. Eat to grow, eat anything meaningfully smaller than you, and find out that growing is the thing that makes you catchable: speed falls with mass, so prey outruns you exactly when you most want it, and spikes that a small fish swims straight under take two fifths of a big one and scatter what is left. Splitting is the only way to close on something faster than you, and it leaves you in pieces: you steer one cell, the same one for the whole run, and the rest swim back to its flank and merge after twenty seconds of unbroken contact -- contact a hard turn or a shove can break, in a pond that has just watched you divide yourself. The bots hunt each other rather than only you, at three skill levels chosen before the run that differ in judgement rather than in speed or reflexes. The score is the area under your mass curve, so surviving big is worth more than briefly being big -- which is what makes a selective player beat a greedy one, measured across three separate blocks of sixty runs.",
+    "description": "A pond far bigger than the screen, full of pellets and of other fish who want them. Eat to grow. Growing slows you down, so the thing you most want to catch is the thing that gets away, and splitting is the only way to close on it. You steer one cell for the whole run, and the pieces swim back to it. The score is how big you were for how long, so surviving big beats being briefly huge.",
     "category": "arcade",
     "path": "/games/bigger-fish/index.html",
     "difficulty": "medium",

@@ -712,7 +712,12 @@ html.lit-fallback .lit .word {
 
 .devices {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* minmax(0, 1fr) rather than 1fr: a plain 1fr column will not shrink below
+     its content, so the 11.5rem television frame forced the second column
+     wider than the stage on a 393px phone and ran 26px past the right
+     padding. With a zero minimum the column stays inside the stage and the
+     frame below shrinks to it. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: clamp(var(--space-lg), 5vw, var(--space-2xl));
   align-items: end;
   justify-items: center;
@@ -727,6 +732,9 @@ html.lit-fallback .lit .word {
    the shelf too rather than lifting the label. */
 .device__visual {
   height: var(--stage-h);
+  /* Full column width, so the frame's max-width below measures against the
+     column rather than against a shrink-wrapped shelf the frame itself set. */
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -756,6 +764,9 @@ html.lit-fallback .lit .word {
 
 .device__frame {
   width: var(--dev-w);
+  /* Never wider than the column it stands in; the aspect ratio keeps the
+     shape when it has to shrink. */
+  max-width: 100%;
   aspect-ratio: var(--dev-ar);
   border: 2px solid var(--color-bg-3);
   border-radius: var(--dev-radius, var(--radius-md));
@@ -1407,6 +1418,9 @@ html.lit-fallback .lit .word {
     position: static;
     min-height: 0;
   }
+  /* And the scroller gives up its pinned height: 220svh of section around a
+     static stage is a screen and a half of nothing. */
+  .anywhere.pin { min-height: 0; }
   .pin__line--late,
   .pin__row > * {
     opacity: 1;
@@ -1419,18 +1433,26 @@ html.lit-fallback .lit .word {
    expensive paint on the page, and the corners are where a thumb lives. */
 @media (max-width: 47.9375em) {
   .plane__wash:nth-child(n + 2) { display: none; }
-  .hud--right { display: none; }
-  .hud--left {
-    position: static;
-    padding: var(--space-lg) var(--space-lg) 0;
-  }
+  /* Neither piece of telemetry on a phone. The left one was made static so
+     it left the corner, which put it first in the document flow: a clock
+     rendered at the top of the page, directly under the wordmark the
+     absolutely positioned top line draws there, and unreadable through it.
+     It is ornament; on a phone it is ornament in the way. */
+  .hud--right,
+  .hud--left { display: none; }
   .pin {
     --pin-p: 1;
   }
+  /* THE STAGE IS STATIC, SO THE SCROLLER MUST BE TOO. The stage lost its
+     pin here but the section kept its 220svh -- a height chosen for a
+     desktop where the stage stays put while the section scrolls under it.
+     With nothing pinned that was a screen and a half of black after "Play
+     anywhere" before the next section arrived. */
   .pin__stage {
     position: static;
     min-height: 0;
   }
+  .anywhere.pin { min-height: 0; }
   .pin__line--late,
   .pin__row > * {
     opacity: 1;
@@ -1471,6 +1493,10 @@ html.lit-fallback .lit .word {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  /* Never onto a second line: a wrapped utility would land on the hero
+     headline, and the About link makes three of them. */
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 /* The hero has to clear the top line, and its headline is measured from the
@@ -1479,7 +1505,14 @@ html.lit-fallback .lit .word {
 .hero__meta { margin-top: var(--space-lg); }
 
 @media (max-width: 47.9375em) {
-  .topline { padding: var(--space-md) var(--space-lg); }
+  .topline { padding: var(--space-md) var(--space-lg); gap: var(--space-sm); }
+  /* Three utilities beside a wordmark on a phone: tighter gaps, less padding
+     and a shade smaller so ARCADE · ABOUT · SOUND[ON] stay on one line.
+     Measured at 393px CSS with the desktop padding the row ended 19px from
+     the edge, which is an overflow on a 375px phone; with this it ends
+     around 60px clear on 375. */
+  .topline__nav { gap: var(--space-xs); }
+  .topline .util { font-size: 0.7rem; letter-spacing: 0.08em; padding-inline: var(--space-xs); }
 }
 
 /* --- The page header, shared by the arcade and the About page --------- */
