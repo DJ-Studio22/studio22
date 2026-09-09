@@ -61,7 +61,20 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 
-Input.clearTouchLayout();
+// ONE PAD, LABELLED A, and no virtual stick.
+//
+// The first version cleared the layout and relied on tap-anywhere. Two things
+// were wrong with that on a phone. Every card said "press A" with no A on the
+// screen; and the guess could not be locked in AT ALL -- locking is
+// Input.pressed('a'), which nothing on a touchscreen produced, so the dial
+// could be dragged for ever and never answered. The stick goes because the
+// dial is the control: a touch on the left half was being claimed by an
+// invisible joystick and nudging the pointer at stick speed, while the same
+// touch on the right half dragged it straight to the spot.
+Input.setDirectionalTouch(false);
+Input.setTouchLayout([
+  { name: 'a', xRatio: 0.90, yRatio: 0.84, radius: 52, label: 'A' },
+]);
 Session.setScoreDirection(GAME_ID, 'high');
 
 audio.define({
@@ -400,8 +413,8 @@ shell = new GameShell({
   onRestart: reset,
   controls: [
     { action: 'Move the pointer', gamepad: 'Left stick or D-pad', keyboard: 'Arrows', touch: 'Drag the dial' },
-    { action: 'Lock it in', gamepad: 'A', keyboard: 'Space', touch: 'Tap' },
-    { action: 'Carry on', gamepad: 'A', keyboard: 'Space', touch: 'Tap' },
+    { action: 'Lock it in', gamepad: 'A', keyboard: 'Space', touch: 'A pad' },
+    { action: 'Carry on', gamepad: 'A', keyboard: 'Space', touch: 'Tap, or A' },
     { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },
   ],
 });
