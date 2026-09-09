@@ -135,7 +135,9 @@ Input.clearTouchLayout();
 Input.setDirectionalTouch(false);
 
 Input.setTouchLayout([
-  { name: 'a', xRatio: 0.5, yRatio: 0.86, radius: 66, label: 'Flip' },
+  // Bottom RIGHT: this is a one-thumb game and the right thumb is where the
+  // phone is already held. Dead centre put it over the room you are reading.
+  { name: 'a', xRatio: 0.9, yRatio: 0.82, radius: 66, label: 'Flip' },
 ]);
 
 Session.setScoreDirection(GAME_ID, 'high');
@@ -706,6 +708,8 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: the flip is judged off the room in front of you.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Flip gravity', gamepad: 'A', keyboard: 'Space', touch: 'Flip pad' },

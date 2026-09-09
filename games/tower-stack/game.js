@@ -145,7 +145,9 @@ Input.clearTouchLayout();
 Input.setDirectionalTouch(false);
 
 Input.setTouchLayout([
-  { name: 'a', xRatio: 0.5, yRatio: 0.88, radius: 62, label: 'Drop' },
+  // Bottom right, for the same reason as Gravity Flip -- not reported, but the
+  // identical declaration and therefore the identical fault on a wide screen.
+  { name: 'a', xRatio: 0.9, yRatio: 0.84, radius: 62, label: 'Drop' },
 ]);
 
 Session.setScoreDirection(GAME_ID, 'high');
@@ -475,7 +477,7 @@ function drawSky() {
   const groundY = BUILD_LINE + cameraY;
   if (groundY < H + 40) {
     ctx.fillStyle = mix(from.ground, to.ground, t);
-    ctx.fillRect(0, groundY, W, H - groundY + 40);
+    ctx.fillRect(screen.left, groundY, screen.stageWidth, H - groundY + 40);
   }
 }
 

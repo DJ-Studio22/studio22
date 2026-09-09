@@ -73,6 +73,11 @@ const SILENCE = 0.001;
 // in #advance: the point of this number is that starting a game costs ONE file.
 const PREFETCH_LEAD = 30;
 
+// The fade either side of a pause. Short: a pause menu wants the music out of
+// the way promptly so the room can talk, and back promptly when play resumes.
+// Long enough not to click.
+const SUSPEND_FADE_SECONDS = 0.35;
+
 /**
  * Where the audible part of a decoded buffer starts and ends, in seconds.
  *
@@ -101,6 +106,24 @@ function audibleRange(buffer) {
   return { start: first / buffer.sampleRate, end: (last + 1) / buffer.sampleRate };
 }
 
+/**
+ * Where to drop the needle for a resume, wrapped into the audible region.
+ *
+ * Exported because it is the one piece of arithmetic in this file that can be
+ * wrong in a way nothing else notices: an offset past the end of a track makes
+ * a BufferSource play silence for ever, which is indistinguishable from the
+ * music simply having stopped. It cannot be reached from a test through the
+ * class, because the class needs an audio context.
+ *
+ * `null` means "from the start of the audible part", which is what a fresh
+ * track wants.
+ */
+export function needleAt(offset, start, end) {
+  const playable = Math.max(0.1, end - start);
+  if (offset === null || !Number.isFinite(offset)) return start;
+  return start + (((offset - start) % playable) + playable) % playable;
+}
+
 /** Fisher-Yates, so a session does not always open on the same song. */
 function shuffled(list) {
   const out = [...list];
@@ -118,6 +141,9 @@ export class Music {
   #playing = null;      // { source, gain, endsAt }
   #timer = null;
   #prefetchTimer = null;
+  // Where the needle was when the game paused, so it can go back. Null while
+  // playing normally.
+  #suspended = null;
   #started = false;
   #decoded = new Map(); // id -> AudioBuffer, only what has actually been heard
   #prefetching = null;
@@ -151,9 +177,48 @@ export class Music {
   /** Fade out and stop. The session can be started again later. */
   stop({ fadeOut = FADE_OUT_SECONDS } = {}) {
     this.#started = false;
+    this.#suspended = null;
     if (this.#timer) { clearTimeout(this.#timer); this.#timer = null; }
     if (this.#prefetchTimer) { clearTimeout(this.#prefetchTimer); this.#prefetchTimer = null; }
     this.#fadeOutCurrent(fadeOut);
+  }
+
+  /**
+   * PAUSE IS A SUSPEND, NOT A STOP.
+   *
+   * The first version called stop() when the pause menu opened and start() when
+   * it closed, and start() re-shuffles the playlist and begins again from its
+   * first track -- so pausing changed the song and threw away where you were in
+   * it. Pausing a game should do to the music exactly what it does to the game:
+   * hold it still.
+   *
+   * A BufferSource cannot be paused, so this notes where the needle is, stops
+   * it, and resume() starts a fresh source at that offset. The position has to
+   * be read HERE rather than on resume, because the audio context's clock keeps
+   * running while the game is paused.
+   */
+  suspend({ fadeOut = SUSPEND_FADE_SECONDS } = {}) {
+    if (!this.#playing || this.#suspended) return;
+    const ctx = this.#context();
+    const playing = this.#playing;
+    this.#suspended = {
+      id: playing.id,
+      buffer: playing.buffer,
+      offset: ctx
+        ? playing.from + (ctx.currentTime - playing.startedAt)
+        : playing.from,
+    };
+    if (this.#timer) { clearTimeout(this.#timer); this.#timer = null; }
+    if (this.#prefetchTimer) { clearTimeout(this.#prefetchTimer); this.#prefetchTimer = null; }
+    this.#fadeOutCurrent(fadeOut);
+  }
+
+  /** Pick the same track up where it was left. */
+  resume({ fadeIn = SUSPEND_FADE_SECONDS } = {}) {
+    const held = this.#suspended;
+    this.#suspended = null;
+    if (!held || !this.#started) return;
+    this.#play(held.id, held.buffer, held.offset, fadeIn);
   }
 
   /** True while a track is playing or fading in. */
@@ -216,6 +281,13 @@ export class Music {
    * gives up only when it has tried every track once -- so four broken files
    * and one good one is still music.
    */
+  /**
+   * Move to the next track in the playlist.
+   *
+   * Walks past tracks that failed to load rather than stopping at one, and
+   * gives up only when it has tried every track once -- so four broken files
+   * and one good one is still music.
+   */
   async #advance(fadeIn) {
     if (!this.#started) return;
 
@@ -227,12 +299,26 @@ export class Music {
       buffer = await this.#load(id);
     }
     if (!buffer || !this.#started) return;
+    this.#play(id, buffer, null, fadeIn);
+  }
 
+  /**
+   * Actually put a buffer on the speakers, from `offset` seconds in.
+   *
+   * Shared by #advance and resume(), which is the whole reason it exists as its
+   * own method: resuming has to start the SAME track at the SAME place, and any
+   * second copy of this arithmetic would drift away from the first.
+   *
+   * `offset` of null means "from the beginning of the audible part".
+   */
+  #play(id, buffer, offset, fadeIn) {
     const ctx = this.#context();
     const bus = this.#bus();
     if (!ctx || !bus) return;
 
     const { start, end } = audibleRange(buffer);
+    const from = needleAt(offset, start, end);
+
     const gain = ctx.createGain();
     gain.connect(bus);
 
@@ -249,18 +335,19 @@ export class Music {
     const now = ctx.currentTime;
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(1, now + fadeIn);
-
-    // Start at the first audible sample, not at zero -- otherwise every track
-    // opens with the encoder's padding.
-    source.start(now, start);
+    source.start(now, from);
 
     this.#fadeOutCurrent(fadeIn);
-    this.#playing = { source, gain, id };
+    // startedAt and from are what make suspend() able to say where the needle
+    // is: the context clock keeps running while a game is paused, so the
+    // position has to be worked out AT the moment of suspending rather than
+    // when play resumes.
+    this.#playing = { source, gain, id, buffer, from, startedAt: now, start, end };
 
     // Hand over before this one ends, so the fades overlap and the room never
     // hears a gap.
-    const playable = Math.max(1, end - start);
-    const handover = Math.max(1, playable - CROSSFADE_SECONDS);
+    const remaining = Math.max(1, end - from);
+    const handover = Math.max(1, remaining - CROSSFADE_SECONDS);
     this.#timer = setTimeout(() => this.#advance(CROSSFADE_SECONDS), handover * 1000);
 
     // The next track is fetched LATE, not now.

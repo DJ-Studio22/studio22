@@ -703,7 +703,7 @@ function drawScenery() {
   ctx.globalAlpha = 1;
 
   ctx.fillStyle = ART.night.haze;
-  ctx.fillRect(0, H * 0.30, W, H * 0.28);
+  ctx.fillRect(screen.left, H * 0.30, screen.stageWidth, H * 0.28);
 
   // The skyline. Blocks recycle to the far end once they pass behind, so the
   // list never grows and nothing is allocated during a run.
@@ -1051,6 +1051,8 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: traffic and cones are seen coming; nothing warns by ear.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Steer', gamepad: 'Left stick or D-pad', keyboard: 'Left / Right or A / D', touch: 'Drag the left side' },

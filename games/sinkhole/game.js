@@ -139,6 +139,11 @@ const INVULN_TIME = 1.6;
 const CAM_ANCHOR = H * 0.42;   // where on screen the player sits once it moves
 const CAM_LOOKAHEAD = 130;     // extra view below at full dive speed
 const CAM_FOLLOW = 7;          // exponential follow rate, per second
+// The least room ever left between the top of the view and the player. The
+// ceiling is clamped into the view (see chaseCeiling), so this is in effect the
+// closest the spikes are ever held while the player is running -- and therefore
+// the real "max lead" of the game, in the units the player experiences it in.
+const CEILING_ROOM = 280;
 
 // --- State ---------------------------------------------------------------
 
@@ -266,14 +271,21 @@ function update(dt) {
   // The ceiling closes rather than sitting still. A dive used to outrun it
   // permanently, which removed the threat the game is named for at exactly
   // the moment the player got good at it.
-  ceilingY = chaseCeiling(ceilingY, P.y, scrollSpeed(), dt, SHAFT_TUNING);
+  // THE CAMERA MOVES FIRST, and the order matters rather than being tidiness.
+  // The ceiling is now clamped against the top of the view, so it has to be
+  // clamped against where the view IS this frame; doing it after left the
+  // ceiling chasing last frame's camera, which at a full dive is sixteen
+  // pixels of drift a frame and reads as the spikes juddering.
+  updateCamera(dt);
+
+  // camY is the world position of the top of the view, and passing it is what
+  // keeps the spikes in frame.
+  ceilingY = chaseCeiling(ceilingY, P.y, scrollSpeed(), dt, SHAFT_TUNING, camY);
 
   if (P.y - PLAYER_R < ceilingY) {
     P.y = ceilingY + PLAYER_R;
     hurt();
   }
-
-  updateCamera(dt);
 
   if (invuln > 0) invuln = Math.max(0, invuln - dt);
   if (shake > 0) shake = Math.max(0, shake - dt * 24);
@@ -293,7 +305,17 @@ function update(dt) {
  */
 function cameraTarget() {
   const dive = clamp(P.vy / MAX_DIVE_FALL, 0, 1);
-  return Math.max(0, P.y - CAM_ANCHOR + dive * CAM_LOOKAHEAD);
+  const want = Math.max(0, P.y - CAM_ANCHOR + dive * CAM_LOOKAHEAD);
+  // THE LOOKAHEAD MAY NOT EAT THE ROOM THE DANGER LIVES IN.
+  //
+  // Diving slides the view down to show more of what is coming, which pushes
+  // the player UP the screen -- from 302 pixels below the top to 172. The
+  // ceiling is now held at the top of the view, so that lookahead was directly
+  // shortening the gap between the spikes and the player, and doing it hardest
+  // at the exact moment the player is going fastest. Looking further ahead
+  // should cost you what is behind, and the spikes are not behind you, they
+  // are the thing you are running from.
+  return Math.min(want, Math.max(0, P.y - CEILING_ROOM));
 }
 
 function updateCamera(dt) {
@@ -454,7 +476,7 @@ function render() {
   lamp.addColorStop(0, ART.lamp);
   lamp.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = lamp;
-  ctx.fillRect(0, camY, W, H);
+  ctx.fillRect(screen.left, camY, screen.stageWidth, H);
 
   for (const ledge of ledges) {
     // Cull what the camera has left behind. Ledges above the ceiling are
@@ -518,11 +540,11 @@ function drawLedge(ledge) {
 
 function drawCeiling() {
   ctx.fillStyle = ART.ceiling;
-  ctx.fillRect(0, 0, W, ceilingY);
+  ctx.fillRect(screen.left, 0, screen.stageWidth, ceilingY);
 
   ctx.fillStyle = ART.ceilingSpike;
   const step = 24;
-  for (let x = 0; x < W; x += step) {
+  for (let x = screen.left; x < screen.right; x += step) {
     ctx.beginPath();
     ctx.moveTo(x, ceilingY);
     ctx.lineTo(x + step / 2, ceilingY + 16);
@@ -537,7 +559,7 @@ function drawCeiling() {
   if (nearness > 0) {
     ctx.globalAlpha = nearness;
     ctx.fillStyle = ART.ceilingWarn;
-    ctx.fillRect(0, ceilingY, W, 150);
+    ctx.fillRect(screen.left, ceilingY, screen.stageWidth, 150);
     ctx.globalAlpha = 1;
   }
 }
@@ -593,14 +615,14 @@ function drawCeilingMarker() {
   ctx.globalAlpha = hidden;
 
   ctx.fillStyle = ART.ceiling;
-  ctx.fillRect(0, 0, W, 18);
+  ctx.fillRect(screen.left, 0, screen.stageWidth, 18);
 
   // Half the height of the real spikes and in the shaded tone, so this
   // never reads as the ceiling actually being at the top of the screen.
   // It is a sign saying which way the danger is, not the danger.
   ctx.fillStyle = ART.spikeShade;
   const step = 24;
-  for (let x = 0; x < W; x += step) {
+  for (let x = screen.left; x < screen.right; x += step) {
     ctx.beginPath();
     ctx.moveTo(x, 18);
     ctx.lineTo(x + step / 2, 26);

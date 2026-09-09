@@ -321,25 +321,36 @@ function drawGround(p) {
   // The solid, minus the gaps. Drawn from the same obstacle list the
   // collision reads, so what looks like a hole is a hole.
   const gaps = course.run.obstacles.filter((o) => o.kind === KIND.GAP);
-  let cursor = -100;
+  // Clipped to the STAGE, which on a wide screen reaches past both sides of
+  // the game's own width. This is the one place in the file where getting that
+  // wrong does not merely leave a bar: the void is drawn first so a gap reads
+  // as a hole, so ground that stops short reads as a pit the player is about
+  // to fall into.
+  const far = screen.left - 100;
+  const near = screen.right + 100;
+  let cursor = far;
   const edges = [];
   for (const o of gaps.sort((a, b) => a.tile - b.tile)) {
     edges.push([cursor, worldToScreen(o.tile * TILE)]);
     cursor = worldToScreen((o.tile + o.tiles) * TILE);
   }
-  edges.push([cursor, W + 100]);
+  edges.push([cursor, near]);
 
   // The void behind everything first, so a gap reads as a HOLE rather than a
   // slightly different shade of floor. Without this the sky gradient shows
   // through, and at the bottom of the screen it is within a few percent of
   // the ground colour — playing it, the gaps were genuinely hard to see.
   ctx.fillStyle = p.void;
-  ctx.fillRect(0, flipped ? 0 : surfaceY, W, flipped ? surfaceY : H - surfaceY);
+  // The GROUND, across the stage: this is the surface the runner runs on,
+  // and a floor that stops mid-screen is the clearest possible way to say
+  // "the world ends here".
+  ctx.fillRect(screen.left, flipped ? 0 : surfaceY, screen.stageWidth,
+    flipped ? surfaceY : H - surfaceY);
 
   for (const [x0, x1] of edges) {
-    if (x1 < -50 || x0 > W + 50) continue;
-    const left = Math.max(x0, -50);
-    const width = Math.min(x1, W + 50) - left;
+    if (x1 < far || x0 > near) continue;
+    const left = Math.max(x0, far);
+    const width = Math.min(x1, near) - left;
     ctx.fillStyle = p.ground;
     ctx.fillRect(left, flipped ? deep : surfaceY, width, flipped ? surfaceY : H - surfaceY);
     ctx.fillStyle = p.groundLip;

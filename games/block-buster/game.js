@@ -1031,6 +1031,8 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: the falling piece is watched, not listened for.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Move', gamepad: 'Left stick or D-pad', keyboard: 'Left / Right or A / D', touch: 'Drag the left side' },

@@ -823,7 +823,7 @@ function drawCombo() {
 // The teaching moment. Big, plain, and on screen long enough to read twice.
 function drawAnswerReveal() {
   ctx.fillStyle = 'rgba(20,10,55,.82)';
-  ctx.fillRect(0, H / 2 - 110, W, 220);
+  ctx.fillRect(screen.left, H / 2 - 110, screen.stageWidth, 220);
 
   UI.text(ctx, 'The answer was', W / 2, H / 2 - 62, {
     size: 22, color: ART.menuLabel, font: 'body', align: 'center', baseline: 'middle',
@@ -868,6 +868,8 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: arithmetic you read off the screen, with no audio cue.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Move', gamepad: 'Left stick or D-pad', keyboard: 'Arrows or A / D', touch: 'Drag the left side' },
