@@ -24,6 +24,33 @@
 // in the first place -- a player on a desktop who starts a game with a
 // controller gets sound. Touch or key input remains the reliable path.
 //
+// THE INTERRUPTION PROBLEM, which is the unlock problem's second act
+// ------------------------------------------------------------------
+// Unlocking once is not enough on a phone. The OS takes the audio session
+// away whenever it likes -- an alarm, a phone call, a notification with a
+// sound, switching to another app and back -- and when it does, the context
+// stops. Safari reports this as a non-standard 'interrupted' state; Chrome
+// and a backgrounded Safari use plain 'suspended'. Either way the context
+// does NOT come back on its own, and a page that never calls resume() again
+// is silent until it is reloaded. That is exactly what shipped: the first
+// version of this file removed its gesture listeners the moment the context
+// was running, and nothing else ever called resume().
+//
+// So the module now watches for the context stopping, from three directions:
+//
+//   1. the context's own statechange event, which Safari and Chrome both fire
+//      when the OS suspends or interrupts it;
+//   2. the page becoming visible again, or regaining focus, at which point a
+//      stopped context is asked to resume outright -- browsers allow that
+//      without a gesture once the page has been unlocked before;
+//   3. the player's next tap or key, because (2) is allowed to fail. When the
+//      context stops, the gesture listeners go back on, and the next
+//      interaction resumes it from inside a real user gesture, which is the
+//      one path no browser refuses.
+//
+// isUnlocked answers "has the player ever unlocked audio"; isRunning answers
+// "can this page make a noise right now". They differ during an interruption.
+//
 // EVERYTHING IS IN MEMORY. Volume and mute are held in fields on this
 // object, never in localStorage, per the project rules. Reload the page and
 // audio is back to defaults, exactly like scores in session.js.
@@ -69,6 +96,14 @@ export class AudioManager {
   #unlockBound = false;
   #gamepadPollId = 0;
 
+  // True while an automatic resume() is in flight, so the kick in play() and
+  // beep() does not fire one per sound effect while the OS has the session.
+  // The gesture and visibility paths ignore this flag on purpose: a resume
+  // that hangs for the length of a phone call must not block the tap that
+  // should end it.
+  #resuming = false;
+  #lifecycleBound = false;
+
   #music = null; // { source, gain, id }
 
   constructor({ volume = 1 } = {}) {
@@ -84,6 +119,15 @@ export class AudioManager {
 
   get isUnlocked() {
     return this.#unlocked;
+  }
+
+  /**
+   * True when the context exists and is actually running -- the only state in
+   * which a sound reaches the speaker. Differs from isUnlocked while the OS
+   * has interrupted the session; see the header.
+   */
+  get isRunning() {
+    return Boolean(this.#ctx) && this.#ctx.state === 'running';
   }
 
   get isMuted() {
@@ -176,6 +220,7 @@ export class AudioManager {
   play(id, { volume = 1, pitch = 1, pitchVariance = 0 } = {}) {
     const ctx = this.#ensureContext();
     if (!ctx) return;
+    this.#kickIfStopped();
 
     const buffer = this.#buffers.get(id);
     if (!buffer) {
@@ -242,6 +287,7 @@ export class AudioManager {
   beep({ freq = 440, duration = 0.12, type = 'sine', volume = 0.3 } = {}) {
     const ctx = this.#ensureContext();
     if (!ctx) return;
+    this.#kickIfStopped();
 
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -274,6 +320,7 @@ export class AudioManager {
   playMusic(id, { fadeIn = 1, loop = true, volume = 1 } = {}) {
     const ctx = this.#ensureContext();
     if (!ctx) return;
+    this.#kickIfStopped();
 
     const buffer = this.#buffers.get(id);
     if (!buffer) {
@@ -406,6 +453,39 @@ export class AudioManager {
     this.#tryUnlock();
   }
 
+  /**
+   * Asks a stopped context to start again, outside any gesture. This is what
+   * the visibility and statechange watchers call; it is public so a game with
+   * its own "tap to continue" screen can call it too. Harmless when the
+   * context is already running or does not exist yet.
+   *
+   * Returns a promise that resolves to whether the context is running
+   * afterwards. Never rejects: a refusal here is expected -- the browser
+   * wanting a gesture -- and the gesture listeners are already re-armed for
+   * exactly that case.
+   */
+  recover() {
+    const ctx = this.#ctx;
+    if (!ctx) return Promise.resolve(false);
+    if (ctx.state === 'running') return Promise.resolve(true);
+    if (ctx.state === 'closed') return Promise.resolve(false);
+
+    // Whatever resume() does, the next tap must also be able to fix this.
+    this.#bindUnlockListeners();
+
+    let settled;
+    try {
+      settled = Promise.resolve(ctx.resume());
+    } catch (error) {
+      // Some older WebKit builds throw synchronously rather than rejecting.
+      settled = Promise.reject(error);
+    }
+    return settled.then(
+      () => this.#afterResumeAttempt(),
+      () => this.#afterResumeAttempt(),
+    );
+  }
+
   // --- Context setup ------------------------------------------------------
 
   // Creates the context and mixing graph on first use. Returns null if Web
@@ -451,7 +531,88 @@ export class AudioManager {
       this.#voices.push({ gain, source: null, busy: false, startedAt: 0 });
     }
 
+    this.#watchLifecycle(this.#ctx);
+
     return this.#ctx;
+  }
+
+  // --- Recovering from interruptions ------------------------------------
+
+  // Wires up the three ways this module finds out the context has stopped.
+  // See "THE INTERRUPTION PROBLEM" in the header.
+  #watchLifecycle(ctx) {
+    // (1) The context says so itself.
+    try {
+      if (typeof ctx.addEventListener === 'function') {
+        ctx.addEventListener('statechange', this.#onStateChange);
+      } else {
+        ctx.onstatechange = this.#onStateChange;
+      }
+    } catch { /* a context that cannot report state still gets (2) and (3) */ }
+
+    if (this.#lifecycleBound) return;
+    this.#lifecycleBound = true;
+
+    // (2) The page comes back. Three events because no single one is
+    // reliable everywhere: visibilitychange is the standard signal,
+    // pageshow catches iOS restoring a tab from the back-forward cache
+    // without a visibilitychange, and focus catches a phone alarm that
+    // dimmed the page without ever hiding it.
+    document.addEventListener('visibilitychange', this.#onPageReturn);
+    window.addEventListener('pageshow', this.#onPageReturn);
+    window.addEventListener('focus', this.#onPageReturn);
+  }
+
+  #onStateChange = () => {
+    const ctx = this.#ctx;
+    if (!ctx) return;
+
+    if (ctx.state === 'running') {
+      // Whether the player tapped or the OS handed the session back on its
+      // own, the context is alive: stop listening for gestures until it stops
+      // again.
+      this.#markUnlocked();
+      this.#releaseUnlockListeners();
+      return;
+    }
+    if (ctx.state === 'closed') return; // nothing brings a closed context back
+
+    // Suspended or interrupted. (3): the next tap fixes it, whatever else
+    // happens. Then try to fix it now without waiting for one, which works on
+    // a page that has been unlocked before and is still in the foreground.
+    this.#bindUnlockListeners();
+    if (this.#unlocked && !isPageHidden()) this.recover();
+  };
+
+  #onPageReturn = () => {
+    if (isPageHidden()) return;
+    if (!this.#unlocked || !this.#ctx) return;
+    if (this.#ctx.state === 'running') return;
+    this.recover();
+  };
+
+  // The cheap check play() and beep() make on their way through: a sound
+  // asked for while the context is stopped is the moment the player would
+  // notice the silence, so it is the moment to try once more.
+  #kickIfStopped() {
+    const ctx = this.#ctx;
+    if (!ctx || !this.#unlocked) return;
+    if (ctx.state === 'running' || ctx.state === 'closed') return;
+    if (this.#resuming) return;
+    this.#resuming = true;
+    this.recover().then(() => { this.#resuming = false; });
+  }
+
+  #afterResumeAttempt() {
+    const ctx = this.#ctx;
+    if (!ctx) return false;
+    if (ctx.state === 'running') {
+      this.#markUnlocked();
+      this.#releaseUnlockListeners();
+      return true;
+    }
+    // Still stopped: the listeners are on, the next gesture gets another go.
+    return false;
   }
 
   #applyMasterGain() {
@@ -528,10 +689,17 @@ export class AudioManager {
   };
 
   #tryUnlock() {
-    if (this.#unlocked) return;
-
+    // NO early return on #unlocked here. The listeners that call this are
+    // put back whenever the context stops, so this is also how a tap resumes
+    // an interrupted context -- from inside the gesture, which is the path
+    // every browser allows.
     const ctx = this.#ensureContext();
     if (!ctx) return;
+    if (ctx.state === 'running') {
+      this.#markUnlocked();
+      this.#releaseUnlockListeners();
+      return;
+    }
 
     try {
       // The iOS ritual: play something, however inaudible, from inside the
@@ -551,9 +719,10 @@ export class AudioManager {
       // tries again on the player's next interaction.
       if (ctx.state === 'running') {
         this.#markUnlocked();
+        this.#releaseUnlockListeners();
       } else {
-        ctx.resume().then(
-          () => { if (ctx.state === 'running') this.#markUnlocked(); },
+        Promise.resolve(ctx.resume()).then(
+          () => this.#afterResumeAttempt(),
           () => { /* still blocked; the next gesture gets another go */ },
         );
       }
@@ -564,12 +733,14 @@ export class AudioManager {
   }
 
   #markUnlocked() {
-    if (this.#unlocked) return;
     this.#unlocked = true;
-    this.#releaseUnlockListeners();
   }
 
+  // Safe to call when nothing is bound; the pair toggles as the context
+  // stops and starts.
   #releaseUnlockListeners() {
+    if (!this.#unlockBound) return;
+    this.#unlockBound = false;
     window.removeEventListener('pointerdown', this.#onInteraction, true);
     window.removeEventListener('touchstart', this.#onInteraction, true);
     window.removeEventListener('keydown', this.#onInteraction, true);
@@ -583,6 +754,12 @@ export class AudioManager {
 
 function clamp01(value) {
   return value < 0 ? 0 : value > 1 ? 1 : value;
+}
+
+// A resume attempted while the page is hidden is refused by every browser
+// that ever suspends a context, so it is not worth making.
+function isPageHidden() {
+  return typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }
 
 // -------------------------------------------------------------------
