@@ -12,10 +12,13 @@
 # is the mechanism.
 #
 # Cloudflare Pages builds independently of this workflow, so a red check here
-# does not by itself stop a deploy. What stops it is branch protection: with
-# "Require status checks to pass" enabled on main and `verify` selected, a
-# pull request cannot merge while this is failing. That is a one-time repo
-# setting and it is written up in DEPLOY.md.
+# does not by itself stop a deploy. Nor does branch protection: this is a
+# private repository on GitHub's free plan, which has neither branch
+# protection nor rulesets (the API answers 403). What stops a red merge is
+# `npm run merge` -- tools/merge-pr.mjs -- which waits for these checks and
+# refuses on a failure. A push straight to main, including the web uploader,
+# runs this workflow after the fact and turns main red; nothing on this plan
+# can refuse the push itself. Written up in DEPLOY.md and CLAUDE.md.
 
 name: CI
 
