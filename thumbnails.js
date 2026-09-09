@@ -859,6 +859,65 @@ function impostorCircle() {
 
   return out + '</svg>';
 }
+/**
+ * Wavelength Lite: a dial between two opposites, a hidden band, and four
+ * people who have all guessed somewhere slightly different.
+ *
+ * The card is the moment the spot is revealed, because that is the moment the
+ * room reacts. You can see what the game is without a word of explanation: two
+ * ends, a target, and everyone standing near it but not on it.
+ */
+function wavelengthLite() {
+  const C = ['#ffb02e', '#4fc3f7', '#7ed957', '#ff6b8a'];
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="wl-bg" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#0b1524"/>'
+    + '<stop offset="1" stop-color="#13233a"/></linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#wl-bg)"/>';
+
+  const x0 = 28;
+  const w = 264;
+  const y = 92;
+  const h = 30;
+  const at = (v) => x0 + (v / 100) * w;
+
+  // The track.
+  out += '<rect x="' + x0 + '" y="' + y + '" width="' + w + '" height="' + h
+    + '" rx="' + (h / 2) + '" fill="rgba(255,255,255,.08)"'
+    + ' stroke="rgba(255,255,255,.14)"/>';
+
+  // The bands, widest first, exactly as the game draws them.
+  const target = 62;
+  const bands = [[16, 0.18], [9, 0.42], [4, 1]];
+  for (const [within, alpha] of bands) {
+    const from = at(target - within);
+    const to = at(target + within);
+    out += '<rect x="' + from.toFixed(1) + '" y="' + (y + 3) + '" width="'
+      + (to - from).toFixed(1) + '" height="' + (h - 6) + '" rx="6"'
+      + ' fill="#ffd479" fill-opacity="' + alpha + '"/>';
+  }
+
+  // The ends, which are the only words on a dial.
+  out += '<text x="' + x0 + '" y="' + (y - 12) + '" font-family="system-ui,sans-serif"'
+    + ' font-size="15" font-weight="700" fill="rgba(238,244,251,.55)">Cold</text>';
+  out += '<text x="' + (x0 + w) + '" y="' + (y - 12) + '" text-anchor="end"'
+    + ' font-family="system-ui,sans-serif" font-size="15" font-weight="700"'
+    + ' fill="rgba(238,244,251,.55)">Hot</text>';
+
+  // Four guesses, clustered around it but not on it.
+  const guesses = [47, 58, 64, 76];
+  guesses.forEach((g, i) => {
+    const gx = at(g);
+    out += '<path d="M' + gx.toFixed(1) + ' ' + (y + h + 5)
+      + ' l -8 17 l 16 0 z" fill="' + C[i] + '"/>';
+  });
+
+  out += '<text x="160" y="178" text-anchor="middle" font-family="system-ui,sans-serif"'
+    + ' font-size="13" font-weight="600" fill="rgba(238,244,251,.5)">'
+    + 'how warm is warm?</text>';
+
+  return out + '</svg>';
+}
 function tankTactics() {
   const block = (x, y, w, h) => '<g><rect x="' + x + '" y="' + y + '" width="' + w
     + '" height="' + h + '" fill="#5a6675" stroke="#8a97a8" stroke-width="2"/></g>';
@@ -1250,6 +1309,7 @@ const ART = {
   'mini-golf': miniGolf,
   winter,
   'tank-tactics': tankTactics,
+  'wavelength-lite': wavelengthLite,
   'impostor-circle': impostorCircle,
   tide,
   'color-heist': colorHeist,
