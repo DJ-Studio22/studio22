@@ -5,7 +5,10 @@
 // THE RULE:
 //
 //   Everyone gets the same word except one person, who gets a different one.
-//   Say a clue each, then vote for whoever you think is the odd one out.
+//   Say a clue each, then vote for whoever you think is the odd one out --
+//   or for nobody, if the table is not sure. Naming an innocent person costs
+//   everybody but the impostor a point; naming nobody costs nothing but lets
+//   the impostor walk.
 //
 // Nobody is told who the impostor is, INCLUDING THE IMPOSTOR. They see a word
 // and it looks exactly like everybody else's card, so they find out they are the
@@ -103,7 +106,33 @@ export const CIRCLE_TUNING = {
   // Caught, but names the word anyway: the round is not a write-off, and it
   // gives a losing impostor a reason to have been listening.
   pointsForStealing: 2,
+
+  // A WRONG ACCUSATION IS A LOSS FOR THE TABLE, not merely a round the impostor
+  // survived. Every player who is not the impostor loses this many points --
+  // whoever they personally named, because the table accused an innocent
+  // person together and "I voted for someone else" is not a defence a room
+  // accepts.
+  //
+  // This is what gives the impostor a real way to win. Before it, the table
+  // had no reason not to accuse somebody every round: a wrong guess cost
+  // nothing, so the only question was who to point at. Now the table has a
+  // third choice -- NOBODY, see SKIP below -- and has to weigh a shot at
+  // catching against the price of getting it wrong. An impostor who talks the
+  // room into naming an innocent has done something, and is paid for it twice:
+  // the survival points, and the hole in everybody else's score.
+  pointsLostForWrongAccusation: 1,
 };
+
+/**
+ * The vote that names nobody. A player who is not sure can say so instead of
+ * being made to accuse somebody, and if the table as a whole says so the round
+ * is skipped: the impostor survives (and is paid for it), and nobody is
+ * punished for an accusation that was never made.
+ *
+ * A negative sentinel rather than a name so it can sit in the same votes array
+ * as the seats; -1 already means "has not voted yet".
+ */
+export const SKIP = -2;
 
 /** Fisher-Yates, with the generator injected so a game can be replayed. */
 function shuffled(list, rng) {
@@ -219,7 +248,8 @@ export class Circle {
   }
 
   /**
-   * One vote. Returns true while there are more to cast.
+   * One vote: a seat, or SKIP for nobody. Returns true while there are more to
+   * cast.
    *
    * Voting for yourself is refused rather than allowed and ignored: it is
    * always a misclick, and a vote nobody meant to cast decides rounds.
@@ -227,7 +257,7 @@ export class Circle {
   vote(target) {
     if (this.phase !== PHASE.VOTE) return false;
     if (target === this.seat) return false;
-    if (target < 0 || target >= this.players) return false;
+    if (target !== SKIP && (target < 0 || target >= this.players)) return false;
     this.votes[this.seat] = target;
     this.seat += 1;
     if (this.seat < this.players) return true;
@@ -235,19 +265,30 @@ export class Circle {
     return false;
   }
 
-  /** How the votes fell, most-voted first. */
+  /** How the votes fell, by seat. Skips are counted separately: see skips(). */
   tally() {
     const counts = new Array(this.players).fill(0);
     for (const target of this.votes) if (target >= 0) counts[target] += 1;
     return counts;
   }
 
+  /** How many players voted for nobody. */
+  skips() {
+    return this.votes.filter((target) => target === SKIP).length;
+  }
+
   /**
-   * Who the table accused, or -1 if it could not agree.
+   * Who the table accused, or -1 if it did not accuse anybody.
    *
-   * A tie is NOT broken. Nobody was accused, so the impostor got away with it —
-   * which is the honest reading of a table that could not make up its mind, and
-   * it stops the game inventing a verdict nobody voted for.
+   * Three ways to accuse nobody, all read the same way -- the impostor got away
+   * with it:
+   *
+   *   - a tie between two names. NOT broken: a table that could not make up
+   *     its mind has not accused anyone, and breaking it would have the game
+   *     invent a verdict nobody voted for.
+   *   - more votes for nobody than for any one name. The table chose not to.
+   *   - as many for nobody as for the top name. Doubt wins the tie, because an
+   *     accusation is the thing that costs, and the table did not agree to it.
    */
   accused() {
     const counts = this.tally();
@@ -258,7 +299,9 @@ export class Circle {
       if (n > top) { top = n; who = p; tied = false; }
       else if (n === top && n > 0) tied = true;
     });
-    return tied ? -1 : who;
+    if (tied) return -1;
+    if (this.skips() >= top) return -1;
+    return who;
   }
 
   /**
@@ -308,8 +351,13 @@ export class Circle {
   }
 
   #settle() {
-    const caught = this.accused() === this.impostor;
-    this.outcome = { caught, accused: this.accused(), stolen: false };
+    const accused = this.accused();
+    const caught = accused === this.impostor;
+    // `wrong` is the table naming an innocent person. `skipped` is the table
+    // naming nobody -- by choice or by failing to agree. They are different
+    // outcomes with different prices, and the result screen says which.
+    const wrong = accused !== -1 && !caught;
+    this.outcome = { caught, accused, wrong, skipped: accused === -1, stolen: false };
 
     if (caught) {
       // Everybody who actually pointed at them is paid. Being carried by the
@@ -318,10 +366,18 @@ export class Circle {
         if (target === this.impostor) this.scores[voter] += this.#tuning.pointsForCatching;
       });
       this.phase = PHASE.STEAL;
-    } else {
-      this.scores[this.impostor] += this.#tuning.pointsForSurviving;
-      this.phase = PHASE.RESULT;
+      return;
     }
+
+    this.scores[this.impostor] += this.#tuning.pointsForSurviving;
+    if (wrong) {
+      // The table loses. Everyone but the impostor, whoever they named: the
+      // accusation was the table's, and it was wrong.
+      for (let p = 0; p < this.players; p++) {
+        if (p !== this.impostor) this.scores[p] -= this.#tuning.pointsLostForWrongAccusation;
+      }
+    }
+    this.phase = PHASE.RESULT;
   }
 
   /** Final placings. Ties share. */
