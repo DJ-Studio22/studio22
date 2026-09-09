@@ -3362,3 +3362,162 @@ a profit, and the test says that instead of the old claim.
   on the black outside the wall. Clamped to the pond.
 
 25 assertions; suite 475 → 481.
+
+## Phase 37 — Updraft's dead ends, and the split that took the stick away
+
+Two faults from playing, and both turned out to be a model being wrong rather
+than a number being wrong.
+
+### Updraft: an already-broken platform is not a platform
+
+Reported: three broken platforms in a row and no way to continue; the run ended
+through nothing the player did.
+
+The distinction is the whole thing. A one-touch platform is fair — you land, you
+bounce, you move on — and an already-broken one is a hole with a picture of a
+platform in it. Updraft's `crack` platforms were the second kind: landing on one
+set `broke` and gave **no bounce at all**, so the bird fell straight through.
+
+Three of them in a row is 186 to 366 units of column with nothing to launch off,
+against a bounce that lifts 214. So it was not a hard stretch, it was a hole
+several platforms deep, and the crack band is 14% of every roll at maximum
+difficulty.
+
+**The fix: a crack platform bounces you once and then breaks behind you.** That
+is what it looks like and what everybody read it as.
+
+**The guard: `games/updraft/climb.js`.** The generation is out of `game.js` — a
+DOM-free module, importable from Node, holding the tuning, the type mix, the
+column and the reachability rule. Two properties are proved over thousands of
+generated columns rather than spot-checked:
+
+- every platform the generator makes can be landed on
+- from every platform you can stand on, another one you can stand on is within
+  a bounce
+
+The reach is **derived from the jump arc, never written down**: `jumpRise` is
+v squared over 2g off the module's own physics, and `game.js` now reads its
+gravity and jump from that same object rather than keeping a second copy. A test
+doubles the jump speed and requires the rise to quadruple, so a retune cannot
+leave the proof describing a game that no longer exists — which would have been
+a proof that passed while the player fell.
+
+The proof deliberately uses the **ordinary bounce, not the spring**. A spring
+lifts 503 against 214, and a column built so a spring is needed is impossible
+everywhere one is absent.
+
+**Say plainly what the guard does and does not do.** It would not have caught
+the reported bug on its own: the question "is every platform landable" had never
+been asked. What it does catch, and what nothing else in the game was watching,
+is the **gap widening** — the spacing grows with the score to 122, and until now
+nothing compared that to the 154 the arithmetic allows. A test asserts the
+repair fires **zero** times across 400 columns, so if it ever starts firing the
+number is the size of a drift rather than a silent patch holding a broken
+generator together.
+
+The check is also proved non-vacuous: three hand-built broken platforms in a row
+must be caught, a gap one unit past the reach must be caught, and the top of the
+column must not be mistaken for a dead end.
+
+One thing the repair had to learn: **it only looks at column at or above the
+player.** Below the bird are the crack platforms it has already smashed, and
+without that rule the repair would have put them back — a platform visibly
+broken reassembling underfoot.
+
+### Bigger Fish: it was the aim-ahead, not the collision
+
+Reported: when split, sometimes no movement in a given direction at all, as
+though the pieces were locked against each other or against something invisible.
+
+Three candidates, and the point was to name one rather than change all three.
+Each was disabled through the tuning and the pack's travel measured:
+
+| | worst direction, 2s hold |
+|---|---|
+| as it was | 172u (87% of unsplit) |
+| no cell-to-cell push | 96% |
+| no merge drift | **79% — worse** |
+
+So it was neither the collision nor the drift. The signal was **directional**,
+and only a second probe found it: with two pieces, 98u along the split axis
+against 134u across it, and 196u unsplit. **Exactly half, along the axis the
+split threw the pieces down.**
+
+The cause is the `steerAhead` model. Every piece swam towards a point 130 units
+past the pack's centre of mass. When the pieces are strung out along the pushed
+direction — which is precisely what a split does, since it throws a half out the
+way you aimed — the leading piece is already at or past that point and stops
+while the trailing one closes. The pack concertinas instead of travelling.
+
+A second, separate thing the player feels as the same bug: at 1600 mass the
+radius is 200, so a cell stops with its centre 200 units short of the wall and
+the stick does nothing. Measured 0u of travel. Not a bug; worth knowing it reads
+as one.
+
+**The new model: you drive one cell.** The largest of your cells moves at its
+own full speed in the direction asked for, always. Nothing pushes it, nothing
+pulls it, nothing waits for it. The other pieces chase it at 92% of their own
+speed and drift towards it — and that drift is **no longer gated on easing off
+the stick**, which retires the rule from Phase 36. It existed to stop the drift
+fighting the aim-at-a-point steering; with the head driven directly there is
+nothing to fight, and a pack that only reassembles when you stop playing is a
+punishment for playing.
+
+Measured after: the head travels **176u — its exact theoretical top speed for an
+800-mass half over two seconds — in every direction, at 2, 4 and 8 pieces**, in
+open water, against the wall and in the corner (the wall cases correctly
+reduced). Splitting costs mass and it costs being edible in two places; it no
+longer costs the ability to steer.
+
+One measurement trap on the way: the first probe measured the **centre of mass**,
+which under the new model lags the head by design, so the fix looked like a
+regression. The probe measures the head, because the head is what the player is
+steering.
+
+Suite 517 → 532.
+
+### And a claim that could not cross a V8 version
+
+The skill-ladder assertion went red on node 22 and green on node 24. Not a
+regression — a measurement that was never portable. Same twelve seeds, same
+code:
+
+|  | careless | ruthless | ratio |
+|---|---|---|---|
+| node 22 (CI) | 768 | 488 | 1.57 |
+| node 24 (local) | 1613 | 537 | 3.00 |
+
+The pond is chaotic and a hundred and fifty seconds turns a one-ulp difference
+in `Math.hypot` into a different run, so the same seeds are not the same runs
+and a median of twelve of them is not a stable quantity. The file had already
+been bitten once at a floor of 2 — 2.74 local, 1.82 on CI. The floor moved to
+1.6 and the sample was resized, and it failed again at 1.573. **Moving it a
+third time would be fitting a threshold to whatever CI last happened to draw.**
+
+Measured properly before retiring it, thirty-six seeds at ninety seconds: the
+player peaked higher against a careless shoal on **9, 7 and 8 of twelve** across
+three disjoint blocks. Twenty-four of thirty-six.
+
+So the effect is real and in the right direction, and nothing like as clean as
+"9.9x" made it sound. What the numbers actually show is a difference in
+**spread** rather than in level: against a careless shoal the player peaked at
+5444 where a ruthless one held them to 290, and also at 13 where a ruthless one
+allowed 87. **A careless shoal is chaos, and chaos is not the same as easy.**
+
+**What is asserted instead is the judgement itself**, on a pond built to ask one
+question: a meal that is edible whole but is more than half of you. A careless
+bot splits at it; a ruthless one never does, because each half would be too
+small to eat what it lands on. And the mirror — a meal out past the launch,
+where the careless level splits at nothing and the checked levels swim there
+first — with both still eating, because appetite is not what separates them.
+
+Deterministic, no chaos in the path, and it cannot come out differently on
+another V8. The file went from 120 seconds to 0.23.
+
+One more leftover found on the way: **the bot still had a branch that eased off
+to a quarter speed to knit its pieces back together.** That was required by the
+steering model this phase replaced. With the followers chasing the head whatever
+the stick is doing, it was a bot handicapping itself for a rule that no longer
+exists.
+
+Suite 532 → 533.

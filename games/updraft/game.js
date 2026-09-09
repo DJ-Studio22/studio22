@@ -23,10 +23,11 @@ import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, randRange as R } from '../../engine/util.js';
+import { CLIMB_TUNING, startingPlatforms, extendColumn } from './climb.js';
 
 const GAME_ID = 'updraft';
-const W = 420;
-const H = 640;
+const W = CLIMB_TUNING.width;
+const H = CLIMB_TUNING.height;
 const TAU = Math.PI * 2;
 
 // --- Physics. Do not retune without playing it. --------------------------
@@ -41,14 +42,18 @@ const TAU = Math.PI * 2;
 // scaling velocity by k and gravity by k SQUARED leaves it exactly where it
 // was while the time to reach it drops to 1/k. The bird gets there sooner and
 // falls back sooner; it does not jump higher or lower.
-const SNAP = 1.125;
-
+//
+// THE NUMBERS THEMSELVES LIVE IN climb.js. They are not repeated here, because
+// the reachability proof is arithmetic on the jump arc, and a second copy of
+// the jump is a second copy that can drift. If they diverged, the proof would
+// be describing a game that no longer exists and would still pass — which is
+// precisely the failure the module was written to prevent.
 const PER_FRAME = {
-  grav: 0.118 * SNAP * SNAP,
-  jump: -7.10 * SNAP,
-  spring: -10.90 * SNAP,
+  grav: CLIMB_TUNING.gravityPerFrame,
+  jump: CLIMB_TUNING.jumpPerFrame,
+  spring: CLIMB_TUNING.springPerFrame,
   move: 0.40,
-  maxvx: 3.9,
+  maxvx: CLIMB_TUNING.maxHorizontalPerFrame,
 };
 
 // Converted once, here. Velocities scale by the tick rate, accelerations by
@@ -151,20 +156,6 @@ for (let i = 0; i < 9; i++) {
 const FOE_PHASE_SPEED = 0.09 * TPS;
 const FACE_FLIP_SPEED = 0.4 * TPS;
 
-function makePlat(y) {
-  const diff = Math.min(score / 2600, 1);
-  const w = Math.max(52, 86 - diff * 30);
-  let type = 'normal';
-  const r = Math.random();
-  if (r < 0.10 + diff * 0.14) type = 'move';
-  else if (r < 0.18 + diff * 0.20) type = 'crack';
-
-  const p = { x: R(6, W - w - 6), y, w, h: 13, type, vx: 0, spring: false, broke: false };
-  if (type === 'move') p.vx = R(0.45, 0.95) * TPS * (Math.random() < 0.5 ? -1 : 1);
-  if (type !== 'crack' && Math.random() < 0.09) p.spring = true;
-  return p;
-}
-
 function reset() {
   score = 0;
   camY = 0;
@@ -180,12 +171,9 @@ function reset() {
   P.face = 1;
   P.squash = 0;
 
-  plats = [{ x: W / 2 - 55, y: H - 90, w: 110, h: 13, type: 'normal', vx: 0, spring: false, broke: false }];
-  let y = H - 90;
-  while (y > -400) {
-    y -= R(62, 96);
-    plats.push(makePlat(y));
-  }
+  // The column comes from climb.js, already checked: from every platform the
+  // bird can stand on, there is another one it can stand on within a bounce.
+  plats = startingPlatforms();
 }
 
 // Speeds converted from the original's per-frame values: a puff that moved
@@ -263,15 +251,24 @@ function update(dt) {
         // here would widen the catch band sixtyfold and let the bird land on
         // platforms it was nowhere near.
         if (foot > p.y && foot < p.y + p.h + P.vy * dt + 2) {
+          // EVERY platform bounces you. A crack platform bounces you ONCE and
+          // then breaks behind you, which is what it looks like and what a
+          // player reasonably reads it as.
+          //
+          // It used to break WITHOUT bouncing, so the bird fell straight
+          // through. One of those is a hazard you survive by moving on; the
+          // other is a hole. Three in a row was a hole 186 to 366 units deep
+          // against a bounce that lifts 214, and it ended runs through nothing
+          // the player did. See climb.js.
+          P.y = p.y - P.h / 2;
+          P.vy = p.spring ? SPRING : JUMP;
+          P.squash = p.spring ? 1.6 : 1;
           if (p.type === 'crack') {
             p.broke = true;
             puff(P.x, p.y, ART.puffWood, 12);
             shake = 4;
             audio.play('break');
           } else {
-            P.y = p.y - P.h / 2;
-            P.vy = p.spring ? SPRING : JUMP;
-            P.squash = p.spring ? 1.6 : 1;
             puff(P.x, p.y + 4, ART.puffWhite, p.spring ? 12 : 5);
             if (p.spring) shake = 6;
             audio.play(p.spring ? 'spring' : 'bounce');
@@ -304,12 +301,10 @@ function update(dt) {
   }
 
   plats = plats.filter((p) => p.y < H + 40);
-  let top = H;
-  for (const p of plats) if (p.y < top) top = p.y;
-  while (top > -160) {
-    top -= R(62, 96 + Math.min(score / 60, 26));
-    plats.push(makePlat(top));
-  }
+  // Tops the column up and re-checks it. The check runs over the whole array
+  // rather than only the new platforms, because a dead end is a relationship
+  // between two of them and the pair can straddle the join.
+  extendColumn(plats, { score, playerY: P.y });
 
   if (score > 240 && tick % 150 === 0 && foes.length < 2) {
     foes.push({

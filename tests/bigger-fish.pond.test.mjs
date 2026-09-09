@@ -549,8 +549,13 @@ test('SKILL LEVELS DIFFER IN JUDGEMENT, NOT IN REFLEXES OR STATS', () => {
   assert.ok(yes('steady') < yes('ruthless'));
 });
 
-// The ladder claim moved to tests/bigger-fish.ladder.test.mjs -- it was 554 of
-// this file's 698 seconds, and a file is what the test runner parallelises.
+// The ladder lives in tests/bigger-fish.ladder.test.mjs. It moved there when it
+// was 554 of this file's 698 seconds and a file is what the runner
+// parallelises; it is now a quarter of a second, because the played version of
+// it was retired. It could not survive crossing a V8 version -- node 22
+// measured a ratio of 1.57 where node 24 measured 3.00 on the same seeds and
+// the same code -- so what that file asserts now is the DECISION the levels
+// differ in, deterministically. The reasoning is written out in full there.
 
 // CAUTION BEATS GREED WAS THE HEADLINE, AND IT IS NOT ASSERTED HERE.
 //
@@ -593,9 +598,10 @@ test('SKILL LEVELS DIFFER IN JUDGEMENT, NOT IN REFLEXES OR STATS', () => {
 //
 // What the game IS, on the evidence: splitting is a tool you pay for rather
 // than a profit (the test above), the danger comes from a shoal that hunts
-// itself rather than from arrivals aimed at you, and the skill ladder is real
-// and measured -- see 'the ladder is real' above, where the same player scores
-// far worse against better bots. Those are claims with samples behind them. The
+// itself rather than from arrivals aimed at you, and the skill levels decide
+// differently -- see tests/bigger-fish.ladder.test.mjs, which asserts the
+// judgement itself rather than a score. Those are claims with evidence behind
+// them. The
 // headline was not, once the thing propping it up was gone.
 
 test('the policies differ in one thing: judgement about being big', () => {
@@ -647,9 +653,10 @@ test('the policies differ in one thing: judgement about being big', () => {
 // the size of the water -- if the trade is ever judged the wrong way round.
 //
 // What still holds, with samples behind it: the bots play the pond rather than
-// the player, the skill ladder is real (a careless shoal leaves the same player
-// on 9.9x the mass a ruthless one does), splitting reaches where swimming
-// cannot, and nothing in the water is sized against you.
+// the player, the skill levels make measurably different decisions (asserted
+// outright in the ladder file; the played gap between them is real but too
+// chaotic to assert, and the numbers are recorded there), splitting reaches
+// where swimming cannot, and nothing in the water is sized against you.
 
 test('tuning is data a test can override', () => {
   // Convention 3, and the override above is the one that matters. This is the

@@ -134,7 +134,10 @@ export const TUNING = {
   // swings the outside piece wide and pulls it off the inside one; a piece of a
   // different size arrives at a different time. Contact becomes something the
   // player's hands are doing.
-  steerAhead: 130,
+  // How fast a follower chases the head, as a share of its own top speed.
+  // Under 1 so a piece genuinely trails rather than gluing itself on, and high
+  // enough that it is never left behind by a head of similar size.
+  followShare: 0.92,
 
   // YOUR OWN PIECES ARE SOLID, and this is the other half of being able to
   // break contact.
@@ -839,27 +842,68 @@ export class Pond {
    */
   get score() { return Math.round(this.massSeconds / this.t.scoreDivisor); }
 
+  /**
+   * The biggest of the player's cells. THE one the stick drives.
+   *
+   * Ties broken by id so the answer cannot flicker between two equal halves
+   * frame to frame, which would hand the stick back and forth and feel like a
+   * fault in the controller.
+   */
+  mainCell(owner = 'player') {
+    let best = null;
+    for (const cell of this.cells) {
+      if (cell.owner !== owner) continue;
+      if (!best || cell.mass > best.mass
+        || (cell.mass === best.mass && cell.id < best.id)) best = cell;
+    }
+    return best;
+  }
+
+  /**
+   * YOU DRIVE ONE CELL. THE REST FOLLOW IT.
+   *
+   * The old model aimed at a point steerAhead units past the pack's CENTRE OF
+   * MASS and had every piece swim to that point. It reads well and it takes the
+   * stick away from you: when the pieces are strung out along the direction you
+   * are pushing -- which is exactly what a split does, since it throws a half
+   * out in the direction you aimed -- the leading piece is already at or past
+   * that aim point, so it stops and waits while the trailing piece closes. The
+   * pack concertinas instead of travelling.
+   *
+   * Measured, holding a direction for two seconds after a split: 98 units along
+   * the split axis against 196 unsplit. Exactly half. Not a lock in the sense
+   * of a collision, which is why looking at #separate found nothing -- turning
+   * cell-to-cell push off entirely moved it from 87% to 96% of unsplit, and
+   * turning the merge drift off made it WORSE.
+   *
+   * So: the main cell moves at its own full speed, always, in the direction
+   * asked for. Nothing pushes it, nothing pulls it, nothing waits for it. The
+   * other pieces chase it. Splitting costs you mass and it costs you being in
+   * two edible places at once; it does not cost you the ability to steer.
+   */
   #steerPlayer(dt, input) {
     const t = this.t;
     const mag = Math.hypot(input.x || 0, input.y || 0);
     if (mag < 0.001) return;
-    const mine = this.cellsOf('player');
-    if (!mine.length) return;
+    const main = this.mainCell('player');
+    if (!main) return;
 
-    // The stick aims at a point ahead of the pack; every piece swims towards
-    // that point rather than along the stick. See steerAhead.
-    const centre = this.centreOf('player');
-    const aimX = centre.x + (input.x / mag) * t.steerAhead;
-    const aimY = centre.y + (input.y / mag) * t.steerAhead;
+    const ux = (input.x || 0) / mag;
+    const uy = (input.y || 0) / mag;
+    main.x += ux * speedOf(main.mass, t) * dt;
+    main.y += uy * speedOf(main.mass, t) * dt;
 
-    for (const cell of mine) {
-      const dx = aimX - cell.x;
-      const dy = aimY - cell.y;
+    // The followers swim at the head rather than at a point in space, so they
+    // trail behind it the way a shoal does instead of racing it to a spot.
+    for (const cell of this.cells) {
+      if (cell.owner !== 'player' || cell === main) continue;
+      const dx = main.x - cell.x;
+      const dy = main.y - cell.y;
       const d = Math.hypot(dx, dy);
       if (d < 0.001) continue;
-      const speed = speedOf(cell.mass, t);
-      cell.x += (dx / d) * speed * dt;
-      cell.y += (dy / d) * speed * dt;
+      const speed = speedOf(cell.mass, t) * t.followShare;
+      cell.x += (dx / d) * Math.min(speed * dt, d);
+      cell.y += (dy / d) * Math.min(speed * dt, d);
     }
   }
 
@@ -1103,20 +1147,30 @@ export class Pond {
     // velocities move in parallel for ever, and no amount of steering can part
     // them. That is geometry rather than tuning, so the answer had to be a rule
     // rather than a number.
-    const gather = Math.max(0, 1 - (this.effort ?? 0));
     for (const [owner, mine] of this.#byOwner()) {
       if (mine.length < 2) continue;
-      const centre = Pond.#centreOfCells(mine);
+
+      // THE PLAYER'S PIECES DRIFT TOWARDS THE CELL THEY ARE STEERING, and they
+      // do it whether or not the stick is being pushed.
+      //
+      // It used to be gated by 1 - effort, so holding a direction switched the
+      // drift off entirely and the pieces only came together while the player
+      // eased off. That was there to stop the drift fighting the old
+      // aim-at-a-point steering; with the head driven directly it has nothing
+      // to fight, and a pack that only reassembles when you stop playing is a
+      // punishment for playing.
+      //
+      // Nothing here moves the head. It is the one cell the stick owns.
+      const head = owner === 'player' ? this.mainCell('player') : null;
+      const centre = head ?? Pond.#centreOfCells(mine);
       for (const cell of mine) {
+        if (cell === head) continue;
         const dx = centre.x - cell.x;
         const dy = centre.y - cell.y;
         const d = Math.hypot(dx, dy);
         if (d < 0.5) continue;
-        // Bots always gather; only the player pays for it with speed, because
-        // only the player has a stick.
-        const pull = owner === 'player' ? t.mergeDrift * gather : t.mergeDrift;
-        cell.x += (dx / d) * pull * dt;
-        cell.y += (dy / d) * pull * dt;
+        cell.x += (dx / d) * t.mergeDrift * dt;
+        cell.y += (dy / d) * t.mergeDrift * dt;
       }
     }
   }
@@ -1133,6 +1187,10 @@ export class Pond {
     const t = this.t;
     for (const [owner, mine] of this.#byOwner()) {
       if (mine.length < 2) continue;
+      // The head is immovable: a follower gets out of ITS way rather than the
+      // two of them splitting the difference, so nothing the player owns can
+      // ever push the thing they are steering off course.
+      const head = owner === 'player' ? this.mainCell('player') : null;
       for (let i = 0; i < mine.length; i++) {
         for (let j = i + 1; j < mine.length; j++) {
           const a = mine[i];
@@ -1145,6 +1203,8 @@ export class Pond {
             * (t.cellRest + effort * t.cellSpread);
           if (d >= want) continue;
           const push = Math.min(t.cellPush * dt, (want - d) / 2);
+          if (a === head) { b.x += (dx / d) * push * 2; b.y += (dy / d) * push * 2; continue; }
+          if (b === head) { a.x -= (dx / d) * push * 2; a.y -= (dy / d) * push * 2; continue; }
           a.x -= (dx / d) * push;
           a.y -= (dy / d) * push;
           b.x += (dx / d) * push;
