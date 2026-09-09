@@ -6,8 +6,8 @@ has to satisfy, and how to tell it is done.
 Tick a task only when its verification actually passed, not when the code was
 written.
 
-**Open right now:** items 13 to 16. Item 13 (real hardware) is the big one and
-cannot be closed from this machine; 14 to 16 are small and known. Everything
+**Open right now:** items 13 to 15. Item 13 (real hardware) is the big one and
+cannot be closed from this machine; 14 and 15 are plays owed on the phone. Everything
 above 13 is done. Last reviewed 9 September 2026.
 
 ---
@@ -366,20 +366,14 @@ nothing paused. Tick when seen.
 
 ---
 
-## 16. Hub descriptions run long on a phone — OPEN
+## 16. Hub descriptions run long on a phone — [x] DONE
 
-Bigger Fish's description was 206 words and rendered as a wall on the landing
-page's featured card; it was cut to 80 (PR #53). Fourteen others are over 60
-words and eleven over 90 -- Gravity Well 176, Beat Blocker 153, Hangman 132,
-Asteroid Salvage 130, Tide 118 -- and the arcade hub shows the full text on
-every card. They
-read as design notes rather than as blurbs.
+Twenty of twenty-six descriptions were 54 to 176 words and read as design
+notes on the cards. All cut to 28 to 34 words on 9 September 2026; the
+longest in the manifest is now Circuit Racer at 39. The measured claims they
+carried are in PROGRESS.md and in the code comments, where they belong.
 
-**Do:** cut each to two or three spoken sentences. The measured claims they
-carry belong in PROGRESS.md, where most of them already are.
-
-**Verify:** no card description over about 60 words; the hub at 393px reads as
-a list of games rather than a list of essays.
+**Verified:** no description over 40 words; manifest tests pass.
 
 ---
 
