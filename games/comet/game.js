@@ -195,7 +195,7 @@ const P = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: PLAYER_RADIUS };
 // The starfield never moves, so it is built once and only ever read.
 const stars = [];
 for (let i = 0; i < 130; i++) {
-  stars.push({ x: R(0, W), y: R(0, H), z: R(0.2, 1) });
+  stars.push({ x: R(-W * 0.35, W * 1.35), y: R(0, H), z: R(0.2, 1) });
 }
 
 // --- Spawning ------------------------------------------------------------
@@ -204,12 +204,14 @@ function makeFoe() {
   // Foes arrive from off-screen, one edge each, so nothing ever materialises
   // on top of the player.
   const side = Math.floor(R(0, 4));
+  const left = screen.left;
+  const right = screen.right;
   let x;
   let y;
-  if (side === 0) { x = R(0, W); y = -30; }
-  else if (side === 1) { x = W + 30; y = R(0, H); }
-  else if (side === 2) { x = R(0, W); y = H + 30; }
-  else { x = -30; y = R(0, H); }
+  if (side === 0) { x = R(left, right); y = -30; }
+  else if (side === 1) { x = right + 30; y = R(0, H); }
+  else if (side === 2) { x = R(left, right); y = H + 30; }
+  else { x = left - 30; y = R(0, H); }
 
   // Hunters chase; drifters cross the arena in a straight line. The mix
   // sours as the waves climb, but never past just over half.
@@ -328,8 +330,8 @@ function update(dt) {
 
   // Walls bounce rather than stop: being pinned in a corner with foes
   // converging is a worse death than being thrown back into the room.
-  if (P.x < P.r) { P.x = P.r; P.vx *= -0.5; }
-  if (P.x > W - P.r) { P.x = W - P.r; P.vx *= -0.5; }
+  if (P.x < screen.left + P.r) { P.x = screen.left + P.r; P.vx *= -0.5; }
+  if (P.x > screen.right - P.r) { P.x = screen.right - P.r; P.vx *= -0.5; }
   if (P.y < P.r) { P.y = P.r; P.vy *= -0.5; }
   if (P.y > H - P.r) { P.y = H - P.r; P.vy *= -0.5; }
 
@@ -412,8 +414,8 @@ function updateFoes(dt) {
       }
       // And wrap, so a drifter that misses comes back around rather than
       // leaving the wave one short forever.
-      if (f.x < -40) f.x = W + 40;
-      if (f.x > W + 40) f.x = -40;
+      if (f.x < screen.left - 40) f.x = screen.right + 40;
+      if (f.x > screen.right + 40) f.x = screen.left - 40;
       if (f.y < -40) f.y = H + 40;
       if (f.y > H + 40) f.y = -40;
     }

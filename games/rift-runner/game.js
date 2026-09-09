@@ -157,16 +157,22 @@ let bestMetres = 0;
 
 // Trail samples behind the runner, pooled.
 const trail = [];
-for (let i = 0; i < 26; i++) trail.push({ x: 0, y: 0, life: 0, sliding: false });
+for (let i = 0; i < 26; i++) trail.push({ x: 0, y: 0, life: 0, sliding: false, hot: false });
 let trailHead = 0;
 // The stride, advanced by DISTANCE rather than by time, so the legs turn over
 // faster as the run speeds up instead of moon-walking at 900 px/s.
 let stepPhase = 0;
 
-function pushTrail(x, y, sliding) {
+function pushTrail(worldX, y, sliding, phasing) {
   const t = trail[trailHead];
   trailHead = (trailHead + 1) % trail.length;
-  t.x = x; t.y = y; t.life = 1; t.sliding = sliding;
+  t.x = worldX;
+  t.y = y;
+  t.life = 1;
+  t.sliding = sliding;
+  // A dash and a rift are the two moments the runner is doing something to the
+  // world rather than moving through it, so they are the two the wake shows.
+  t.hot = phasing;
 }
 
 // Parallax bands, generated once and scrolled.
@@ -260,7 +266,8 @@ function update(dt) {
     });
   }
 
-  pushTrail(RUNNER_X, run.y, run.sliding);
+  // The WORLD position, not the screen one. See pushTrail.
+  pushTrail(run.x, run.y, run.sliding, run.phasing || gateFlash > 0.3);
   bestMetres = Math.max(bestMetres, course.metres);
 
   if (!course.running) crash();
@@ -473,13 +480,19 @@ function drawRunner(p) {
   const x = RUNNER_X - TUNING.bodyW / 2;
   const flipped = course.realm.flipped;
 
-  // Trail, densest right behind.
+  // The wake. Densest right behind, streaming away to the left as the world
+  // scrolls, and taller or flatter depending on what the runner was doing when
+  // it was laid down.
   for (const t of trail) {
     if (t.life <= 0) continue;
-    ctx.globalAlpha = t.life * 0.3;
-    ctx.fillStyle = ART.runner.trail;
+    const tx = worldToScreen(t.x) - TUNING.bodyW / 2;
+    // Off the back of the stage: nothing to draw, and on a wide screen that
+    // edge is further out than it used to be.
+    if (tx + TUNING.bodyW < screen.left) continue;
+    ctx.globalAlpha = t.life * (t.hot ? 0.55 : 0.3);
+    ctx.fillStyle = t.hot ? p.accent : ART.runner.trail;
     const h = t.sliding ? TUNING.slideHeight : TUNING.bodyH;
-    ctx.fillRect(x, flipped ? t.y : t.y - h, TUNING.bodyW, h);
+    ctx.fillRect(tx, flipped ? t.y : t.y - h, TUNING.bodyW, h);
   }
   ctx.globalAlpha = 1;
 
