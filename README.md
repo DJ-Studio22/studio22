@@ -34,12 +34,12 @@ push to `main`, on Node 22 and 24. So a break is caught loudly, in minutes,
 without anyone remembering to look.
 
 The workflow is **branch, commit, push, open a PR, wait for the checks,
-`npm run merge`** — a convention rather than an enforced rule, because branch
-protection is not available on a private repo on GitHub's free plan. The merge
-script waits for the checks and refuses on a red one; `gh pr merge` does not
-look, and a red check was once merged that way. Run `npm run ci` before
-pushing; it is the identical sequence, so a green local run means a green
-remote one. Written up in [`DEPLOY.md`](DEPLOY.md).
+`npm run merge`**. A ruleset on `main` requires the pull request and both
+checks and binds administrators, so a direct push or a red merge is refused by
+GitHub; the merge script waits for the checks and refuses on a red one before
+it ever gets that far. Run `npm run ci` before pushing; it is the identical
+sequence, so a green local run means a green remote one. Written up in
+[`DEPLOY.md`](DEPLOY.md).
 
 ---
 

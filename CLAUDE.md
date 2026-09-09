@@ -21,12 +21,12 @@ Deployed as a static site to Cloudflare Pages.
 - NO data collection of any kind. No names stored, no analytics, no tracking.
 - NO online multiplayer. Local hot-seat and pass-and-play only.
 - NEVER commit on `main`: branch, push, open a PR, wait for both CI checks,
-  merge. Nothing on the server enforces this — see the git workflow section
-  below for why, and follow it regardless.
+  merge. Since 10 September 2026 the server enforces this too -- a ruleset
+  refuses a direct push -- but the habit came first and stays.
 - NEVER merge a pull request without confirming its checks are green. Use
-  `npm run merge`, which refuses. `gh pr merge` does not look at the checks
-  and there is no branch protection on this repo, so nothing else will stop
-  you.
+  `npm run merge`, which refuses. The ruleset also requires both checks, so
+  `gh pr merge` on a red PR is refused by GitHub; the script is the gate you
+  see, the ruleset is the one behind it.
 
 ## Architecture rules
 - Games import FROM engine/. Nothing in engine/ ever imports FROM games/.
@@ -203,16 +203,18 @@ Never animate CSS layout properties — transform and opacity only.
 
 ## Git workflow — branches and pull requests, always
 
-**This is a convention, not an enforced rule, and that is worth knowing up
-front.** GitHub does not offer branch protection or rulesets on a private repo
-on the free plan — `"protected": false` is what the API reports for `main`, and
-the protection endpoints answer 403. Nothing on the server will stop a direct
-push.
+**Enforced on the server since 10 September 2026, and a convention before
+that.** For its first weeks this was a private repository on GitHub's free
+plan, which has neither branch protection nor rulesets, and the discipline was
+the whole mechanism -- and two music files went straight to `main` through
+the web uploader to prove it. The repository is public now, and a ruleset
+named `main` (Settings > Rules) requires a pull request, requires both CI
+checks, blocks force pushes and deletions, and has an EMPTY bypass list, so it
+binds administrators too. A direct push is refused with the reason printed.
+Verified the day it went live: an empty commit pushed to `main` came back
+"push declined due to repository rule violations".
 
-So the discipline is the whole mechanism. Follow it anyway: CI still runs on
-every pull request and every push, so a break is still caught loudly and fast —
-the difference is that it is caught *after* the merge rather than instead of
-it, and only if somebody is reading.
+Keep the habit anyway. The ruleset is a safety net, not the workflow.
 
 Every piece of work:
 
@@ -244,10 +246,11 @@ git checkout main && git pull
   rule and it was bought with a broken `main`.
 
   `gh pr merge` does not look at the checks. It squashes a pull request with a
-  failing build without a word, and there is no branch protection to refuse
-  it on the server either. The only thing between a red check and
-  `main` was remembering to read the output of `gh pr checks` before typing
-  the next command.
+  failing build without a word, and for the repo's first weeks there was no
+  branch protection to refuse it on the server either. The only thing between
+  a red check and `main` was remembering to read the output of
+  `gh pr checks` before typing the next command. (The ruleset now refuses
+  that merge too. The script stays, because it also waits and explains.)
 
   **On PR #16 that did not happen.** The checks were watched, node 24 came back
   red, the merge was typed anyway, and `main` carried a failing suite for a
