@@ -683,7 +683,7 @@ export class GameShell {
     if (!this.#hasMusic) return;
     const playing = this.#screen === null && this.#soundOn;
     if (playing) {
-      if (this.#music) { this.#music.start(); return; }
+      if (this.#music) { this.#music.start(); this.#music.resume(); return; }
       if (this.#musicLoading) return;
       this.#musicLoading = true;
       import('./music.js')
@@ -701,7 +701,14 @@ export class GameShell {
         .finally(() => { this.#musicLoading = false; });
       return;
     }
-    this.#music?.stop();
+    // SUSPEND rather than stop. A pause menu holds the game still, and it
+    // should hold the music still with it -- stopping threw away both the track
+    // and the position, so every pause changed the song.
+    //
+    // Leaving the game entirely (sound switched off, or a game over that is not
+    // coming back) still stops; that path is setSound() and the game's own
+    // teardown, not this one.
+    this.#music?.suspend();
   }
 
   // --- The overlay's own animation frame ----------------------------------

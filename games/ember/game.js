@@ -109,7 +109,10 @@ Input.clearTouchLayout();
 Input.setDirectionalTouch(false);
 
 Input.setTouchLayout([
-  { name: 'a', xRatio: 0.5, yRatio: 0.86, radius: 66, label: 'Burn' },
+  // Bottom LEFT, by request, and it suits the game: the balloon sits at the
+  // left of the screen and the gorge is read to the right of it, so a pad on
+  // the right would cover exactly the part you are looking at.
+  { name: 'a', xRatio: 0.08, yRatio: 0.82, radius: 66, label: 'Burn' },
 ]);
 
 Session.setScoreDirection(GAME_ID, 'high');
@@ -275,7 +278,7 @@ function drawSky() {
   ctx.fill();
 
   ctx.fillStyle = ART.sky.haze;
-  ctx.fillRect(0, H * 0.55, W, H * 0.45);
+  ctx.fillRect(screen.left, H * 0.55, screen.stageWidth, H * 0.45);
 }
 
 /**
@@ -313,23 +316,36 @@ function drawGorge() {
   const step = 8;
   const left = flight.x - BALLOON_X;
 
+  // SAMPLED ACROSS THE WHOLE STAGE, not across the game's own width.
+  //
+  // On a phone in landscape the canvas now extends past both sides of the
+  // game's 880 (see engine/canvas.js). This loop ran from -4 to W, so the rock
+  // simply stopped where the black bars used to be and the gorge read as a
+  // cliff cut off in mid-air -- the reclaimed space looked like missing world
+  // rather than more of it.
+  //
+  // wallsAt() is defined for any x, so there is nothing to invent: the gorge
+  // was always there, it just was not being asked for.
+  const from = screen.left - 4;
+  const to = screen.right + step;
+
   for (const side of ['ceiling', 'floor']) {
     ctx.beginPath();
-    ctx.moveTo(-4, side === 'ceiling' ? -4 : H + 4);
-    for (let sx = -4; sx <= W + step; sx += step) {
+    ctx.moveTo(from, side === 'ceiling' ? -4 : H + 4);
+    for (let sx = from; sx <= to; sx += step) {
       const w = wallsAt(left + sx, flight.gates);
       ctx.lineTo(sx, w[side]);
     }
-    ctx.lineTo(W + 4, side === 'ceiling' ? -4 : H + 4);
+    ctx.lineTo(to, side === 'ceiling' ? -4 : H + 4);
     ctx.closePath();
     ctx.fillStyle = ART.rock.face;
     ctx.fill();
 
     // The rim, on the gorge-facing edge only.
     ctx.beginPath();
-    for (let sx = -4; sx <= W + step; sx += step) {
+    for (let sx = from; sx <= to; sx += step) {
       const w = wallsAt(left + sx, flight.gates);
-      if (sx === -4) ctx.moveTo(sx, w[side]);
+      if (sx === from) ctx.moveTo(sx, w[side]);
       else ctx.lineTo(sx, w[side]);
     }
     ctx.strokeStyle = ART.rock.rim;
@@ -499,6 +515,8 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: the gorge is read ahead visually -- no sound tells you to burn.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Burner', gamepad: 'Hold A', keyboard: 'Hold Space', touch: 'Hold Burn' },

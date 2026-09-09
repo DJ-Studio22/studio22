@@ -568,7 +568,7 @@ function paper() {
   // just a black bar the game chose not to fill.
   ctx.fillRect(screen.left, 0, screen.stageWidth, H);
   ctx.fillStyle = ART.paperEdge;
-  ctx.fillRect(0, H - 14, W, 14);
+  ctx.fillRect(screen.left, H - 14, screen.stageWidth, 14);
 }
 
 function render() {
@@ -958,6 +958,8 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: a typing race; the words are read, never heard.
+  music: true,
   // Paper, not the arcade. Without this the shell's near-white HUD text
   // would be invisible on the background this game draws.
   shellTheme: 'light',

@@ -288,21 +288,21 @@ function drawSea() {
   const base = WATERLINE;
   ctx.fillStyle = ART.sea.surface;
   ctx.beginPath();
-  ctx.moveTo(0, base);
-  for (let x = 0; x <= W; x += 20) {
+  ctx.moveTo(screen.left, base);
+  for (let x = screen.left; x <= screen.right; x += 20) {
     ctx.lineTo(x, base + Math.sin(seaPhase * 1.6 + x * 0.03) * 4);
   }
-  ctx.lineTo(W, H);
-  ctx.lineTo(0, H);
+  ctx.lineTo(screen.right, H);
+  ctx.lineTo(screen.left, H);
   ctx.closePath();
   ctx.fill();
 
   ctx.strokeStyle = ART.sea.foam;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  for (let x = 0; x <= W; x += 20) {
+  for (let x = screen.left; x <= screen.right; x += 20) {
     const y = base + Math.sin(seaPhase * 1.6 + x * 0.03) * 4;
-    if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    if (x === screen.left) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.stroke();
 }

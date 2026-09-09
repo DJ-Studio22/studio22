@@ -205,3 +205,61 @@ test('standing still lets it catch up, which is the whole design', () => {
   for (let i = 0; i < 600; i++) ceiling = chaseCeiling(ceiling, player, 235, 1 / 60);
   assert.ok(player - ceiling < start, 'the ceiling did not gain on a stationary player');
 });
+
+test('THE SPIKES NEVER LEAVE THE TOP OF THE VIEW', () => {
+  // Fixed twice, returned twice, and both times the number was adjusted when
+  // the MODEL was what was wrong.
+  //
+  // The lead above is expressed in WORLD units; what a player complains about
+  // is expressed in SCREEN units, and nothing connected the two. The camera
+  // holds the player 302 pixels below the top of the view and the lead settles
+  // at 820, so the resting state of the old model put the spikes 518 pixels
+  // ABOVE the screen. Not while the player got ahead -- always. No value of
+  // ceilingCatchUp reaches that, because the equilibrium itself is out of
+  // frame, which is why tuning it kept appearing to work and kept coming back.
+  //
+  // So the constraint now lives where the complaint does: the ceiling is
+  // clamped to the top of the view, and this is the check that says so.
+  const CAM_ANCHOR = 720 * 0.42;
+  const CAM_LOOKAHEAD = 130;
+
+  let ceiling = SHAFT_TUNING.ceilingStartY;
+  let player = SHAFT_TUNING.ceilingStartY + 200;
+  let worstOffScreen = 0;
+
+  const dt = 1 / 60;
+  for (let i = 0; i < 60 * 30; i++) {
+    // A player diving as hard as the game allows, which is the case that used
+    // to lose them.
+    player += 1150 * dt;
+    const viewTop = Math.max(0, player - CAM_ANCHOR + CAM_LOOKAHEAD);
+    ceiling = chaseCeiling(ceiling, player, 235, dt, SHAFT_TUNING, viewTop);
+    // Positive means the ceiling is above the top of the view: off screen.
+    worstOffScreen = Math.max(worstOffScreen, viewTop - ceiling);
+  }
+
+  assert.equal(Math.round(worstOffScreen), 0,
+    `after thirty seconds of diving the spikes were ${Math.round(worstOffScreen)}px above the screen`);
+});
+
+test('and being held in view does not mean being shoved onto the player', () => {
+  // The other half of the report was "they spawn on top of me". The clamp
+  // pushes the ceiling DOWN towards the player, so it has to be checked that it
+  // never pushes it onto them: the crush is meant to be something you watch
+  // arrive, not something that lands.
+  const CAM_ANCHOR = 720 * 0.42;
+  let ceiling = SHAFT_TUNING.ceilingStartY;
+  let player = SHAFT_TUNING.ceilingStartY + 200;
+  let closest = Infinity;
+
+  const dt = 1 / 60;
+  for (let i = 0; i < 60 * 30; i++) {
+    player += 600 * dt;                       // a steady, ordinary descent
+    const viewTop = Math.max(0, player - CAM_ANCHOR);
+    ceiling = chaseCeiling(ceiling, player, 235, dt, SHAFT_TUNING, viewTop);
+    closest = Math.min(closest, player - ceiling);
+  }
+
+  assert.ok(closest > 100,
+    `the ceiling closed to ${Math.round(closest)}px of the player without them stopping`);
+});

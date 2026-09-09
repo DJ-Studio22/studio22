@@ -156,7 +156,7 @@ export function ledgeSegments(ledge, tuning = SHAFT_TUNING) {
  * `ceilingMaxLead` it closes faster, so a dive buys a finite, earned margin
  * rather than permanent safety.
  */
-export function chaseCeiling(ceilingY, playerY, scrollSpeed, dt, tuning = SHAFT_TUNING) {
+export function chaseCeiling(ceilingY, playerY, scrollSpeed, dt, tuning = SHAFT_TUNING, viewTop = null) {
   const t = { ...SHAFT_TUNING, ...tuning };
 
   // It always descends with the shaft, whatever else is happening.
@@ -170,6 +170,27 @@ export function chaseCeiling(ceilingY, playerY, scrollSpeed, dt, tuning = SHAFT_
   // settles instead of diverging.
   const excess = (playerY - next) - t.ceilingMaxLead;
   if (excess > 0) next += excess * t.ceilingCatchUp * dt;
+
+  // AND IT NEVER LEAVES THE TOP OF THE VIEW. This is the part that was wrong
+  // twice, and it was wrong because it was missing rather than mistuned.
+  //
+  // The lead above was expressed in WORLD units and the thing a player
+  // actually complains about is expressed in SCREEN units, and the two never
+  // met. The camera holds the player 302 pixels below the top of the view
+  // (172 in a full dive) and the lead settles at 820, so at equilibrium the
+  // spikes sat 518 pixels ABOVE the top of the screen -- not transiently while
+  // the player got ahead, but as the resting state of the model. No value of
+  // ceilingCatchUp changes that: the equilibrium lead is nearly three times
+  // the room the camera gives, so the ceiling was always outside the frame.
+  //
+  // Which is also where "it spawned on top of me" came from. Something
+  // invisible that closes the moment you slow down does not appear to close --
+  // it appears to arrive. Held at the top edge it is always visible, always
+  // approaching, and the pressure is something you can watch.
+  //
+  // viewTop is optional so the pure-rules tests can still call this without a
+  // camera; game.js always passes it.
+  if (viewTop !== null) next = Math.max(next, viewTop);
 
   // It may REACH the player — that is the death this game is named for, and
   // game.js turns it into a hit. What it must never do is step past them in
