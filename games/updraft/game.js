@@ -89,6 +89,7 @@ const ART = {
   crackBottom: '#8b6338',
   crackLine: 'rgba(60,35,15,.5)',
   spring: '#ffe66d',
+  boostAura: 'rgba(255,230,109,.28)',
   bird: '#ffe66d',
   birdBelly: '#f2c94c',
   birdBeak: '#f2994a',
@@ -145,7 +146,13 @@ let plats = [];
 let foes = [];
 const clouds = [];
 
-const P = { x: W / 2, y: H - 140, vx: 0, vy: 0, w: 30, h: 32, face: 1, squash: 0 };
+// `boosting` is the spring's invulnerability. A spring launches the bird two
+// and a half times higher than a bounce, straight up through whatever is
+// waiting, and being killed on the way up by a foe you could not have steered
+// round felt like being punished for the gift. So for the whole ASCENT off a
+// spring the bird is shielded: any foe it touches dies instead. It ends the
+// moment the bird starts falling again, and an ordinary bounce never sets it.
+const P = { x: W / 2, y: H - 140, vx: 0, vy: 0, w: 30, h: 32, face: 1, squash: 0, boosting: false };
 
 // Drift speeds converted at creation, so everything downstream is per second.
 for (let i = 0; i < 9; i++) {
@@ -169,6 +176,7 @@ function reset() {
   P.vx = 0;
   P.vy = JUMP;
   P.face = 1;
+  P.boosting = false;
   P.squash = 0;
 
   // The column comes from climb.js, already checked: from every platform the
@@ -240,6 +248,10 @@ function update(dt) {
   P.y += P.vy * dt;
   if (P.squash > 0) P.squash *= SQUASH_DECAY_PER_SECOND ** dt;
 
+  // The shield lasts exactly as long as the ascent. The apex is where vy
+  // passes through zero, so "falling again" is the first tick vy is positive.
+  if (P.boosting && P.vy > 0) P.boosting = false;
+
   // Land on platforms, only while falling.
   if (P.vy > 0) {
     for (const p of plats) {
@@ -263,6 +275,9 @@ function update(dt) {
           P.y = p.y - P.h / 2;
           P.vy = p.spring ? SPRING : JUMP;
           P.squash = p.spring ? 1.6 : 1;
+          // Only a spring arms the shield. An ordinary bounce leaves it as it
+          // was, which after the check above is always off.
+          if (p.spring) P.boosting = true;
           if (p.type === 'crack') {
             p.broke = true;
             puff(P.x, p.y, ART.puffWood, 12);
@@ -323,7 +338,17 @@ function update(dt) {
     if (f.y > H + 70) { foes.splice(i, 1); continue; }
 
     if (Math.hypot(f.x - P.x, f.y - P.y) < f.r + 13) {
-      if (P.vy > 0 && P.y < f.y - 4) {
+      if (P.boosting) {
+        // Shielded by the spring: the foe dies and the ascent carries on
+        // untouched. No bounce off it -- the bird is already going up faster
+        // than a stomp would send it, and a kink in the arc mid-boost would
+        // read as the game grabbing the controls.
+        foes.splice(i, 1);
+        score += 50;
+        shake = 8;
+        puff(f.x, f.y, ART.puffFoe, 18);
+        audio.play('squash');
+      } else if (P.vy > 0 && P.y < f.y - 4) {
         foes.splice(i, 1);
         P.vy = JUMP * 1.1;
         P.squash = 1.4;
@@ -445,6 +470,12 @@ function render() {
   const bh = P.h * (1 + sq * 0.22);
   ctx.save();
   ctx.translate(P.x, P.y);
+  // The spring shield, drawn as a soft halo so the player can see that this
+  // ascent is the one that goes through foes rather than into them.
+  if (P.boosting) {
+    ctx.fillStyle = ART.boostAura;
+    ctx.beginPath(); ctx.arc(0, 0, bh * 0.85, 0, TAU); ctx.fill();
+  }
   ctx.scale(P.face, 1);
   ctx.fillStyle = ART.bird;
   ctx.beginPath(); ctx.ellipse(0, 0, bw / 2, bh / 2, 0, 0, TAU); ctx.fill();
