@@ -21,8 +21,8 @@ in the repo (one file, two commands).
 
 ### 1. Point the domain at Cloudflare Pages
 
-I cannot do any of this — it needs your registrar login and your Cloudflare
-account.
+None of this is in the repo: it needs the registrar login and the Cloudflare
+account, so it is done by hand in the two dashboards.
 
 **If the domain is already in your Cloudflare account:**
 
