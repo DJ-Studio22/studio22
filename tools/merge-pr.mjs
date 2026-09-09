@@ -107,3 +107,11 @@ if (merge.status !== 0) {
   process.exit(merge.status || 1);
 }
 console.log(`\nMerged #${pr.number}.`);
+
+// PRUNE THE STALE TRACKING REFS. --delete-branch removes the remote branch,
+// but the local copy of the remote's branch list (refs/remotes/origin/*) is
+// only updated by a fetch with --prune, and nothing here ever ran one. After
+// fifty-four merges `git branch -r` listed forty-eight branches that did not
+// exist on the server, and it looked like the deletes were not taking. They
+// were. Pruned here so the local view matches the remote every time.
+spawnSync('git', ['fetch', '--prune', '--quiet'], { stdio: 'inherit' });
