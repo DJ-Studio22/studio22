@@ -547,5 +547,28 @@
     "tournamentReady": false,
     "estimatedRunTime": 360,
     "status": "live"
+  },
+  {
+    "id": "impostor-circle",
+    "title": "Impostor Circle",
+    "tagline": "One of you has a different word.",
+    "description": "Everyone at the table gets the same word except one person, who gets a different one — and nobody is told who, including the impostor. They find out the same way everybody else does: by listening. Go round saying one word each, then vote for whoever sounds wrong. Every player is the impostor exactly once, so the game is fair by construction rather than on average, and a caught impostor still gets one guess at the word everybody else had. The device never shows a secret while it is changing hands; the person about to look presses the button themselves, so nobody ever has to say do not look yet.",
+    "category": "party",
+    "path": "/games/impostor-circle/index.html",
+    "difficulty": "easy",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "party",
+      "social",
+      "deduction",
+      "pass-and-play",
+      "words",
+      "local"
+    ],
+    "featured": false,
+    "tournamentReady": false,
+    "estimatedRunTime": 420,
+    "status": "live"
   }
 ]

@@ -797,6 +797,68 @@ function tide() {
 
   return out + '</svg>';
 }
+/**
+ * Impostor Circle: five faces round a ring, and one of them is not saying the
+ * same word as the others.
+ *
+ * The card shows the situation rather than the interface: a circle of people, a
+ * speech mark over each, and one of them a different colour with a question mark
+ * in it. You can tell what the game is without being told.
+ */
+function impostorCircle() {
+  const C = ['#ffb02e', '#4fc3f7', '#7ed957', '#ff6b8a', '#c792ea'];
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><radialGradient id="ic-glow">'
+    + '<stop offset="0" stop-color="#2b2740"/>'
+    + '<stop offset="1" stop-color="#12111a"/></radialGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#ic-glow)"/>';
+
+  const cx = 160;
+  const cy = 104;
+  const r = 62;
+
+  // The ring they are sitting round.
+  out += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none"'
+    + ' stroke="rgba(255,255,255,.10)" stroke-width="2"/>';
+
+  // The odd one out is at the top, where the eye lands first.
+  const odd = 0;
+  for (let i = 0; i < 5; i++) {
+    const angle = -Math.PI / 2 + (i / 5) * Math.PI * 2;
+    const x = cx + Math.cos(angle) * r;
+    const y = cy + Math.sin(angle) * r;
+    out += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1)
+      + '" r="18" fill="' + C[i] + '"/>';
+
+    // A word bubble over each: three bars for everyone, a question mark for
+    // the one who does not know what they are talking about.
+    if (i === odd) {
+      out += '<text x="' + x.toFixed(1) + '" y="' + (y + 7).toFixed(1)
+        + '" font-family="system-ui,sans-serif" font-size="22" font-weight="700"'
+        + ' text-anchor="middle" fill="#3a2400">?</text>';
+      out += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1)
+        + '" r="26" fill="none" stroke="#ffffff" stroke-opacity=".55"'
+        + ' stroke-width="2" stroke-dasharray="5 5"/>';
+    } else {
+      out += '<rect x="' + (x - 8).toFixed(1) + '" y="' + (y - 4).toFixed(1)
+        + '" width="16" height="3" rx="1.5" fill="rgba(0,0,0,.5)"/>';
+      out += '<rect x="' + (x - 8).toFixed(1) + '" y="' + (y + 2).toFixed(1)
+        + '" width="11" height="3" rx="1.5" fill="rgba(0,0,0,.5)"/>';
+    }
+  }
+
+  // The word everybody else has, sitting in the middle of the ring.
+  out += '<rect x="116" y="92" width="88" height="26" rx="7"'
+    + ' fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.14)"/>';
+  out += '<text x="160" y="110" font-family="system-ui,sans-serif" font-size="14"'
+    + ' font-weight="700" text-anchor="middle" fill="#f3eee6">BEACH</text>';
+
+  out += '<text x="160" y="186" font-family="system-ui,sans-serif" font-size="13"'
+    + ' font-weight="600" text-anchor="middle" fill="rgba(243,238,230,.5)">'
+    + 'who is the odd one out?</text>';
+
+  return out + '</svg>';
+}
 function tankTactics() {
   const block = (x, y, w, h) => '<g><rect x="' + x + '" y="' + y + '" width="' + w
     + '" height="' + h + '" fill="#5a6675" stroke="#8a97a8" stroke-width="2"/></g>';
@@ -1188,6 +1250,7 @@ const ART = {
   'mini-golf': miniGolf,
   winter,
   'tank-tactics': tankTactics,
+  'impostor-circle': impostorCircle,
   tide,
   'color-heist': colorHeist,
   hangman,
