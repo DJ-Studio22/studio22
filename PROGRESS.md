@@ -1,6 +1,14 @@
 # Studio 22 — Build Progress
 
 ## Done
+- Phase 40: music. engine/music.js plays a shuffled, cross-faded playlist in the
+  nine games where a sound never tells the player anything -- never Beat
+  Blocker, whose music IS the chart. Two independent volumes in the pause menu,
+  MUSIC and EFFECTS, persisted across games. Nothing is fetched until a run
+  starts, nothing at all when sound is off, and a missing file is silence rather
+  than a broken game. The five tracks moved from the repo root to public/music/
+  so they actually ship
+
 - Phase 39: the test suite back from 19m42s to 3m09s, all 500 still passing.
   Three things, in the order they were found: the pond's per-owner grouping was
   seventy-three array filters three times a frame (0.449 -> 0.318 ms), the skill
@@ -79,6 +87,86 @@
 ## Next
 - Nothing queued. Every entry in games.json is `live` — the arcade has no
   placeholder cards left for the first time.
+
+
+## Phase 40 — music, and what it costs
+
+### A playlist, not a loop
+
+The brief was ten instrumental loops; what arrived was five full songs of three
+to five minutes at ~180kbps VBR, 48kHz, 28MB the lot. Looping a whole song
+means an abrupt jump from its last bar to its first every few minutes, which is
+worse than any click at a loop point, so engine/music.js plays a SHUFFLED
+PLAYLIST instead and cross-fades four seconds before the end of each track. The
+room hears continuous music that changes and never restarts.
+
+It still handles real loops unchanged if the tracks are ever re-exported: a loop
+is a playlist of one, and the loopStart/loopEnd trimming below is what makes
+that seamless.
+
+### The MP3 padding, and why it is trimmed at decode time
+
+An MP3 does not decode to what went in. The encoder pads the front (about 1100
+samples) and the back (to fill the last frame), and `decodeAudioData` hands the
+padding over: Chrome applies the gapless tags, Safari historically does not, and
+neither is safe to depend on. That padding IS the click at a loop point.
+
+So every buffer is scanned for its first and last sample above the noise floor,
+and the source plays and loops between those two points. It costs one pass over
+a decoded buffer, it works for any codec, and it means the encoding settings are
+belt and braces rather than the only defence.
+
+### What it costs, per game
+
+    music module (dynamic import)     1.2 KB gzipped, fetched only by a
+                                      game with music: true, only when a
+                                      run starts
+    audio, per session                ONE track: 4.1 - 7.3 MB, average 5.6
+
+A game is 15 to 30 KB gzipped, so a track is roughly two hundred times the game
+it plays under. That is the honest number. It is mitigated by never fetching it
+until a run begins, never fetching it at all when sound is off, and fetching the
+NEXT track only in the last thirty seconds of the current one -- the first
+version prefetched immediately and doubled the cost of pressing Start.
+
+Re-exported as 45-second loops at 112kbps CBR 44.1kHz, the same five would be
+about 630 KB each and the whole set would weigh less than one track does now.
+
+### Which games, and the rule for the next one
+
+The test is NOT "would this be nice with a soundtrack". It is: does a SOUND in
+this game tell the player something they have to act on? If yes, music is a
+second thing competing with information.
+
+Music on: Bigger Fish, Updraft, Comet, Sinkhole, Mini Golf, Winter, Colour
+Heist, Hangman, Tower Stack. Off everywhere else, and never Beat Blocker.
+
+### Two volumes, because they are two decisions
+
+MUSIC and EFFECTS are separate rows in the pause menu, drawn as five blocks
+rather than a percentage because this menu is read from ten feet away. Left and
+right nudge; the button cycles and wraps, so it works on a stick, a keyboard and
+a thumb without three code paths. Adjusting EFFECTS plays a blip, so the number
+means something while you are setting it. Both are session preferences, so they
+follow the player from game to game, and the existing Sound toggle still kills
+everything.
+
+Sound off is not just quiet: engine/music.js asks before it fetches, so a muted
+visit downloads no audio at all. Verified in a browser rather than asserted --
+landing page, arcade hub and party page make zero audio requests; a game with
+music makes none on its title screen and exactly one once a run starts; the same
+game with sound off makes none even in play; and Beat Blocker never makes one.
+The sound-off check has a CONTROL beside it, because "nothing was fetched"
+passes just as well when the tap missed the Start button.
+
+### 28MB in git history: leave it
+
+It is not worth cleaning up. Rewriting history to drop the blobs means a forced
+push, every clone invalidated, and the Cloudflare Pages build re-pointed -- for
+a repo with one contributor where the cost is a slower first clone. The files
+have to ship anyway, so they would only move from history into the working tree.
+Revisit only if the tracks are re-exported and the originals become genuinely
+dead weight; that is the moment when a history rewrite buys something.
 
 
 ## Phase 38 — the shape of a phone

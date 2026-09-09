@@ -55,6 +55,16 @@ const SCREEN = {
   HOWTO: 'howto',
 };
 
+// Five steps, drawn as blocks. A number would be more precise and less
+// readable from ten feet away, which is the distance this menu is designed for.
+const VOLUME_STEPS = 5;
+
+function volumeBar(value) {
+  const filled = Math.round(value * VOLUME_STEPS);
+  if (filled === 0) return 'Off';
+  return '\u25A0'.repeat(filled) + '\u25A1'.repeat(VOLUME_STEPS - filled);
+}
+
 // How far a stick has to push before it counts as a menu move. Well above
 // input.js's 0.15 deadzone: a menu should need a deliberate flick, not a
 // lean, or the selection skids past the item the player wanted.
@@ -135,6 +145,14 @@ export class GameShell {
   // who muted the site on the landing page gets a muted game. The pause menu
   // still flips it per game, and that writes back through setSound().
   #soundOn = Session.isSoundOn();
+  // Set by a game declaring music: true. Governs whether the pause menu offers
+  // a music row at all, and whether engine/music.js is ever asked to start.
+  #hasMusic = false;
+  #music = null;
+  // Separate from #navLatch: up/down and left/right have to be able to repeat
+  // independently, or nudging a volume would block moving off the row.
+  #sideLatch = 0;
+  #musicLoading = false;
   #tournamentMode = false;
   #touchCapable = false;
 
@@ -194,6 +212,12 @@ export class GameShell {
    *        passing anything: light chrome over a light game and dark chrome
    *        on its own setup screen would read as two different games.
    * @param {() => void} [options.onPassToNextPlayer] Tournament handoff (Phase 7).
+   * @param {boolean} [options.music=false]  Play background music from
+   *                                  engine/music.js. Opt-in per game: a game
+   *                                  where a sound TELLS the player something
+   *                                  (Beat Blocker, anything rhythmic) must
+   *                                  leave this off. Nothing is downloaded
+   *                                  unless this is true AND sound is on.
    * @param {object} [options.audio]  Anything with setMuted(bool). Optional
    *        until engine/audio.js exists.
    *
@@ -209,6 +233,13 @@ export class GameShell {
     this.#canvas = options.canvas;
     this.#loop = options.loop ?? null;
     this.#audio = options.audio ?? null;
+    this.#hasMusic = Boolean(options.music) && Boolean(this.#audio);
+
+    // The stored levels, applied before a single sound plays. Doing this at
+    // construction rather than on the first note is what makes "muted means
+    // silent from the first frame" true.
+    this.#audio?.setMusicVolume?.(Session.getMusicVolume());
+    this.#audio?.setSfxVolume?.(Session.getSfxVolume());
     this.#onRestart = options.onRestart ?? (() => window.location.reload());
     this.#onPassToNextPlayer = options.onPassToNextPlayer ?? null;
 
@@ -533,10 +564,45 @@ export class GameShell {
     this.#openScreen(SCREEN.HOWTO);
   }
 
+  /**
+   * Steps one of the two volumes, wrapping at the ends.
+   *
+   * Wraps rather than clamping so a single button can drive it: pressing
+   * "Music" over and over walks 0, 20, 40 ... 100, 0, which is the whole
+   * control on a device with no left and right. Left/right still nudge without
+   * wrapping, which is what somebody with a stick expects.
+   */
+  #nudgeVolume(which, direction) {
+    const step = 0.2;
+    const current = which === 'music' ? Session.getMusicVolume() : Session.getSfxVolume();
+    let next = Math.round((current + step * direction) * 100) / 100;
+    if (next > 1.0001) next = 0;
+    if (next < -0.0001) next = 1;
+    next = Math.min(1, Math.max(0, next));
+    if (which === 'music') {
+      Session.setMusicVolume(next);
+      this.#audio?.setMusicVolume?.(next);
+    } else {
+      Session.setSfxVolume(next);
+      this.#audio?.setSfxVolume?.(next);
+      // Play something, so the number means something. Without this the player
+      // is adjusting a level they cannot hear until they close the menu.
+      this.#audio?.play?.('move');
+    }
+  }
+
   setSound(on) {
     this.#soundOn = Boolean(on);
     Session.setSoundOn(this.#soundOn);
+    // Sound off means the music stops AND stops downloading. Back on starts it
+    // again, which is the first moment a file is fetched for a player who
+    // opened the site muted.
+    if (this.#hasMusic) {
+      if (this.#soundOn) this.#music?.start();
+      else this.#music?.stop({ fadeOut: 0.3 });
+    }
     this.#applyAudio();
+    this.#applyMusic();
   }
 
   // --- Screen transitions -------------------------------------------------
@@ -558,6 +624,7 @@ export class GameShell {
     // it was tapped.
     Input.setTouchControlsEnabled(false);
     this.#applyAudio();
+    this.#applyMusic();
     this.#startOverlayLoop();
   }
 
@@ -566,6 +633,7 @@ export class GameShell {
     this.#stopOverlayLoop();
     Input.setTouchControlsEnabled(true);
     this.#applyAudio();
+    this.#applyMusic();
     // No-op if the game never started its loop (a how-to shown before play).
     this.#loop?.resume();
   }
@@ -596,6 +664,44 @@ export class GameShell {
     // deliberately keep playing -- a game over sting is part of the moment.
     const suspended = this.#screen === SCREEN.PAUSE || this.#screen === SCREEN.HOWTO;
     this.#audio?.setMuted?.(!this.#soundOn || suspended);
+  }
+
+  /**
+   * Starts or stops the music to match what is on screen.
+   *
+   * Music plays while the game is being PLAYED. It fades out on the pause menu
+   * and on game over -- the first because a paused game is a conversation
+   * happening in the room, the second because a score screen wants the sting
+   * and then quiet. It does not play under the title, because nobody has
+   * chosen to play anything yet.
+   *
+   * The module is imported lazily, so a game without music never downloads the
+   * code either, and a game with music does not fetch a note until the first
+   * run begins.
+   */
+  #applyMusic() {
+    if (!this.#hasMusic) return;
+    const playing = this.#screen === null && this.#soundOn;
+    if (playing) {
+      if (this.#music) { this.#music.start(); return; }
+      if (this.#musicLoading) return;
+      this.#musicLoading = true;
+      import('./music.js')
+        .then(({ Music }) => {
+          this.#music = new Music(this.#audio);
+          // Re-checked rather than assumed: the player may have paused, muted
+          // or left the game while this module was in flight.
+          if (this.#screen === null && this.#soundOn) this.#music.start();
+        })
+        .catch((error) => {
+          // A chunk that would not load is a reason for silence, not for a
+          // broken game.
+          console.warn('[shell] Music module failed to load: ' + error.message);
+        })
+        .finally(() => { this.#musicLoading = false; });
+      return;
+    }
+    this.#music?.stop();
   }
 
   // --- The overlay's own animation frame ----------------------------------
@@ -645,6 +751,17 @@ export class GameShell {
     }
     this.#navLatch = direction;
 
+    // SIDEWAYS ADJUSTS A ROW THAT CAN BE ADJUSTED. A volume is a quantity, and
+    // the gesture for a quantity is left and right -- pressing A five times to
+    // wrap back round to quiet is what you do when there is no other way, not
+    // what anybody reaches for. Edge-triggered on its own latch so holding
+    // right does not empty the slider in a frame.
+    const sideways = Math.abs(state.x) > NAV_THRESHOLD ? Math.sign(state.x) : 0;
+    if (sideways !== 0 && this.#sideLatch === 0) {
+      items[this.#selected]?.nudge?.(sideways);
+    }
+    this.#sideLatch = sideways;
+
     if (Input.pressed('a')) {
       items[this.#selected]?.run();
       return;
@@ -679,6 +796,7 @@ export class GameShell {
     this.#selected = 0;
     this.#navLatch = 0;
     this.#applyAudio();
+    this.#applyMusic();
   }
 
   // Item lists are rebuilt per frame rather than stored, so labels that
@@ -704,6 +822,24 @@ export class GameShell {
         { label: 'Resume', run: () => this.resume() },
         { label: 'Restart', run: () => this.#restart() },
         { label: `Sound: ${this.#soundOn ? 'On' : 'Off'}`, run: () => this.setSound(!this.#soundOn) },
+        // Two rows rather than one, because they are two decisions: turn the
+        // song down and still hear a split land, or mute the blips and keep
+        // the song. Left/right nudges by a step; the button cycles, so this
+        // works on a gamepad, a keyboard and a thumb without three code paths.
+        //
+        // Only shown when the game HAS music -- a volume slider for a track
+        // that does not exist is a control that does nothing, and a menu full
+        // of those teaches players not to read the menu.
+        ...(this.#hasMusic ? [{
+          label: () => `Music: ${volumeBar(Session.getMusicVolume())}`,
+          run: () => this.#nudgeVolume('music', 1),
+          nudge: (direction) => this.#nudgeVolume('music', direction),
+        }] : []),
+        {
+          label: () => `Effects: ${volumeBar(Session.getSfxVolume())}`,
+          run: () => this.#nudgeVolume('sfx', 1),
+          nudge: (direction) => this.#nudgeVolume('sfx', direction),
+        },
         { label: 'How to Play', run: () => this.showHowToPlay() },
         {
           label: this.#tournamentMode ? 'Back to Tournament' : 'Back to Arcade',
@@ -962,7 +1098,11 @@ export class GameShell {
     UI.panel(ctx, layout.panelX, layout.panelY, layout.panelW, layout.panelH, { scale });
 
     items.forEach((item, i) => {
-      UI.button(ctx, layout.itemRects[i], item.label, { selected: i === this.#selected, scale });
+      // A label may be a function, so a row that shows a live value -- a volume
+      // -- redraws itself as the value changes rather than needing the whole menu
+      // rebuilt around it.
+      const label = typeof item.label === 'function' ? item.label() : item.label;
+      UI.button(ctx, layout.itemRects[i], label, { selected: i === this.#selected, scale });
     });
 
     return layout;

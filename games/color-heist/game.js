@@ -483,6 +483,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: a maze you read, with no audio tells.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Move', gamepad: 'Left stick or D-pad', keyboard: 'WASD or arrows', touch: 'Drag the left side' },

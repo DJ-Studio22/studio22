@@ -230,8 +230,20 @@ test('MENU SELECTION WRAPS — a cursor that stops reads as a broken pad', () =>
   const { shell } = soloShell({ onRestart: () => { restarted++; } });
   shell.pause();
 
-  // Five items, so five downs must return the cursor to the first one.
-  for (let i = 0; i < 5; i++) tap('ArrowDown');
+  // UP FROM THE TOP, THEN BACK DOWN, rather than "n downs return to the top".
+  //
+  // This test used to press Down five times because the pause menu had five
+  // items. It was not testing that the cursor wraps, it was testing that the
+  // menu has five items -- and it went red the moment an Effects volume row
+  // made it six, for a change that had nothing to do with wrapping. Convention
+  // 12: an assertion pinned to an incidental fact rather than to the property.
+  //
+  // Up from the first item lands on the LAST one if the cursor wraps, and stays
+  // put if it does not. Coming back down then reaches Resume in the first case
+  // and Restart in the second, which is the difference this can see -- with no
+  // opinion at all about how many rows are in between.
+  tap('ArrowUp');
+  tap('ArrowDown');
   tap('Space');
 
   assert.equal(restarted, 0, 'the cursor did not wrap — it landed on Restart');

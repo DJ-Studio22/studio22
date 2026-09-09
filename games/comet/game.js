@@ -701,6 +701,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: flying through space, and nothing in it has to be HEARD to be avoided.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Fly', gamepad: 'Left stick or D-pad', keyboard: 'Arrows or WASD', touch: 'Drag the left side' },

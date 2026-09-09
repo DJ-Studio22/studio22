@@ -703,6 +703,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: turn-based and unhurried; there is nothing to react to at all.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Aim', gamepad: 'Left stick or D-pad', keyboard: 'Left / Right', touch: 'Drag the left side' },

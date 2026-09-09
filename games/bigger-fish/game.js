@@ -562,6 +562,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: a pond you swim around in; every sound is flavour, nothing is a cue.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Swim', gamepad: 'Left stick', keyboard: 'WASD or arrows', touch: 'Drag the left side' },
