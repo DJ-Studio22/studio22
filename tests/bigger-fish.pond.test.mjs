@@ -279,6 +279,66 @@ test('the pieces come back to the head instead of trailing it for ever', () => {
   assert.ok(head.x - pond.t.width / 2 > speedOf(head.mass) * 4 * 0.95, 'the followers held the head back');
 });
 
+test('A SPLIT FLIES AN ARC: out past the old reach, a coast, then reeled in, fastest last', () => {
+  // The complaint from the phone: the split piece did not travel far enough to
+  // catch anything, because the followers hauled it back from the first frame.
+  // Now the launch is left alone until it has stopped, the piece coasts, and
+  // comes home slowly at first and fastest just before it rejoins.
+  const pond = lonePlayer(200);
+  const head = pond.mainCell('player');
+  pond.split('player', head.x + 100, head.y);
+  const piece = pond.cellsOf('player').find((c) => c !== head);
+
+  let peak = 0;
+  let peakAt = 0;
+  const returnSpeeds = [];   // closing speed sampled every quarter second on the way back
+  let last = null;
+  let home = null;
+  for (let i = 1; i <= 60 * 8; i++) {
+    pond.step(1 / 60, {});
+    const d = Math.hypot(piece.x - head.x, piece.y - head.y);
+    if (d > peak) { peak = d; peakAt = i / 60; }
+    if (piece.flight?.phase === 'back' && i % 15 === 0) {
+      if (last !== null) returnSpeeds.push((last - d) * 4);
+      last = d;
+    }
+    if (!piece.flight && home === null) home = i / 60;
+  }
+  // Out: beyond what the old launch (620 / 2.6 = 238 units) could ever reach.
+  assert.ok(peak > 340, `the piece only got ${peak.toFixed(0)} units out`);
+  assert.ok(peakAt > 1 && peakAt < 2.5, `it peaked at ${peakAt}s`);
+  // Back: it does come home, and the closing speed rises along the way.
+  assert.ok(home !== null && home < 6, `never came home (${home})`);
+  assert.ok(returnSpeeds.length >= 3, 'too few return samples to judge the ramp');
+  const first = returnSpeeds[0];
+  const lastSpeed = returnSpeeds[returnSpeeds.length - 1];
+  assert.ok(lastSpeed > first * 1.5, `the return did not accelerate: ${first.toFixed(0)} -> ${lastSpeed.toFixed(0)} units/s`);
+  // And it ends on the flank, in contact, not inside the head.
+  const d = Math.hypot(piece.x - head.x, piece.y - head.y);
+  assert.ok(d > radiusOf(head.mass) * 0.5 && d <= radiusOf(head.mass) + radiusOf(piece.mass) + TUNING.contactSlack,
+    `came to rest ${d.toFixed(0)} from the head`);
+});
+
+test('and the piece is never stranded: a leash, and a return that gains on a running head', () => {
+  // Launched BACKWARDS while the head runs flat out the other way. The piece
+  // may never be further than splitMaxRange from the head, and it still comes
+  // home, because the return closes on top of matching the head's movement.
+  const pond = lonePlayer(200);
+  const head = pond.mainCell('player');
+  head.x = 1500;
+  pond.split('player', head.x - 100, head.y);
+  const piece = pond.cellsOf('player').find((c) => c !== head);
+  let maxD = 0;
+  let home = null;
+  for (let i = 1; i <= 60 * 12; i++) {
+    pond.step(1 / 60, { x: 1, y: 0 });
+    maxD = Math.max(maxD, Math.hypot(piece.x - head.x, piece.y - head.y));
+    if (!piece.flight && home === null) home = i / 60;
+  }
+  assert.ok(maxD <= TUNING.splitMaxRange + 1, `the piece was ${maxD.toFixed(0)} from the head; the leash is ${TUNING.splitMaxRange}`);
+  assert.ok(home !== null && home < 8, `the piece never caught a running head (${home})`);
+});
+
 test('a merge never absorbs the head', () => {
   // Merging added the second cell into the first by array order. When the
   // first was a follower, the head was the one deleted and the stick fell back

@@ -121,8 +121,38 @@ export const TUNING = {
   // SPLIT.
   splitMinMass: 26,
   maxCells: 8,
-  splitLaunch: 620,          // initial speed of the launched half
-  splitDrag: 2.6,            // how fast that launch bleeds off
+  // THE LAUNCH. Reach is launch over drag (see splitReach): 620 / 2.6 was 238
+  // units of glide, and in play the piece barely got there, because the
+  // follower steering was hauling it back from the first frame. 900 / 2.4 is
+  // 375 units, and the flight below leaves the launch alone until it has
+  // finished. A split is meant to be a real attempt at a kill, not a hop.
+  splitLaunch: 900,          // initial speed of the launched half
+  splitDrag: 2.4,            // how fast that launch bleeds off
+
+  // THE ARC A SPLIT PIECE FLIES. Committed at the top, then reeled in.
+  //
+  //   out    the launch carries it and nothing steers it. It glides to a stop
+  //          -- the drag is exponential, so it arrives slowly -- and coasts
+  //          there for splitCoastSeconds, which is the moment it either eats
+  //          what it was thrown at or did not.
+  //   back   it drifts home, slowly at first and fastest just before it
+  //          rejoins. The closing speed -- ON TOP of matching the head, so a
+  //          head that keeps running is still caught -- runs from
+  //          splitReturnSlow to splitReturnFast times the faster of its own
+  //          pace and the head's over splitReturnSeconds, squared, so the
+  //          acceleration is in the last third of the way.
+  //   leash  it is never further than splitMaxRange from the head. A head
+  //          that runs away drags the piece with it rather than leaving it to
+  //          be eaten alone.
+  //
+  // Only the player's pieces fly this arc; a bot's pieces keep their own
+  // steering, which never let go of them in the first place.
+  splitCoastBelow: 45,       // launch speed under which the piece counts as stopped
+  splitCoastSeconds: 0.35,
+  splitReturnSlow: 0.45,
+  splitReturnFast: 2.6,
+  splitReturnSeconds: 2.4,   // how long the ramp from slow to fast takes
+  splitMaxRange: 520,
   // PUTTING YOURSELF BACK TOGETHER IS SOMETHING YOU DO, NOT SOMETHING THAT
   // HAPPENS TO YOU.
   //
@@ -467,6 +497,7 @@ export class Pond {
   }
 
   reset() {
+    this.#headWas = null;
     const t = this.t;
     this.time = 0;
     this.running = true;
@@ -626,6 +657,7 @@ export class Pond {
   }
 
   #spikeCells = null;
+  #headWas = null;   // where the player's head was last step; see #followHead
   #spikeCols = 0;
   #spikeRows = 0;
 
@@ -671,6 +703,9 @@ export class Pond {
   #newCell(owner, x, y, mass) {
     const cell = {
       id: nextId++, owner, x, y, mass, vx: 0, vy: 0,
+      // The split arc, for a player piece on its way out and back; null while
+      // it is an ordinary follower. Declared here so every cell keeps one shape.
+      flight: null,
     };
     this.cells.push(cell);
     return cell;
@@ -763,6 +798,8 @@ export class Pond {
       const piece = this.#newCell(owner, cell.x, cell.y, half);
       piece.vx = Math.cos(angle) * t.splitLaunch;
       piece.vy = Math.sin(angle) * t.splitLaunch;
+      // The player's piece flies the arc; see TUNING.splitCoastSeconds.
+      if (owner === 'player') piece.flight = { phase: 'out', coast: 0, t: 0 };
       done++;
     }
     if (owner === 'player') this.splits += done;
@@ -819,6 +856,7 @@ export class Pond {
     }
 
     this.#steerPlayer(dt, input);
+    this.#followHead(dt);
     this.#thinkBots(dt);
     this.#moveCells(dt);
     this.#moveBlobs(dt);
@@ -962,6 +1000,33 @@ export class Pond {
     const uy = (input.y || 0) / mag;
     main.x += ux * speedOf(main.mass, t) * dt;
     main.y += uy * speedOf(main.mass, t) * dt;
+  }
+
+  /**
+   * The player's other pieces, every step, stick or no stick.
+   *
+   * This used to live inside #steerPlayer, behind its "no input, nothing to
+   * do" return -- so a split piece only flew its arc while the stick was
+   * pushed, and a player who let go to watch the split land watched it hang
+   * at the far end for ever. The head is the only thing the stick moves; the
+   * pieces have their own business whatever the thumb is doing.
+   */
+  #followHead(dt) {
+    const t = this.t;
+    const main = this.mainCell('player');
+    if (!main) { this.#headWas = null; return; }
+
+    // How fast the head is ACTUALLY moving this step, from where it was last
+    // step -- not its top speed. A returning piece matches this and closes on
+    // top of it, so it gains on a still head and a running head alike.
+    // Capped at the head's top speed so a respawn or a spike burst cannot read
+    // as a teleport. Reset when the head changes.
+    let headMoving = 0;
+    if (this.#headWas && this.#headWas.id === main.id && dt > 0) {
+      headMoving = Math.min(speedOf(main.mass, t),
+        Math.hypot(main.x - this.#headWas.x, main.y - this.#headWas.y) / dt);
+    }
+    this.#headWas = { id: main.id, x: main.x, y: main.y };
 
     // The followers swim at the head rather than at a point in space, so they
     // trail behind it the way a shoal does instead of racing it to a spot.
@@ -975,6 +1040,51 @@ export class Pond {
       const dy = main.y - cell.y;
       const d = Math.hypot(dx, dy);
       if (d < 0.001) continue;
+
+      // THE LEASH, whatever phase the piece is in: never further from the head
+      // than splitMaxRange. Applied as a clamp rather than a force so a head
+      // running flat out cannot outpace it.
+      if (d > t.splitMaxRange) {
+        const over = d - t.splitMaxRange;
+        cell.x += (dx / d) * over;
+        cell.y += (dy / d) * over;
+      }
+
+      if (cell.flight) {
+        const f = cell.flight;
+        if (f.phase === 'out') {
+          // The launch is doing the moving (see #moveCells). This only watches
+          // for it to finish: stopped, and coasted for a moment.
+          const launchSpeed = Math.hypot(cell.vx, cell.vy);
+          if (launchSpeed < t.splitCoastBelow) f.coast += dt;
+          if (f.coast >= t.splitCoastSeconds || d >= t.splitMaxRange) {
+            f.phase = 'back';
+            f.t = 0;
+            cell.vx = 0;
+            cell.vy = 0;
+          }
+          continue;
+        }
+        // Back: slow to start, fastest at the end. The ramp runs on TIME, not
+        // on distance covered: measured by distance, a piece riding the leash
+        // behind a running head never made progress and so never sped up, and
+        // hung 520 units back for as long as the stick was held. And the
+        // closing speed is added to the head's own, so the piece gains on a
+        // head that is running away at the same rate it would on one at rest.
+        f.t += dt;
+        const progress = Math.min(1, f.t / t.splitReturnSeconds);
+        const base = Math.max(speedOf(cell.mass, t), headSpeed);
+        const speed = headMoving + base * (t.splitReturnSlow + (t.splitReturnFast - t.splitReturnSlow) * progress * progress);
+        const flank = (radiusOf(cell.mass, t) + radiusOf(main.mass, t)) * t.cellRest;
+        const closing = Math.max(0, d - flank);
+        const step = Math.min(speed * dt, closing);
+        cell.x += (dx / d) * step;
+        cell.y += (dy / d) * step;
+        // Home: from here it is an ordinary follower.
+        if (closing - step < 0.5) cell.flight = null;
+        continue;
+      }
+
       const speed = Math.max(speedOf(cell.mass, t), headSpeed) * t.followShare;
       // To the head's FLANK, not its centre. A follower that aims at the
       // centre drives inside the head faster than #separate can push it out,
@@ -1246,6 +1356,8 @@ export class Pond {
       const centre = head ?? Pond.#centreOfCells(mine);
       for (const cell of mine) {
         if (cell === head) continue;
+        // A piece still on its way out is left to fly. See TUNING.splitCoastSeconds.
+        if (cell.flight && cell.flight.phase === 'out') continue;
         const dx = centre.x - cell.x;
         const dy = centre.y - cell.y;
         const d = Math.hypot(dx, dy);

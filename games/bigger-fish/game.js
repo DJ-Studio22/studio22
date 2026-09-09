@@ -45,7 +45,7 @@ import { AudioManager } from '../../engine/audio.js';
 import { ParticlePresets, ParticleSystem, clamp } from '../../engine/util.js';
 
 import {
-  Pond, SKILL_NAMES, TUNING, mergeContactSeconds, radiusOf, speedOf, splitReach,
+  Pond, SKILL_NAMES, TUNING, mergeContactSeconds, radiusOf, speedOf,
 } from './pond.js';
 
 const GAME_ID = 'bigger-fish';
@@ -404,23 +404,11 @@ function drawCells() {
   }
 }
 
-function drawReach() {
-  // WHERE A SPLIT WOULD LAND, drawn from the same splitReach() the bots use to
-  // decide whether to commit to one. A dashed ring rather than a number,
-  // because the question it answers is "can I reach that from here".
-  const mine = pond.cellsOf('player');
-  if (!mine.length) return;
-  const head = mine.reduce((a, b) => (a.mass >= b.mass ? a : b));
-  if (head.mass < TUNING.splitMinMass) return;
-  const [x, y] = toScreen(head.x, head.y);
-  ctx.strokeStyle = 'rgba(255,194,71,0.28)';
-  ctx.lineWidth = 2;
-  ctx.setLineDash([7, 9]);
-  ctx.beginPath();
-  ctx.arc(x, y, splitReach(head.mass) * camera.scale, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}
+// The dashed reach ring around the player is gone. It was drawn from
+// splitReach() so the picture could not disagree with the bots, and it was
+// still visual noise: a circle that breathed with your mass in the middle of
+// the playfield, saying something the split itself says the moment you press
+// it. Removed on request from the phone.
 
 function drawMinimap() {
   const size = 118;
@@ -517,7 +505,7 @@ function drawHud() {
   if (mass >= TUNING.spikeMass) {
     ctx.fillStyle = ART.hud.warn;
     ctx.font = '700 13px system-ui, sans-serif';
-    ctx.fillText('BIG ENOUGH FOR SPIKES TO HURT', 22, 134);
+    ctx.fillText('BIG ENOUGH FOR SPIKES TO HURT', x, 134);
   }
 
   if (flash) {
@@ -537,7 +525,6 @@ function render() {
   drawPellets();
   drawSpikes();
   drawBlobs();
-  drawReach();
   drawCells();
   particles.draw(ctx);
   ctx.restore();
