@@ -524,5 +524,28 @@
     "tournamentReady": true,
     "estimatedRunTime": 120,
     "status": "live"
+  },
+  {
+    "id": "tide",
+    "title": "Tide",
+    "tagline": "Fill a line. The biggest share takes it.",
+    "description": "A board game with one rule: put a stone on any empty square, and when a row or column fills up, whoever has the most stones in it takes the line and the line washes away. Everything else falls out of that. The last stone can flip who holds a line, so closing one somebody else leads hands them the whole thing in front of the table — and a row already three-to-one is a row nobody wants to touch, which is where the arguing starts. Two to six people on one screen, passing one pad. The board shows what your move pays and who it pays before you commit, so nobody has to be taught the rule.",
+    "category": "party",
+    "path": "/games/tide/index.html",
+    "difficulty": "easy",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "party",
+      "board",
+      "pass-and-play",
+      "multiplayer",
+      "strategy",
+      "local"
+    ],
+    "featured": false,
+    "tournamentReady": false,
+    "estimatedRunTime": 360,
+    "status": "live"
   }
 ]

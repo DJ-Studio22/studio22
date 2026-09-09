@@ -736,6 +736,67 @@ function winter() {
  * way out, gold after the bounce, arriving at a tank that is plainly behind
  * cover and could not have been hit any other way.
  */
+/**
+ * Tide: a row one stone short of full, with one colour holding most of it.
+ *
+ * The card shows the decision rather than the board -- a gap, a line somebody
+ * already owns, and the water arriving. Anyone who has played it reads the
+ * situation instantly, and anyone who has not sees a board game with a tide in
+ * it, which is what it is.
+ */
+function tide() {
+  const C = ['#ffb02e', '#4fc3f7', '#7ed957', '#ff6b8a'];
+  let out = '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="td-sea" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#08202e"/>'
+    + '<stop offset="1" stop-color="#0d3347"/></linearGradient>'
+    + '<linearGradient id="td-wash" x1="0" y1="0" x2="1" y2="0">'
+    + '<stop offset="0" stop-color="#78d7ff" stop-opacity=".55"/>'
+    + '<stop offset="1" stop-color="#78d7ff" stop-opacity="0"/></linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#td-sea)"/>';
+
+  // A four by four board, drawn from the middle out so it sits on the card.
+  const cell = 38;
+  const ox = 160 - cell * 2;
+  const oy = 100 - cell * 2;
+
+  // Row 1 is the story: three amber, one grey, one gap.
+  const board = [
+    [-1, 1, -1, 2],
+    [0, 0, 0, null],
+    [3, -1, 1, -1],
+    [-1, 2, -1, 0],
+  ];
+
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const x = ox + c * cell;
+      const y = oy + r * cell;
+      out += '<rect x="' + (x + 2) + '" y="' + (y + 2) + '" width="' + (cell - 4)
+        + '" height="' + (cell - 4) + '" rx="7" fill="rgba(255,255,255,.05)"'
+        + ' stroke="rgba(255,255,255,.09)"/>';
+      const who = board[r][c];
+      if (who === null) continue;
+      const fill = who === -1 ? '#7d8c95' : C[who];
+      out += '<circle cx="' + (x + cell / 2) + '" cy="' + (y + cell / 2)
+        + '" r="' + (cell / 2 - 7) + '" fill="' + fill + '"/>';
+    }
+  }
+
+  // The line that is one short, outlined in the colour that would take it.
+  out += '<rect x="' + (ox + 1) + '" y="' + (oy + cell + 1) + '" width="' + (cell * 4 - 2)
+    + '" height="' + (cell - 2) + '" rx="9" fill="none" stroke="' + C[0]
+    + '" stroke-width="2.5"/>';
+
+  // The water, arriving.
+  out += '<rect x="0" y="0" width="120" height="200" fill="url(#td-wash)"/>';
+  out += '<path d="M0 176 q26 -9 52 0 t52 0 t52 0 t52 0 t52 0 t60 0" fill="none"'
+    + ' stroke="#bef0ff" stroke-opacity=".55" stroke-width="2.5"/>';
+  out += '<path d="M0 188 q26 -9 52 0 t52 0 t52 0 t52 0 t52 0 t60 0" fill="none"'
+    + ' stroke="#bef0ff" stroke-opacity=".3" stroke-width="2"/>';
+
+  return out + '</svg>';
+}
 function tankTactics() {
   const block = (x, y, w, h) => '<g><rect x="' + x + '" y="' + y + '" width="' + w
     + '" height="' + h + '" fill="#5a6675" stroke="#8a97a8" stroke-width="2"/></g>';
@@ -1127,6 +1188,7 @@ const ART = {
   'mini-golf': miniGolf,
   winter,
   'tank-tactics': tankTactics,
+  tide,
   'color-heist': colorHeist,
   hangman,
   'beat-blocker': beatBlocker,
