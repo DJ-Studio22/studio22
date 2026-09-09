@@ -31,23 +31,30 @@
 // is off. The landing page and the arcade hub never import this module, so they
 // cannot fetch audio even by accident. ONE track is fetched to begin with, and
 // the next only in the last half-minute of it -- so the cost of starting a game
-// is one file, not five and not two.
+// is one file, not all seven and not two.
 //
 // If a file is missing, slow, or corrupt, the game gets silence. Never an
 // error, never a stall: this module's failure mode is the absence of music.
 
 import { Session } from './session.js';
 
-// The five tracks, in public/music/. Filenames are URL-safe on purpose -- the
-// originals had spaces and an apostrophe, which survive a fetch only by luck
-// and encoding.
-const TRACKS = [
-  'beautiful-mistake',
-  'dont-call-me',
-  'never-good-at-leaving',
-  'stay-a-while',
-  'tonight-again',
-];
+// THE PLAYLIST IS THE FOLDER. `__MUSIC_TRACKS__` is compiled in by Vite from
+// whatever .mp3 files are in public/music/ (vite.config.js, `define`, via
+// tools/music-tracks.mjs), so a new song is a new file and no code changes.
+//
+// It used to be a list of five names written here, and the sixth and seventh
+// songs were dropped into the folder, shipped by the build, and never played.
+// A list that has to be kept in step with a folder will not be.
+//
+// Outside Vite -- the Node test runner importing this module -- the constant
+// does not exist and the playlist is empty, which is the correct answer for a
+// context with no audio in it. tests/engine.music.test.mjs checks the folder
+// through the same function the build uses.
+/* global __MUSIC_TRACKS__ */
+const TRACKS = typeof __MUSIC_TRACKS__ !== 'undefined' ? __MUSIC_TRACKS__ : [];
+
+/** The track ids this build will play, for anything that wants to show them. */
+export const trackIds = () => [...TRACKS];
 
 const BASE = '/music/';
 
