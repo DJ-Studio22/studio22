@@ -127,3 +127,14 @@ the registrar and Cloudflare steps are written up in [`DEPLOY.md`](DEPLOY.md).
 `PROGRESS.md` is the build log and the record of decisions already settled.
 `BACKLOG.md` is what is left. Every entry in `games.json` is `live`; what
 remains is hardware testing and a short list of known rough edges.
+
+---
+
+## Reading this code
+
+The source is public so that people can read it. It is a portfolio piece,
+not an open-source project: there is no licence, and none is implied. You
+are welcome to look, learn from it and get in touch about it. You may not
+copy it, redistribute it, or build on it without permission.
+
+Copyright 2026 Timothy Jackson. All rights reserved.
