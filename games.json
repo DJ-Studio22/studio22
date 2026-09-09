@@ -570,5 +570,28 @@
     "tournamentReady": false,
     "estimatedRunTime": 420,
     "status": "live"
+  },
+  {
+    "id": "wavelength-lite",
+    "title": "Wavelength Lite",
+    "tagline": "One of you can see the spot. Say something useful.",
+    "description": "A dial runs between two opposites — cold to hot, useless to essential, a hobby to an obsession. One player sees a hidden spot on it and says a clue out loud, no numbers and neither end word, and everybody else takes a turn moving the pointer to where they think it is. The whole game is how well one person idea of quite warm matches everyone else. Everybody gives a clue exactly once, guesses are made without seeing anyone else, and the clue-giver is paid the average of them — so landing the whole table beats landing one lucky person.",
+    "category": "party",
+    "path": "/games/wavelength-lite/index.html",
+    "difficulty": "easy",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "party",
+      "social",
+      "guessing",
+      "pass-and-play",
+      "local",
+      "conversation"
+    ],
+    "featured": false,
+    "tournamentReady": false,
+    "estimatedRunTime": 420,
+    "status": "live"
   }
 ]
