@@ -208,8 +208,7 @@ npm run ci                         # test + build + verify, the same as CI
 git add -A && git commit
 git push -u origin thing-im-doing
 gh pr create --fill                # or open it in the browser
-gh pr checks --watch               # wait for both checks to go green
-gh pr merge --squash --delete-branch
+npm run merge                      # waits for the checks, REFUSES on a red one
 git checkout main && git pull
 ```
 
@@ -230,8 +229,11 @@ worth keeping tidy.
 ### When the checks fail
 
 Fix it on the branch and push again — the PR re-runs automatically. Do not
-merge around a red check; the ruleset will not let you anyway, and the one
-time it would have been justified is the time it would have been wrong.
+merge around a red check. Nothing on the server will stop you: there is no
+branch protection on a private free-plan repo, and `gh pr merge` does not look
+at the checks -- PR #16 went to `main` red that way. `npm run merge`
+(`tools/merge-pr.mjs`) is the gate: it waits for pending checks, refuses on
+any failure, and has no `--force` on purpose.
 
 If a check fails on CI but passes locally, the difference is almost always one
 of two things: `npm ci` installs exactly what `package-lock.json` pins and
@@ -240,7 +242,9 @@ specific to Node 22 while local is 24. Both are real failures worth having.
 
 ### If you do not have `gh`
 
-The PR can be opened and merged in the browser; the CLI just saves the trip.
+The PR can be opened and merged in the browser; the CLI just saves the trip,
+but without it you are also without the merge gate, so read the checks
+yourself before pressing the button.
 GitHub prints a "Compare & pull request" link the first time a branch is
 pushed. Installing it is `winget install GitHub.cli`, then `gh auth login`.
 

@@ -25,7 +25,8 @@ Deployed as a static site to Cloudflare Pages.
   below for why, and follow it regardless.
 - NEVER merge a pull request without confirming its checks are green. Use
   `npm run merge`, which refuses. `gh pr merge` does not look at the checks
-  and the rulesets have an admin bypass, so nothing else will stop you.
+  and there is no branch protection on this repo, so nothing else will stop
+  you.
 
 ## Architecture rules
 - Games import FROM engine/. Nothing in engine/ ever imports FROM games/.
@@ -44,8 +45,8 @@ Deployed as a static site to Cloudflare Pages.
 
 ## Game palettes
 Each game defines its own palette. Games are artwork, not chrome, and pushing
-thirteen games through one set of tokens would make them all look like the same
-picture. A game's colours are local to that game.
+twenty-six games through one set of tokens would make them all look like the
+same picture. A game's colours are local to that game.
 
 The convention, which every game follows the same way:
 
@@ -68,9 +69,27 @@ enough colours that one flat object turns unwieldy, group by subject
 ### What stays consistent
 The shell draws on top of every game, and it keeps site tokens regardless of
 what the game underneath looks like. Pause menu, game over, title screen, and
-HUD must be instantly recognisable in all thirteen games — a player who pauses
+HUD must be instantly recognisable in every game — a player who pauses
 should know they are in Studio 22, not in whatever world the game just built
 around them. Games never restyle the shell.
+
+## Music
+The playlist is the folder. Every `.mp3` in `public/music/` is a track;
+`vite.config.js` reads the folder at build time and compiles the list into
+`engine/music.js` as `__MUSIC_TRACKS__`. There is no list of tracks anywhere
+in the source and there must not be one: the first version had five names in
+an array and the sixth and seventh songs shipped without ever being played.
+
+- Filenames are lowercase words joined by hyphens: `half-the-sky.mp3`. The
+  build refuses anything else (`tools/music-tracks.mjs`), because a space or
+  a capital is a file that fetches on one browser and not another.
+- Music is opt-in per game (`music: true` in the shell config) and never
+  goes in a game where a sound tells the player something -- Beat Blocker's
+  music is its chart.
+- Nothing is fetched until a run starts, nothing at all with sound off, one
+  track at a time. A missing file is silence, never an error.
+- `verify-build` checks every song in the folder is in `dist/music` AND in
+  the compiled playlist, so a song that ships but cannot play fails the build.
 
 ## Testing — a game with real tuning gets its simulation extracted
 
@@ -81,7 +100,9 @@ a claim splits in two:
 - `game.js` keeps canvas, input, audio, camera and shell wiring.
 - A **rules module** holds the simulation, free of the DOM, importable from
   Node — `driving.js`, `problems.js`, `board.js`, `swing.js`, `rooms.js`,
-  `motion.js`, `gorge.js`, `hold.js`.
+  `motion.js`, `gorge.js`, `hold.js`, `climb.js`, `shaft.js`, `pond.js`,
+  `orbit.js`, `rift.js`, `circle.js`, `dial.js` and the rest. Most games
+  have one now.
 
 Then a bot in `tests/` plays it thousands of times a second.
 
@@ -209,6 +230,10 @@ git checkout main && git pull
 - **Never commit on `main`.** Branch first, before the first edit. Nothing
   will refuse the commit, which is exactly why the habit has to be automatic.
   Noticing afterwards means a cherry-pick or a reset, and both are avoidable.
+  **This includes the GitHub web uploader.** On 9 September 2026 two music
+  files went straight to `main` through "Add file > Upload", with names the
+  build would have refused, and were renamed in a PR afterwards. Upload to a
+  branch and open a PR like anything else; CI is the only thing checking.
 - **Run `npm run ci` before pushing.** It is exactly what the workflow runs —
   `npm test`, `npm run build`, then the two build checks — so a green local run
   means a green remote one and finding out costs seconds instead of a round
@@ -219,8 +244,8 @@ git checkout main && git pull
   rule and it was bought with a broken `main`.
 
   `gh pr merge` does not look at the checks. It squashes a pull request with a
-  failing build without a word, and the repo's rulesets carry an admin bypass,
-  so the server does not refuse either. The only thing between a red check and
+  failing build without a word, and there is no branch protection to refuse
+  it on the server either. The only thing between a red check and
   `main` was remembering to read the output of `gh pr checks` before typing
   the next command.
 
