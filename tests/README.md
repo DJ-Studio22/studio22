@@ -188,8 +188,8 @@ found what the other did.
 ## 8. engine/ gets covered too, and it is where the worst bugs live
 
 For a long time this directory tested games and not the engine. That was
-backwards. Seven games have measured rules modules; `engine/` is 6,500 lines
-that every one of the thirteen imports, so a fault there breaks all of them at
+backwards. Most games have measured rules modules; `engine/` is over 8,500 lines
+that every one of the twenty-six imports, so a fault there breaks all of them at
 once — and the black-screen bug that took every game down lived in
 `engine/canvas.js`.
 

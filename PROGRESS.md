@@ -1,6 +1,29 @@
 # Studio 22 — Build Progress
 
 ## Done
+- Phase 43: the second phone report, 9 September 2026. All seven songs play
+  because the playlist is now the folder rather than a list; the landing page
+  on a phone lost a clock rendered under the wordmark and a screen and a half
+  of black after "Play anywhere", and gained an About link; the About copy was
+  read aloud and cut; and Bigger Fish's pond runs at a quarter of the pellets
+  so growth is something you watch. See below
+
+- Phase 42: the first phone report, 9 September 2026. Audio that died after an
+  alarm and never came back -- the manager had unlocked once and never called
+  resume() again -- now recovers three ways and has a test that interrupts a
+  fake context from outside. Updraft's spring shields the whole ascent. A
+  session-best line with confetti in the five distance games. Gravity Well
+  measured and given a top speed. Impostor Circle can skip a vote and a wrong
+  accusation costs the table. Both party games got the A pad their cards had
+  been asking for. Bigger Fish's head is a cell for life. See below
+
+- Phase 41: three party games and an About page. Tide (a board game with one
+  rule), Impostor Circle (nobody is told who the impostor is, including the
+  impostor) and Wavelength Lite (a dial between two opposites), all
+  pass-and-play on one device with the same hand-off ceremony. About page
+  linked from the footer and, since Phase 43, the top line. Twenty-six games
+  live
+
 - Phase 40: music. engine/music.js plays a shuffled, cross-faded playlist in the
   nine games where a sound never tells the player anything -- never Beat
   Blocker, whose music IS the chart. Two independent volumes in the pause menu,
@@ -45,7 +68,7 @@
   survive the change and is written up as unproven rather than retuned
 
 - Phase 0: Node, Git, VS Code, Claude Code installed
-- Phase 1: Vite scaffold, GitHub repo, Cloudflare Pages auto-deploy live at studio22-anw.pages.dev
+- Phase 1: Vite scaffold, GitHub repo, Cloudflare Pages auto-deploy live at studio22-anw.pages.dev (now https://studio22.games, Phase 31)
 - Phase 2: all eight engine modules — input.js, canvas.js, loop.js, session.js, ui.js, shell.js, audio.js, util.js. Verified on desktop keyboard, Xbox gamepad, and iPhone touch across input, canvas, loop, shell, and audio (iOS unlock confirmed on first tap). 60fps confirmed on device.
 - Phase 3: games.json + engine/manifest.js, scroll-driven landing page, visual identity in styles/tokens.css, arcade hub
 - Phase 4 (partial): Updraft ported from reference/skyhopper.html (19.3 KB gzipped). Engine gaps found during that port are fixed — showTitle(), drawHud best field, ParticleSystem.shift(), TICKS_PER_SECOND, audio.define(), Input.clearTouchLayout()
@@ -88,6 +111,154 @@
 - Nothing queued. Every entry in games.json is `live` — the arcade has no
   placeholder cards left for the first time.
 
+
+## Phase 43 — the second phone report, and a playlist that is a folder
+
+### The two songs that shipped and never played
+
+Two new MP3s arrived on `main` through the GitHub web uploader -- ` Today.mp3`
+with a leading space and `Half The Sky.mp3` -- and the build copied them to
+`dist/music/` and the game never asked for them, because `engine/music.js`
+held the five track names in an array. Both halves are fixed and the second is
+the one that matters: the playlist is now READ FROM THE FOLDER at build time
+(`vite.config.js` `define`, through `tools/music-tracks.mjs`) and compiled into
+the module as a constant. A new song is a new file. `listTracks()` refuses a
+name that is not lowercase-hyphenated, so the next bad upload is a build error
+with the rename in it rather than silence in the game, and `verify-build`
+checks every song in the folder is both in `dist/music` and in the compiled
+playlist. Seven tracks, 36.5 MB, one fetched at a time.
+
+**DECIDED: there is no list of tracks in the source, and there must not be.**
+
+### The landing page on a phone
+
+Both faults were half-done fixes in the small-screen block of `site.css`. The
+corner telemetry had been made `position: static` so it left the corner, which
+put the clock first in the document flow, rendered under the wordmark. Hidden
+on phones now. The "Play anywhere" stage had lost its pin on phones but the
+section kept its `220svh`, so a static 878px stage sat in an 1866px section --
+the screen and a half of black. `min-height: 0` wherever the stage is static.
+Measured in a 393px viewport: no gap between any two blocks on the page.
+
+Also from the sweep: the top line has an About link, three utilities that are
+forbidden to wrap and end 39px inside a 375px screen; the television frame in
+the device row overflowed its `1fr` column by 26px (`minmax(0, 1fr)` and a
+`max-width`); Bigger Fish's 206-word description was cut to 80.
+
+### Bigger Fish: a quarter of the pellets
+
+The spawn rule was already right -- everything enters at mass 2, tested since
+Phase 37 -- and the report that bots "spawn at 1000" came in twice anyway,
+because at 1 pellet per 2667 square units the median bot was 200 mass at
+sixty seconds and the biggest 777, 4000 by two minutes. From the player's
+seat that is indistinguishable from spawning huge. Pellet density is the one
+dial that slows everything at the same rate, so it went to a quarter: 3840
+pellets, 1 per 10667.
+
+| twelve seeds, 60 s, idle player | before | after |
+|---|---|---|
+| median bot | 201 | 45 |
+| biggest bot | 1034 | 176 |
+| biggest bot at 120 s | 4035 | 588 |
+| selective policy | 200 | 24 |
+| idle player survives | 27 s | 42 s |
+
+**DECIDED: the bot count stays at 72.** Forty was tried in Phase 36 and made
+the two skill policies agree on half of runs instead of a fifth; bot density is
+what keeps judgement measurable. The pellet count is the growth dial and the
+bot count is the danger dial, and they are not interchangeable.
+
+### The About page, read aloud
+
+Second paragraph of "How it was made" deleted; the rest cut to sentences that
+survive being spoken. "One studio" became "one person", which is what the
+landing page already said.
+
+## Phase 42 — the first phone report
+
+Eight items from an iPhone, all verified against a production build, each on
+its own branch (PRs #45 to #51).
+
+### Audio that never came back
+
+An alarm or an app switch killed every sound until reload. Not a
+visibilitychange handler suspending without resuming: there was no lifecycle
+handling at all. `AudioManager` unlocked the context on the first gesture,
+removed its gesture listeners, and nothing anywhere ever called `resume()`
+again. Safari's `interrupted` state and a backgrounded `suspended` both stayed
+put for ever.
+
+Three recovery paths now: the context's own `statechange`, page return
+(`visibilitychange`, `pageshow`, `focus`), and the player's next tap or key --
+the gesture listeners go back on whenever the context stops, because a bare
+`resume()` is allowed to be refused. `play()` and `beep()` kick a recovery,
+once, if asked to sound into a stopped context. `isRunning` is new and
+distinct from `isUnlocked`. `tests/engine.audio.test.mjs` drives the manager
+with a fake context whose state is changed from outside, as the OS does; six of
+seven tests fail against the shipped module. Verified on the build: an
+externally suspended context comes back in about 12 ms.
+
+### Gravity Well: the difficulty was speed
+
+A competent pilot -- reads a second and a half of the line, re-decides twice a
+second, the new second skill level in `tests/helpers/gravity-bot.mjs` --
+averaged 215 units a second, one full screen per second, and died at a median
+14.5 s. Fewer bodies, weaker pull, a faster turn, a wider lane and more fuel
+were each tried; every one helped the good pilot and left the competent one
+dying at the same fourteen seconds.
+
+A top speed of 100 (`TUNING.maxSpeed`), enforced inside `advance()` so the
+prediction is capped by the same arithmetic as the flight, changed the failure:
+competent median run 42 s, good pilot stops crashing at all (18 of 30 alive at
+sixty seconds). Corridor growth eased to match, fuel burn 11/s from 15.
+Foresight re-measured: 0.5 s 1013, 1 s 1432, 1.5 s 3672, 2 s 4819, 3 s 4793,
+5 s 4057 -- same shape, plateau from two seconds. The touch thumbstick is gone;
+two turn pads bottom-left, BURN bottom-right.
+
+**DECIDED: the top speed is the lever, not the corridor.** Re-tune the corridor
+before the cap and the competent pilot is back at fourteen seconds.
+
+### Bigger Fish: the stick drives one cell for life
+
+Reported twice: at four or more pieces the player is stuck. The head was "the
+biggest piece", re-chosen every frame. Two halves tie and the tie went to the
+piece that stayed, so at two pieces it held; at four or more, whichever piece
+grazed a pellet first became the head and the pack turned round to chase it,
+several times a second. The merge also deleted the head when it was second in
+the array.
+
+The head is now a cell by id. Splits, merges and spike bursts keep it; growing
+never moves it; only the head being eaten passes control, once, to the largest
+piece left. Followers chase at 1.6 times the faster of their own speed and the
+head's, stop at its flank, and the stick-spread rule (`cellSpread` 0.7 -> 0)
+is gone -- it was holding a heavy follower 220 units off the head for as long
+as the stick was pushed. Three of four new tests fail against the old model.
+
+**DECIDED: control is an identity, never a size comparison.**
+
+### The rest
+
+- Updraft: a spring arms a shield until the first falling tick; foes touched
+  on the way up die for the usual 50, no kink in the arc.
+- `engine/best-marker.js`: a dashed line at the session best in the shell
+  accent, confetti on crossing, then the line comes down. The engine owns the
+  crossing (once, strictly past, never on a first run, never re-arms); each of
+  Updraft, Sinkhole, Skyhook, Rift Runner and Ember maps the best to a place in
+  its own world. The burst has been unit-tested and not yet watched.
+- Impostor Circle: a NOBODY row skips the vote when it takes the plurality or
+  ties the top name; a wrong accusation costs every non-impostor a point. Vote
+  rows shrink so six players plus NOBODY fit.
+- Both party games had cleared the touch layout and said "press A" on a phone
+  with no A. Wavelength Lite could not lock a guess in on touch at all. One A
+  pad each, virtual stick off.
+
+## Phase 41 — three party games and an About page
+
+Tide (#42), Impostor Circle (#43) and Wavelength Lite (#44): pass-and-play on
+one device, two to six players, the same hand-off card in the player's colour
+with the person about to look pressing the button themselves. Each has a
+DOM-free rules module and a test file. The About page (#40) took Bigger Fish
+into the featured slot. Twenty-six games live, all `live` in the manifest.
 
 ## Phase 40 — music, and what it costs
 

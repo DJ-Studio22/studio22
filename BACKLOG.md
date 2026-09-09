@@ -6,8 +6,9 @@ has to satisfy, and how to tell it is done.
 Tick a task only when its verification actually passed, not when the code was
 written.
 
-**Open right now:** item 13 only — real-hardware testing. Everything else is
-done. Item 13 cannot be closed from this machine and is not a code task.
+**Open right now:** items 13 to 17. Item 13 (real hardware) is the big one and
+cannot be closed from this machine; 14 to 17 are small and known. Everything
+above 13 is done. Last reviewed 9 September 2026.
 
 ---
 
@@ -302,19 +303,19 @@ Android phone or tablet at all. Untested:
   which is exactly the case `100svh` and the canvas letterbox exist for.
 - Tournament mode's on-screen keyboard, which is touch-first by design.
 
-**iOS audio on current Safari.** The unlock in `engine/audio.js` is written
-against a specific historical iOS rule — resume() alone was not enough, a
-buffer had to be played inside the gesture handler. That was verified by hand
-once, on one iPhone, on a since-superseded iOS. Firefox is the only engine in
-the automated suite that suspends audio until a gesture, so it is the only one
-exercising that path at all, and it is not the engine the rule was written
-for. Untested:
+**iOS audio on current Safari.** Partly evidenced now. An iPhone on current
+iOS has been played on (September 2026) and found the worst bug on the list:
+audio died for good after an alarm or an app switch, because nothing ever
+called `resume()` after the first unlock. Fixed in `engine/audio.js` (PR
+#45) with three recovery paths and a test that interrupts a fake context from
+outside. Still untested on the device:
 
-- Whether the unlock still fires on current iOS Safari.
-- Whether the silent-buffer step is still required, or now harmless noise.
+- Whether the silent-buffer step in the unlock is still required, or now
+  harmless noise.
 - The hardware mute switch, which on iOS silences Web Audio in some
   configurations and not others.
-- Audio surviving a backgrounded tab and a returning one.
+- That the recovery actually fires on the phone after a real alarm, as opposed
+  to in Chrome with the context suspended by script. Nobody has heard it yet.
 
 ### How to close it
 
@@ -332,5 +333,67 @@ Borrowed hardware and an afternoon. In rough order of value:
 
 Tick this only when the hardware has actually been in hand. It is a real gap
 and writing it down is not the same as closing it.
+
+---
+
+## 14. Cold-start plays owed — OPEN
+
+CLAUDE.md requires a human to play the first thirty seconds of a game cold
+before it is done, and two retunes shipped in September 2026 on bot evidence
+alone:
+
+- **Gravity Well** with its new top speed (PR #47). The bots say a competent
+  pilot now lasts 42 s where it lasted 14.5 s. A person has not flown it.
+- **Bigger Fish** at a quarter of the pellets (PR #55) and with the persistent
+  head (PR #50). The pond is measurably slower and the stick measurably stays
+  put. Whether it *feels* like watching a bot eat its way up, and whether the
+  followers' return reads as a shoal or a queue, is a phone question.
+
+**Verify:** thirty seconds cold on the phone, each. Tick when played.
+
+---
+
+## 15. The best-marker burst has not been seen — OPEN
+
+`engine/best-marker.js` (PR #51) draws the session-best line in five games and
+fires confetti on crossing it. The line was verified on the production build in
+Updraft and Rift Runner. The confetti is covered by a unit test and has never
+been watched: the browser harness could not time a jump in a throttled tab.
+
+**Verify:** beat a session best in any of Updraft, Sinkhole, Skyhook, Rift
+Runner or Ember and confirm a brief burst at the player, nothing obscured,
+nothing paused. Tick when seen.
+
+---
+
+## 16. Hub descriptions run long on a phone — OPEN
+
+Bigger Fish's description was 206 words and rendered as a wall on the landing
+page's featured card; it was cut to 80 (PR #53). Fourteen others are over 60
+words and eleven over 90 -- Gravity Well 176, Beat Blocker 153, Hangman 132,
+Asteroid Salvage 130, Tide 118 -- and the arcade hub shows the full text on
+every card. They
+read as design notes rather than as blurbs.
+
+**Do:** cut each to two or three spoken sentences. The measured claims they
+carry belong in PROGRESS.md, where most of them already are.
+
+**Verify:** no card description over about 60 words; the hub at 393px reads as
+a list of games rather than a list of essays.
+
+---
+
+## 17. Forty-eight stale remote branches — OPEN
+
+Every remote branch except `main` is a merged PR (checked 9 September 2026:
+54 merged PRs, no branch with commits newer than its merge). `npm run merge`
+passes `--delete-branch` but the remote copies survive, so the list keeps
+growing.
+
+**Do:** delete the merged remote branches, and find out why `--delete-branch`
+leaves them (a repo setting, or the local checkout being on the branch at the
+time).
+
+**Verify:** `git branch -r` shows `main` and whatever is genuinely in flight.
 
 ---
