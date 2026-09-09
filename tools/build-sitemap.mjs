@@ -33,6 +33,7 @@ const pages = [
   { loc: '/', priority: '1.0', changefreq: 'monthly' },
   { loc: '/arcade.html', priority: '0.9', changefreq: 'monthly' },
   { loc: '/party.html', priority: '0.7', changefreq: 'monthly' },
+  { loc: '/about.html', priority: '0.5', changefreq: 'yearly' },
   ...live.map((game) => ({ loc: game.path, priority: '0.8', changefreq: 'monthly' })),
 ];
 

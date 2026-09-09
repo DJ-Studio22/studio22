@@ -268,6 +268,19 @@ done.push(apply('arcade.html', metaBlock({
   },
 })));
 
+// --- About ---------------------------------------------------------------
+done.push(apply('about.html', metaBlock({
+  url: '/about.html',
+  title: 'About — Studio 22',
+  description: 'A passion project: a small arcade of original browser games, in one place, made by one studio. No accounts, no ads, nothing collected.',
+  jsonLd: {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: 'About Studio 22',
+    url: `${ORIGIN}/about.html`,
+  },
+})));
+
 // --- Party ---------------------------------------------------------------
 done.push(apply('party.html', metaBlock({
   url: '/party.html',

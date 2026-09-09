@@ -31,6 +31,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         arcade: resolve(__dirname, 'arcade.html'),
+        about: resolve(__dirname, 'about.html'),
         party: resolve(__dirname, 'party.html'),
         ...findGameEntries(),
       },
