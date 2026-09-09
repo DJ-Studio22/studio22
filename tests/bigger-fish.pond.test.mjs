@@ -217,6 +217,112 @@ test('the pieces drift back towards each other on their own', () => {
   assert.ok(gapAt() < wide, `the pieces are not closing: ${wide} then ${gapAt()}`);
 });
 
+// --- The head: which piece the stick drives --------------------------------
+
+// A pond with only the player in it, in the middle, on empty water. The same
+// set-up the merge tests use, for the same reasons written above them.
+function lonePlayer(mass = 400) {
+  const pond = new Pond({ ...TUNING, pellets: 0 });
+  pond.bots = [];
+  pond.cells = pond.cells.filter((c) => c.owner === 'player');
+  pond.spikes = [];
+  const cell = pond.cellsOf('player')[0];
+  cell.x = pond.t.width / 2;
+  cell.y = pond.t.height / 2;
+  cell.mass = mass;
+  return pond;
+}
+
+test('THE STICK DRIVES THE SAME CELL HOWEVER THE PIECES GROW -- the four-piece fault', () => {
+  // Reported twice. The head was "the biggest piece", re-chosen every frame.
+  // Two pieces are equal halves and the tie went to the one that stayed, so it
+  // looked fine; at four or more, whichever piece grazed a pellet first became
+  // the head and the whole pack turned round to chase it, several times a
+  // second. This drives the pond into exactly that state and asserts the stick
+  // never moves.
+  const pond = lonePlayer(800);
+  const head = pond.mainCell('player');
+  pond.split('player', head.x + 100, head.y);
+  pond.split('player', head.x + 100, head.y);
+  assert.equal(pond.cellsOf('player').length, 4, 'two splits did not make four');
+  assert.equal(pond.mainCell('player'), head, 'a split moved the stick');
+
+  // Now a FOLLOWER grows past the head, by a lot, and keeps growing.
+  const follower = pond.cellsOf('player').find((c) => c !== head);
+  for (let i = 0; i < 60 * 3; i++) {
+    follower.mass += 5;
+    pond.step(1 / 60, { x: 1, y: 0 });
+    assert.equal(pond.mainCell('player'), head,
+      `the stick jumped to a heavier piece on frame ${i} (${follower.mass} vs ${head.mass})`);
+  }
+  assert.ok(follower.mass > head.mass * 3, 'the follower never actually outgrew the head, so this proved nothing');
+});
+
+test('the pieces come back to the head instead of trailing it for ever', () => {
+  // A follower paced at 0.92 of a head moving at 1.0 never arrives; the gap
+  // grows for as long as the stick is held. Hold a direction for four seconds
+  // after a split and the pieces must be at the head's flank, not strung out
+  // behind it. `bound` is generous -- two cells' worth of radius past touching --
+  // because #separate holds them a little apart while the stick is pushed.
+  const pond = lonePlayer(400);
+  const head = pond.mainCell('player');
+  pond.split('player', head.x - 100, head.y);      // launched BACKWARDS, so it starts behind
+  pond.split('player', head.x - 100, head.y);
+  for (let i = 0; i < 60 * 4; i++) pond.step(1 / 60, { x: 1, y: 0 });
+  const bound = (radiusOf(head.mass) + radiusOf(head.mass)) * 2;
+  for (const cell of pond.cellsOf('player')) {
+    if (cell === head) continue;
+    const gap = Math.hypot(cell.x - head.x, cell.y - head.y);
+    assert.ok(gap < bound, `a follower is ${gap.toFixed(0)} behind the head after four seconds; bound ${bound.toFixed(0)}`);
+  }
+  // And the head was never slowed by them: full speed for four seconds.
+  assert.ok(head.x - pond.t.width / 2 > speedOf(head.mass) * 4 * 0.95, 'the followers held the head back');
+});
+
+test('a merge never absorbs the head', () => {
+  // Merging added the second cell into the first by array order. When the
+  // first was a follower, the head was the one deleted and the stick fell back
+  // to "the biggest" -- the same fault by another door.
+  const pond = lonePlayer(200);
+  const head = pond.mainCell('player');
+  pond.split('player', head.x + 100, head.y);
+  const [a, b] = pond.cellsOf('player');
+  // Put the head SECOND in the array, and smaller, so both old rules would have
+  // deleted it.
+  pond.cells = pond.cells.filter((c) => c !== head).concat([head]);
+  const other = a === head ? b : a;
+  other.mass = head.mass * 2;
+  other.x = head.x; other.y = head.y;
+  other.vx = 0; other.vy = 0; head.vx = 0; head.vy = 0;
+  for (let i = 0; i < 60 * (mergeContactSeconds() + 1); i++) {
+    // Pinned together: this is about who survives, not about contact.
+    other.x = head.x; other.y = head.y;
+    pond.step(1 / 60, {});
+  }
+  assert.equal(pond.cellsOf('player').length, 1, 'they did not merge');
+  assert.equal(pond.cellsOf('player')[0], head, 'the merge deleted the cell the stick drives');
+  assert.equal(pond.mainCell('player'), head);
+});
+
+test('control passes to the largest piece left ONLY when the head is eaten, and then stays', () => {
+  const pond = lonePlayer(400);
+  const head = pond.mainCell('player');
+  pond.split('player', head.x + 100, head.y);
+  pond.split('player', head.x + 100, head.y);
+  const pieces = pond.cellsOf('player').filter((c) => c !== head);
+  pieces[0].mass = 90;
+  pieces[1].mass = 50;
+  pieces[2].mass = 70;
+  // Something eats the head.
+  pond.cells = pond.cells.filter((c) => c !== head);
+  const next = pond.mainCell('player');
+  assert.equal(next, pieces[0], 'control did not pass to the largest remaining piece');
+  // And it does not move again when another piece outgrows the new head.
+  pieces[1].mass = 500;
+  pond.step(1 / 60, { x: 1, y: 0 });
+  assert.equal(pond.mainCell('player'), pieces[0], 'the stick moved again on growth');
+});
+
 test('a small cell cannot split, and nobody exceeds the cell cap', () => {
   const pond = new Pond();
   const cell = pond.cellsOf('player')[0];
