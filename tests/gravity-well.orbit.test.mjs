@@ -332,10 +332,23 @@ test('SEEING FURTHER AHEAD IS WORTH MORE, up to the length of a decision', () =>
     'the drawn line is outside the range that was measured to pay');
 });
 
-test('the two pilots differ in exactly one field', () => {
+test('the pilots differ along two named axes and nothing else', () => {
+  // Sight (usesPrediction, and how much of the line is read) and cadence (how
+  // often the pilot re-decides). A third field appearing here is a third thing
+  // the comparison could be measuring without saying so.
   const keys = new Set(Object.values(SKILLS).flatMap((s) => Object.keys(s)));
-  assert.deepEqual([...keys], ['usesPrediction']);
-  assert.notEqual(SKILLS.planner.usesPrediction, SKILLS.chaser.usesPrediction);
+  assert.deepEqual([...keys].sort(), ['decideEvery', 'horizon', 'usesPrediction']);
+  // The chaser is the good pilot without eyes: same cadence, no line.
+  assert.notEqual(SKILLS.good.usesPrediction, SKILLS.chaser.usesPrediction);
+  assert.equal(SKILLS.good.decideEvery, SKILLS.chaser.decideEvery);
+  // The competent pilot has the same eyes as the good one and reads less of
+  // the line, less often.
+  assert.equal(SKILLS.competent.usesPrediction, SKILLS.good.usesPrediction);
+  assert.ok(SKILLS.competent.horizon < SKILLS.good.horizon);
+  assert.ok(SKILLS.competent.decideEvery > SKILLS.good.decideEvery);
+  // And the good pilot reads the whole of what the game draws, no more.
+  assert.equal(SKILLS.good.horizon, TUNING.predictSeconds);
+  assert.equal(SKILLS.planner, SKILLS.good);
 });
 
 test('tuning is data a test can override — and gravity is what makes it a game', () => {
@@ -348,6 +361,14 @@ test('tuning is data a test can override — and gravity is what makes it a game
   // harder". It is what makes a run vary: the same corridor can slingshot you a
   // long way or end you early, and that spread is the game. A slalom with no
   // gravity in it is safer and duller.
+  //
+  // The top speed (TUNING.maxSpeed, September 2026) took the edge off the worst
+  // case on purpose -- a slingshot can no longer fling the craft into the next
+  // body at a speed nothing could answer -- so the floor moved from a fifth of
+  // the weightless floor to about six tenths of it (1876 against 3055 over
+  // sixteen seeds). The spread is still wider with gravity than without, which
+  // is the claim that matters; the ratio below is loosened to fit the cap and
+  // no further.
   const empty = { ...TUNING, G: 0 };
   const normal = [];
   const weightless = [];
@@ -357,11 +378,66 @@ test('tuning is data a test can override — and gravity is what makes it a game
   }
   const withGravity = summarise(normal);
   const without = summarise(weightless);
-  assert.ok(withGravity.min < without.min * 0.6,
+  assert.ok(withGravity.min < without.min * 0.8,
     `the worst run is ${without.min} without gravity against ${withGravity.min} with it, `
     + 'so the pull is not doing anything');
   assert.ok(withGravity.p90 - withGravity.p10 > without.p90 - without.p10,
     'gravity does not widen the spread of outcomes, so it is scenery');
+});
+
+test('THE TOP SPEED IS WHAT MADE IT PLAYABLE, and it holds in the prediction too', () => {
+  // The number behind the September 2026 easing. Without a cap the competent
+  // pilot -- one that reads a second and a half of the line, twice a second --
+  // averaged 215 units a second and died at a median 14.5 seconds; a screen a
+  // second is faster than a thumb. With the cap its median run is three times
+  // as long and the good pilot stops crashing altogether. Measured over thirty
+  // seeds of sixty seconds:
+  //
+  //                 competent            good
+  //   no cap        median death 14.5s   25.3s   (30/30 dead, mostly crashed)
+  //   cap 100       median death 42.4s   60s+    (good: 18/30 alive, 0 crashes)
+  //
+  // So the cap is asserted as tuning, and the cap is asserted to be enforced
+  // by the integrator -- a cap applied to the craft but not to the prediction
+  // would make the line a lie about speed.
+  assert.ok(TUNING.maxSpeed > 0 && TUNING.maxSpeed <= 120, `maxSpeed ${TUNING.maxSpeed} is outside what was measured to play`);
+
+  const fast = { x: 100, y: 75, vx: 500, vy: 0, angle: 0, fuel: 100 };
+  advance(fast, [], { burn: true }, TUNING.step);
+  assert.ok(Math.abs(speedOf(fast) - TUNING.maxSpeed) < 1e-9, 'the craft exceeds the top speed');
+
+  const flown = { x: 100, y: 75, vx: 500, vy: 20, angle: 0.3, fuel: 100 };
+  const forecast = predict(flown, [], { burn: true }, TUNING, { seconds: 1 });
+  assert.ok(Math.abs(speedOf(forecast.end) - TUNING.maxSpeed) < 1e-9, 'the prediction is not capped the same way');
+
+  // And with the cap removed the same craft keeps its speed -- so the test
+  // above is measuring the cap and not something else.
+  const uncapped = advance({ ...fast, vx: 500, vy: 0 }, [], {}, TUNING.step, { ...TUNING, maxSpeed: 0 });
+  assert.ok(speedOf(uncapped) > 400);
+});
+
+test('THE COMPETENT PILOT LASTS, which is what "easier" means here', () => {
+  // Not distance: distance is what the cap trades away. Survival. A competent
+  // reader who died at fourteen seconds is now past thirty at the median, and
+  // the good pilot is not merely also helped -- it stops crashing, so the two
+  // are separated by fuel and navigation rather than by reflexes.
+  const life = (skill) => {
+    const seconds = [];
+    let crashes = 0;
+    for (let seed = 1; seed <= 16; seed++) {
+      withSeed(seed, () => {
+        const run = runOnce(skill, TUNING, { seconds: 60 });
+        seconds.push(run.seconds);
+        if (run.reason === END.CRASHED) crashes++;
+      });
+    }
+    return { median: summarise(seconds).median, crashes };
+  };
+  const competent = life('competent');
+  const good = life('good');
+  assert.ok(competent.median >= 30, `a competent run lasts ${competent.median}s at the median; it was 14.5 before the cap`);
+  assert.ok(good.median > competent.median, 'reading the whole line is not worth more time alive than reading part of it');
+  assert.ok(good.crashes <= 2, `the good pilot crashed ${good.crashes} times in sixteen; the cap was meant to end that`);
 });
 
 test('speedOf, strayed and chunkStart are what the run is judged on', () => {
