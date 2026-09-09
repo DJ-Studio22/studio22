@@ -144,6 +144,33 @@ export function installDom({
   const body = makeElement('body');
   const documentElement = makeElement('html');
 
+  // Both window and document keep real listener lists with a dispatch(), so a
+  // test can send the page-lifecycle events -- visibilitychange lives on
+  // document, focus and pageshow on window -- and see what the engine does.
+  const listenersOn = () => {
+    const map = new Map();
+    return {
+      addEventListener: (type, fn) => {
+        if (!map.has(type)) map.set(type, []);
+        map.get(type).push(fn);
+      },
+      removeEventListener: (type, fn) => {
+        map.set(type, (map.get(type) ?? []).filter((f) => f !== fn));
+      },
+      // Takes a payload so a test can send a real-shaped event. engine/input.js
+      // reads event.code off keydown, and a bare { type } would silently do
+      // nothing at all.
+      dispatch: (type, payload = {}) => {
+        const event = { type, preventDefault() {}, stopPropagation() {}, target: null, ...payload };
+        for (const fn of [...(map.get(type) ?? [])]) fn(event);
+        return event;
+      },
+      // How many listeners a type has, for a test asserting that something
+      // was armed or released rather than only that it fired.
+      listenerCount: (type) => (map.get(type) ?? []).length,
+    };
+  };
+
   const document = {
     body,
     documentElement,
@@ -152,10 +179,10 @@ export function installDom({
     createElementNS: (_ns, tag) => makeElement(tag),
     querySelector: () => null,
     querySelectorAll: () => [],
-    addEventListener() {},
-    removeEventListener() {},
+    ...listenersOn(),
     getElementById: () => null,
     visibilityState: 'visible',
+    get hidden() { return this.visibilityState === 'hidden'; },
     activeElement: null,
   };
 
@@ -172,7 +199,6 @@ export function installDom({
     _store: store,
   };
 
-  const listeners = new Map();
   const win = {
     innerWidth,
     innerHeight,
@@ -180,21 +206,7 @@ export function installDom({
     document,
     sessionStorage,
     location: { search: '', href: 'http://localhost/', reload() {} },
-    addEventListener: (type, fn) => {
-      if (!listeners.has(type)) listeners.set(type, []);
-      listeners.get(type).push(fn);
-    },
-    removeEventListener: (type, fn) => {
-      listeners.set(type, (listeners.get(type) ?? []).filter((f) => f !== fn));
-    },
-    // Takes a payload so a test can send a real-shaped event. engine/input.js
-    // reads event.code off keydown, and a bare { type } would silently do
-    // nothing at all.
-    dispatch: (type, payload = {}) => {
-      const event = { type, preventDefault() {}, stopPropagation() {}, target: null, ...payload };
-      for (const fn of [...(listeners.get(type) ?? [])]) fn(event);
-      return event;
-    },
+    ...listenersOn(),
     matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
     requestAnimationFrame: (fn) => setTimeout(() => fn(performance.now()), 0),
     cancelAnimationFrame: (id) => clearTimeout(id),
