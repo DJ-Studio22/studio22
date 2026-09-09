@@ -197,3 +197,240 @@ export function chaseCeiling(ceilingY, playerY, scrollSpeed, dt, tuning = SHAFT_
   // one tick, which would read as a teleport rather than a crush.
   return Math.min(next, playerY);
 }
+
+// --- The descent itself ---------------------------------------------------
+//
+// WHY THIS MOVED HERE, AND IT SHOULD HAVE BEEN HERE ALL ALONG.
+//
+// Sinkhole is the only game in the arcade whose difficulty was never measured,
+// and the reason is structural rather than an oversight: the ceiling, the
+// player and the camera all lived in game.js, tangled up with a canvas, so no
+// bot could ever play it. Three separate reports of the same fault -- spikes
+// that leave the top of the screen -- went out of the door because nothing
+// could play ten thousand runs and say what the ceiling was doing.
+//
+// The camera is in here too, which looks like presentation and is not. The
+// moment the ceiling was clamped to the top of the view, where the view is
+// became a rule: it decides how much room the player has above them, which
+// decides when they are crushed. A number that decides a death is not a
+// drawing concern.
+//
+// game.js keeps the canvas, the particles, the audio and the shell. It owns no
+// physics.
+
+/** Player and world constants. Separate from the tuning above so a test can
+ *  clone and override either without disturbing the other. */
+export const PHYSICS = {
+  width: 480,
+  height: 720,
+
+  gravity: 1500,
+  diveGravity: 3400,
+  maxFall: 760,
+  maxDiveFall: 1150,
+
+  moveAccel: 3200,
+  maxMove: 320,
+  groundDragPerSecond: 0.0005,
+  airDragPerSecond: 0.06,
+
+  playerRadius: 14,
+  ledgeHeight: 16,
+  ledgeSpacing: 132,
+
+  baseScroll: 62,
+  scrollPerDepth: 0.011,
+  maxScroll: 235,
+
+  startLives: 3,
+  invulnTime: 1.6,
+  ceilingHeight: 100,
+
+  // Where the player sits on screen, and how much further down the view slides
+  // while diving. See viewTopFor: the lookahead may not eat the room the
+  // ceiling occupies.
+  camAnchor: 720 * 0.42,
+  camLookahead: 130,
+  camFollow: 7,
+  ceilingRoom: 280,
+};
+
+/**
+ * The world position of the TOP of the view.
+ *
+ * This is a rule, not a camera trick: chaseCeiling clamps the spikes to this
+ * line, so it sets how much room the player has above them. The lookahead
+ * slides the view down to show more of what is coming, which pushes the player
+ * up the screen -- and that would shorten the gap to the spikes hardest at the
+ * exact moment the player is going fastest. Looking further ahead should cost
+ * you what is behind you, and the spikes are not behind you.
+ */
+export function viewTopFor(playerY, vy, physics = PHYSICS) {
+  const p = { ...PHYSICS, ...physics };
+  const dive = Math.min(1, Math.max(0, vy / p.maxDiveFall));
+  const want = Math.max(0, playerY - p.camAnchor + dive * p.camLookahead);
+  return Math.min(want, Math.max(0, playerY - p.ceilingRoom));
+}
+
+/** How fast the shaft rises at this depth. */
+export function scrollAt(depth, physics = PHYSICS) {
+  const p = { ...PHYSICS, ...physics };
+  return Math.min(p.baseScroll + depth * p.scrollPerDepth, p.maxScroll);
+}
+
+/**
+ * One run, with no canvas anywhere in it.
+ *
+ * `clampCeiling` exists so the harness can play the OLD model as well as the
+ * new one and put a number on the difference. It is not a game option -- game.js
+ * always leaves it on.
+ */
+export class Descent {
+  constructor({ tuning = SHAFT_TUNING, physics = PHYSICS, clampCeiling = true } = {}) {
+    this.t = { ...SHAFT_TUNING, ...tuning };
+    this.p = { ...PHYSICS, ...physics };
+    this.clampCeiling = clampCeiling;
+
+    this.depth = 0;
+    this.lives = this.p.startLives;
+    this.invuln = 0;
+    this.dead = false;
+    this.hits = 0;
+    this.spikeHits = 0;
+    this.crushes = 0;
+    this.time = 0;
+
+    this.x = this.p.width / 2;
+    this.y = 200;
+    this.vx = 0;
+    this.vy = 0;
+    this.onGround = false;
+
+    this.ceilingY = this.p.ceilingHeight;
+    this.camY = 0;
+    this.ledges = [];
+    for (let y = 360; y < this.p.height + this.p.ledgeSpacing; y += this.p.ledgeSpacing) {
+      this.ledges.push(makeLedge(y, this.depth, this.t));
+    }
+  }
+
+  get scrollSpeed() {
+    return scrollAt(this.depth, this.p);
+  }
+
+  /** Metres, the way the game reports it. */
+  get metres() {
+    return Math.floor(this.depth / 10);
+  }
+
+  /** How far above the top of the view the spikes are. Negative is on screen. */
+  get spikesAboveView() {
+    return this.camY - this.ceilingY;
+  }
+
+  step(dt, input = {}) {
+    if (this.dead) return;
+    const p = this.p;
+    const moveX = Math.max(-1, Math.min(1, input.x ?? 0));
+    const diving = Boolean(input.dive);
+
+    this.time += dt;
+
+    this.vx += moveX * p.moveAccel * dt;
+    const drag = this.onGround ? p.groundDragPerSecond : p.airDragPerSecond;
+    this.vx *= drag ** dt;
+    this.vx = Math.max(-p.maxMove, Math.min(p.maxMove, this.vx));
+    this.x = Math.max(p.playerRadius,
+      Math.min(p.width - p.playerRadius, this.x + this.vx * dt));
+
+    const gravity = diving ? p.diveGravity : p.gravity;
+    const terminal = diving ? p.maxDiveFall : p.maxFall;
+    this.vy = Math.min(this.vy + gravity * dt, terminal);
+
+    const bottomBefore = this.y + p.playerRadius;
+    this.y += this.vy * dt;
+
+    const rise = this.scrollSpeed * dt;
+    this.depth += rise;
+    for (const ledge of this.ledges) ledge.y -= rise;
+
+    this.onGround = false;
+    this.#land(bottomBefore, rise);
+    if (this.onGround) this.y -= rise;
+
+    this.#recycle();
+
+    this.camY += (viewTopFor(this.y, this.vy, p) - this.camY)
+      * (1 - Math.exp(-dt * p.camFollow));
+
+    this.ceilingY = chaseCeiling(
+      this.ceilingY, this.y, this.scrollSpeed, dt, this.t,
+      this.clampCeiling ? this.camY : null,
+    );
+
+    if (this.y - p.playerRadius < this.ceilingY) {
+      this.y = this.ceilingY + p.playerRadius;
+      this.crushes++;
+      this.#hurt();
+    }
+
+    if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
+  }
+
+  #land(bottomBefore, rise) {
+    if (this.vy < 0) return;
+    const p = this.p;
+    const bottomAfter = this.y + p.playerRadius;
+
+    const crossed = [];
+    for (const ledge of this.ledges) {
+      const yBefore = ledge.y + rise;
+      if (bottomBefore > yBefore) continue;
+      if (bottomAfter < ledge.y) continue;
+      crossed.push(ledge);
+    }
+    if (crossed.length === 0) return;
+    crossed.sort((a, b) => a.y - b.y);
+
+    for (const ledge of crossed) {
+      if (isGap(ledge, this.x, p.playerRadius)) continue;
+      if (isSpikeAt(ledge, this.x, p.playerRadius)) {
+        this.spikeHits++;
+        this.#hurt();
+        return;
+      }
+      this.y = ledge.y - p.playerRadius;
+      this.vy = 0;
+      this.onGround = true;
+      return;
+    }
+  }
+
+  #recycle() {
+    const p = this.p;
+    this.ledges = this.ledges.filter((ledge) => ledge.y > -p.ledgeHeight * 2);
+    let low = -Infinity;
+    for (const ledge of this.ledges) low = Math.max(low, ledge.y);
+    if (low === -Infinity) low = 0;
+    while (low < this.camY + p.height + p.ledgeSpacing) {
+      low += p.ledgeSpacing;
+      this.ledges.push(makeLedge(low, this.depth, this.t));
+    }
+  }
+
+  #hurt() {
+    if (this.invuln > 0) return;
+    this.hits++;
+    this.lives--;
+    if (this.lives <= 0) {
+      this.dead = true;
+      return;
+    }
+    const p = this.p;
+    this.invuln = p.invulnTime;
+    this.y = p.ceilingHeight + p.height * 0.34;
+    this.vy = 0;
+    this.vx = 0;
+    this.camY = viewTopFor(this.y, this.vy, p);
+  }
+}
