@@ -20,6 +20,7 @@ import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { Descent, PHYSICS, isSafeLanding, isSpikeAt, ledgeSegments, SHAFT_TUNING } from './shaft.js';
 import { ParticleSystem, randRange as R, clamp } from '../../engine/util.js';
+import { BestMarker } from '../../engine/best-marker.js';
 
 const GAME_ID = 'sinkhole';
 
@@ -74,6 +75,14 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 220 });
+// The session-best line across the shaft, and the confetti for passing it.
+const best = new BestMarker();
+// Where the marker sits when the depth counter reaches the best: the height
+// the player starts at, which is about where they spend the run. Depth is a
+// count of how far the shaft has scrolled, not of where the player is, so
+// the line is placed like a ledge -- see render() -- and the crossing is
+// decided by the counter, which is the number the HUD shows.
+const BEST_LINE_ANCHOR_Y = 200;
 
 // One pad, named for what it does. Steering is the virtual stick on the left
 // half, which engine/input.js provides without a layout.
@@ -91,6 +100,7 @@ audio.define({
   dive: { beep: { freq: 300, duration: 0.12, type: 'sawtooth', volume: 0.12 } },
   hurt: { beep: { freq: 150, duration: 0.28, type: 'sawtooth', volume: 0.22 } },
   death: { beep: { freq: 90, duration: 0.5, type: 'triangle', volume: 0.26 } },
+  best: { beep: { freq: 990, duration: 0.16, type: 'triangle', volume: 0.16 } },
 });
 
 // --- Tuning --------------------------------------------------------------
@@ -160,6 +170,7 @@ function reset() {
   shake = 0;
   P.squash = 0;
   particles.clear();
+  best.reset(Session.getBest(GAME_ID));
 }
 
 // --- Update --------------------------------------------------------------
@@ -225,6 +236,9 @@ function update(dt) {
   if (shake > 0) shake = Math.max(0, shake - dt * 24);
   if (P.squash > 0) P.squash = Math.max(0, P.squash - dt * 5);
   particles.update(dt);
+
+  // Past the best? The burst is in screen space, at the player.
+  if (best.update(run.metres, dt, { burstX: run.x, burstY: run.y - run.camY })) audio.play('best');
 }
 
 function render() {
@@ -271,7 +285,23 @@ function render() {
   particles.draw(ctx);
   drawPlayer();
 
+  // The best, as a place in the shaft: a metre is ten units of scroll, and
+  // the line rises with the ledges as the depth counter climbs towards it.
+  if (best.visible) {
+    best.drawLine(ctx, {
+      orientation: 'horizontal',
+      at: BEST_LINE_ANCHOR_Y + best.best * 10 - run.depth,
+      from: screen.left,
+      to: screen.left + screen.stageWidth,
+      min: run.camY - 10,
+      max: run.camY + H + 10,
+      label: `BEST ${best.best} m`,
+      scale: screen.uiScale,
+    });
+  }
+
   ctx.restore();
+  best.drawBurst(ctx);
   ctx.restore();
 
   drawCeilingMarker();

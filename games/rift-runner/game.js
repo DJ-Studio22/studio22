@@ -40,7 +40,8 @@ import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, clamp, randRange } from '../../engine/util.js';
 
 import { Course } from './patterns.js';
-import { GROUND_Y, KIND, TILE, TUNING, WORLD_H, bodyOf } from './rift.js';
+import { GROUND_Y, KIND, PIXELS_PER_METRE, TILE, TUNING, WORLD_H, bodyOf } from './rift.js';
+import { BestMarker } from '../../engine/best-marker.js';
 
 const GAME_ID = 'rift-runner';
 
@@ -116,6 +117,8 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 240 });
+// The session-best line across the course, and the confetti for passing it.
+const best = new BestMarker();
 
 // Three verbs, three pads. No joystick: there is nothing to steer, and a stick
 // sitting on screen doing nothing invites the wrong thumb.
@@ -140,6 +143,7 @@ audio.define({
   dash: { beep: { freq: 880, duration: 0.10, type: 'square', volume: 0.16 } },
   gate: { beep: { freq: 660, duration: 0.28, type: 'triangle', volume: 0.22 } },
   crash: { beep: { freq: 90, duration: 0.55, type: 'triangle', volume: 0.28 } },
+  best: { beep: { freq: 990, duration: 0.16, type: 'triangle', volume: 0.16 } },
 });
 
 // --- State ---------------------------------------------------------------
@@ -193,6 +197,7 @@ function reset() {
   toPalette = fromPalette;
   particles.clear();
   for (const t of trail) t.life = 0;
+  best.reset(Session.getBest(GAME_ID));
 }
 
 function crash() {
@@ -269,6 +274,9 @@ function update(dt) {
   // The WORLD position, not the screen one. See pushTrail.
   pushTrail(run.x, run.y, run.sliding, run.phasing || gateFlash > 0.3);
   bestMetres = Math.max(bestMetres, course.metres);
+
+  // Past the best? The burst is in screen space, at the runner.
+  if (best.update(course.metres, dt, { burstX: RUNNER_X, burstY: run.y - TUNING.bodyH / 2 })) audio.play('best');
 
   if (!course.running) crash();
 }
@@ -656,9 +664,23 @@ function render() {
 
   drawSky(p);
   drawGround(p);
+  // The best as a place on the course: a metre is PIXELS_PER_METRE of world.
+  if (best.visible) {
+    best.drawLine(ctx, {
+      orientation: 'vertical',
+      at: worldToScreen(best.best * PIXELS_PER_METRE),
+      from: 0,
+      to: H,
+      min: screen.left - 10,
+      max: screen.left + screen.stageWidth + 10,
+      label: `BEST ${best.best} m`,
+      scale: screen.uiScale,
+    });
+  }
   drawObstacles(p);
   if (running || shake > 0.02) drawRunner(p);
   particles.draw(ctx);
+  best.drawBurst(ctx);
 
   // The white bloom as a rift is crossed.
   if (gateFlash > 0) {

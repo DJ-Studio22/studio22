@@ -23,6 +23,7 @@ import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
 import { ParticleSystem, randRange as R } from '../../engine/util.js';
+import { BestMarker } from '../../engine/best-marker.js';
 import { CLIMB_TUNING, startingPlatforms, extendColumn } from './climb.js';
 
 const GAME_ID = 'updraft';
@@ -111,6 +112,8 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 260 });
+// The session-best line across the sky, and the confetti for passing it.
+const best = new BestMarker();
 
 // Nothing to press: you bounce automatically and only steer. This removes the
 // engine's default A/B pads so they cannot sit on screen doing nothing. The
@@ -134,6 +137,7 @@ audio.define({
   break: { beep: { freq: 150, duration: 0.13, type: 'sawtooth', volume: 0.18 } },
   squash: { beep: { freq: 300, duration: 0.1, type: 'sawtooth', volume: 0.22 } },
   death: { beep: { freq: 110, duration: 0.4, type: 'triangle', volume: 0.25 } },
+  best: { beep: { freq: 990, duration: 0.16, type: 'triangle', volume: 0.16 } },
 });
 
 // --- Game state ----------------------------------------------------------
@@ -170,6 +174,9 @@ function reset() {
   shake = 0;
   foes = [];
   particles.clear();
+  // The figure to beat this run: the session best as it stands before the run
+  // begins. Null on the first run of a visit, and then the marker stays away.
+  best.reset(Session.getBest(GAME_ID));
 
   P.x = W / 2;
   P.y = H - 140;
@@ -306,6 +313,9 @@ function update(dt) {
     particles.shift(0, d);
     score = Math.max(score, Math.floor(camY / 10));
   }
+
+  // Past the best? The burst is in screen space, at the bird.
+  if (best.update(score, dt, { burstX: P.x, burstY: P.y })) audio.play('best');
 
   for (const p of plats) {
     if (p.type === 'move' && !p.broke) {
@@ -447,6 +457,22 @@ function render() {
 
   for (const p of plats) drawPlat(p);
 
+  // The session best is a height, and a height is a place: the camera line
+  // sits at H * 0.42 when camY equals the height's camY, so the marker is
+  // that line offset by how far the camera still has to climb.
+  if (best.visible) {
+    best.drawLine(ctx, {
+      orientation: 'horizontal',
+      at: H * 0.42 + camY - best.best * 10,
+      from: screen.left,
+      to: screen.left + screen.stageWidth,
+      min: -10,
+      max: H + 10,
+      label: `BEST ${best.best}`,
+      scale: screen.uiScale,
+    });
+  }
+
   for (const f of foes) {
     ctx.save();
     ctx.translate(f.x, f.y + Math.sin(f.ph) * 4);
@@ -501,6 +527,7 @@ function render() {
   ctx.restore();
 
   particles.draw(ctx);
+  best.drawBurst(ctx);
   ctx.restore();
 
   // Both lines through the engine HUD, so every game's score and best sit in
