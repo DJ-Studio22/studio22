@@ -59,6 +59,12 @@ export class AudioManager {
   #volume = 1;
   #muted = false;
 
+  // The two buses' own levels, independent of each other and of the master.
+  // The graph was always shaped for this -- see #ensureContext -- and until now
+  // nothing turned the dials.
+  #musicVolume = 1;
+  #sfxVolume = 1;
+
   #unlocked = false;
   #unlockBound = false;
   #gamepadPollId = 0;
@@ -335,6 +341,63 @@ export class AudioManager {
   }
 
   /**
+   * The audio context and the music bus, for engine/music.js.
+   *
+   * Exposed rather than letting music.js build its own graph, so that ONE mute
+   * and ONE pair of volume sliders govern both. Both force the context into
+   * existence, which is safe: creating it is cheap, and it stays suspended
+   * until the player has touched something.
+   */
+  get musicContext() {
+    return this.#ensureContext();
+  }
+
+  get musicBus() {
+    this.#ensureContext();
+    return this.#musicGain;
+  }
+
+  /**
+   * The music bus level, 0..1, independent of effects.
+   *
+   * Ramped rather than set, like every other gain change in this file: a step
+   * change in gain is a click, and a click is the one artefact a player will
+   * always notice.
+   *
+   * Safe before the context exists -- the value is remembered and applied when
+   * it does, which matters because the volume is restored from the session
+   * before anybody has touched the screen to unlock audio.
+   */
+  setMusicVolume(volume) {
+    this.#musicVolume = clamp01(volume);
+    AudioManager.#rampTo(this.#ctx, this.#musicGain, this.#musicVolume);
+  }
+
+  get musicVolume() {
+    return this.#musicVolume;
+  }
+
+  /** The effects bus level, 0..1, independent of music. */
+  setSfxVolume(volume) {
+    this.#sfxVolume = clamp01(volume);
+    AudioManager.#rampTo(this.#ctx, this.#sfxBus, this.#sfxVolume);
+  }
+
+  get sfxVolume() {
+    return this.#sfxVolume;
+  }
+
+  // Shared by both setters and by #ensureContext. A no-op before the graph
+  // exists, which is not a failure: the stored value is applied at build time.
+  static #rampTo(ctx, node, value) {
+    if (!ctx || !node) return;
+    const now = ctx.currentTime;
+    node.gain.cancelScheduledValues(now);
+    node.gain.setValueAtTime(node.gain.value, now);
+    node.gain.linearRampToValueAtTime(value, now + GAIN_RAMP_SECONDS);
+  }
+
+  /**
    * Forces an unlock attempt. Called automatically on the first interaction;
    * exposed only for the rare case of a game wanting to trigger it from its
    * own "tap to start" button.
@@ -374,6 +437,11 @@ export class AudioManager {
     this.#musicGain.connect(this.#master);
     this.#master.connect(this.#ctx.destination);
     this.#master.gain.value = this.#muted ? 0 : this.#volume;
+    // Whatever the player last chose, applied as the graph is built rather
+    // than after -- otherwise the first note of a track plays at full volume
+    // and then ducks, which is worse than either level on its own.
+    this.#musicGain.gain.value = this.#musicVolume;
+    this.#sfxBus.gain.value = this.#sfxVolume;
 
     // Pre-build the voice pool so no gain node has to be allocated during
     // gameplay.

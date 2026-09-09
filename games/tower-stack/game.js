@@ -609,6 +609,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: the drop is judged by eye, not by ear.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Drop', gamepad: 'A', keyboard: 'Space', touch: 'Drop pad' },

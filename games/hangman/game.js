@@ -593,6 +593,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: word game, no timing, no cues.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Guess a letter', gamepad: 'Move to it, then A', keyboard: 'Press the letter', touch: 'Tap the letter' },

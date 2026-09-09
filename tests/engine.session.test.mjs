@@ -177,3 +177,38 @@ test('unreadable stored data is discarded rather than crashing the page', async 
   assert.ok(warnings.some((w) => w.includes('[session]')), 'a corrupt session should be reported');
   assert.equal(globalThis.sessionStorage.getItem(STORAGE_KEY), null, 'and cleaned up');
 });
+
+// --- Two volumes, and why they are two -----------------------------------
+
+test('MUSIC AND EFFECTS ARE SEPARATE DIALS', () => {
+  // One slider cannot say "turn the song down but let me still hear a split
+  // land", and that is the request this exists for. The soundOn switch above
+  // is a third thing again: it kills everything.
+  Session.setMusicVolume(0.2);
+  Session.setSfxVolume(0.9);
+  assert.equal(Session.getMusicVolume(), 0.2);
+  assert.equal(Session.getSfxVolume(), 0.9, 'changing music moved effects');
+
+  Session.setSfxVolume(0.1);
+  assert.equal(Session.getMusicVolume(), 0.2, 'changing effects moved music');
+});
+
+test('a volume is clamped, and rubbish resolves to a level rather than silence', () => {
+  // These are read back from sessionStorage, which is a string store somebody
+  // could have edited. A NaN reaching a GainNode is not a quiet game, it is a
+  // broken audio graph.
+  assert.equal(Session.setMusicVolume(5), 1);
+  assert.equal(Session.setMusicVolume(-2), 0);
+  assert.equal(Session.setSfxVolume('loud'), 1, 'a non-number should not mute the game');
+  assert.equal(Session.setSfxVolume(0.5), 0.5);
+});
+
+test('both volumes survive a reload, like the sound toggle', () => {
+  // They are preferences, not data about the visit, so they follow the player
+  // from game to game -- which is the whole point of setting them once.
+  Session.setMusicVolume(0.4);
+  Session.setSfxVolume(0.6);
+  const stored = JSON.parse(sessionStorage.getItem('studio22.session.v2'));
+  assert.equal(stored.musicVolume, 0.4);
+  assert.equal(stored.sfxVolume, 0.6);
+});

@@ -106,6 +106,32 @@ const playedGames = new Set();
 // what it made.
 let soundOn = true;
 
+// TWO volumes, because they are two different decisions.
+//
+// Someone playing with the telly on wants the song down and still wants to
+// hear a split land. Someone who likes the track and finds the blips annoying
+// wants the opposite. One slider cannot express either, and the existing
+// soundOn toggle is a third thing again: it kills everything, and it stays the
+// switch the landing page and the pause menu drive.
+//
+// Preferences, like soundOn, so they survive clear() and follow the player
+// from game to game.
+//
+// Music sits below effects by default. Effects are information -- you ate
+// something, you hit something -- and music is furniture; furniture at the
+// same level as information drowns it.
+let musicVolume = 0.55;
+let sfxVolume = 0.85;
+
+// A volume is a number between nothing and everything. Anything else -- a
+// string from old storage, a NaN, an out-of-range number a caller computed --
+// resolves to the default rather than silently muting or deafening.
+function clampVolume(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1, Math.max(0, n));
+}
+
 // --- Storage ------------------------------------------------------------
 
 // Resolved once. The write probe matters: some browsers expose
@@ -165,6 +191,8 @@ function load() {
       if (typeof id === 'string') playedGames.add(id);
     }
     if (typeof data.soundOn === 'boolean') soundOn = data.soundOn;
+    if (typeof data.musicVolume === 'number') musicVolume = clampVolume(data.musicVolume);
+    if (typeof data.sfxVolume === 'number') sfxVolume = clampVolume(data.sfxVolume);
   } catch (error) {
     console.warn(`[session] Ignoring unreadable saved session: ${error.message}`);
     try { storage.removeItem(STORAGE_KEY); } catch { /* nothing more to do */ }
@@ -183,6 +211,8 @@ function save() {
       directions: Object.fromEntries(directions),
       played: [...playedGames],
       soundOn,
+      musicVolume,
+      sfxVolume,
     }));
   } catch {
     // Quota exceeded, or storage revoked mid-session. The in-memory copy is
@@ -359,6 +389,34 @@ export const Session = {
     soundOn = Boolean(on);
     save();
     return soundOn;
+  },
+
+  /**
+   * Music and effect volumes, 0..1, independent of each other and of the
+   * soundOn switch above.
+   *
+   * soundOn is the mute: off means silent whatever these say, and -- because
+   * engine/music.js asks before it fetches anything -- means no audio file is
+   * ever downloaded either.
+   */
+  getMusicVolume() {
+    return musicVolume;
+  },
+
+  setMusicVolume(value) {
+    musicVolume = clampVolume(value);
+    save();
+    return musicVolume;
+  },
+
+  getSfxVolume() {
+    return sfxVolume;
+  },
+
+  setSfxVolume(value) {
+    sfxVolume = clampVolume(value);
+    save();
+    return sfxVolume;
   },
 
   // gameIds played this visit, oldest first, for the arcade hub to decorate

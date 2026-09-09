@@ -1362,6 +1362,9 @@ shell = new GameShell({
   canvas: screen,
   loop,
   audio,
+  // Music: a menu of decisions with no timing element.
+  // Nothing is fetched unless sound is on and a run actually starts.
+  music: true,
   onRestart: reset,
   controls: [
     { action: 'Choose', gamepad: 'Stick or D-pad up/down', keyboard: 'Up / Down', touch: 'Drag the left side' },
