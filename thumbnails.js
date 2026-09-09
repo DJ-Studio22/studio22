@@ -591,12 +591,34 @@ function gravityFlip() {
  */
 function riftRunner() {
   const spike = (x) => '<path d="M' + x + ' 150 L' + (x + 11) + ' 128 L' + (x + 22) + ' 150 Z" fill="#ff5a6e"/>';
+
+  // The runner is a STICK FIGURE, because the game's is. The card used to show
+  // a white rectangle with two fainter rectangles behind it, which was what the
+  // game drew when the card was made and has not been for a while -- a
+  // thumbnail that promises a different game to the one behind it is worse than
+  // no thumbnail, because the player only finds out after tapping.
+  //
+  // Mid-stride and mid-rift: one leg forward, one back, arms counter-swung,
+  // and the wake streaming off the heels rather than stacked on top of the
+  // body. That wake is the fix this card is being redrawn for.
+  const runner = (x, y) => '<g stroke="#f6f2e8" stroke-width="4" stroke-linecap="round" fill="none">'
+    + '<circle cx="' + x + '" cy="' + (y - 34) + '" r="7" fill="#f6f2e8" stroke="none"/>'
+    + '<path d="M' + x + ' ' + (y - 27) + ' L' + x + ' ' + (y - 12) + '"/>'
+    + '<path d="M' + x + ' ' + (y - 12) + ' L' + (x - 9) + ' ' + y + '"/>'
+    + '<path d="M' + x + ' ' + (y - 12) + ' L' + (x + 10) + ' ' + (y - 2) + '"/>'
+    + '<path d="M' + x + ' ' + (y - 24) + ' L' + (x - 11) + ' ' + (y - 17) + '"/>'
+    + '<path d="M' + x + ' ' + (y - 24) + ' L' + (x + 11) + ' ' + (y - 28) + '"/>'
+    + '</g>';
+
   return '<svg ' + VIEW + '>'
     + '<defs>'
     + '<linearGradient id="rr-a" x1="0" y1="0" x2="0" y2="1">'
     + '<stop offset="0" stop-color="#141a2e"/><stop offset="1" stop-color="#2b3a5c"/></linearGradient>'
     + '<linearGradient id="rr-b" x1="0" y1="0" x2="0" y2="1">'
     + '<stop offset="0" stop-color="#2a1206"/><stop offset="1" stop-color="#7a2c10"/></linearGradient>'
+    + '<linearGradient id="rr-w" x1="0" y1="0" x2="1" y2="0">'
+    + '<stop offset="0" stop-color="#ff8b3d" stop-opacity="0"/>'
+    + '<stop offset="1" stop-color="#ff8b3d" stop-opacity=".55"/></linearGradient>'
     + '</defs>'
     // Two worlds, meeting at the rift.
     + '<rect width="186" height="200" fill="url(#rr-a)"/>'
@@ -618,11 +640,9 @@ function riftRunner() {
     // The rift itself, on the seam, edge-lit.
     + '<rect x="178" y="20" width="16" height="130" fill="rgba(255,255,255,.12)"/>'
     + '<path d="M178 20 L178 150 M194 20 L194 150" stroke="#ffffff" stroke-width="3"/>'
-    // The runner, mid-dash through it, trailing.
-    + '<g opacity=".28" fill="#f6f2e8">'
-    + '<rect x="120" y="106" width="20" height="34"/><rect x="144" y="106" width="20" height="34"/></g>'
-    + '<g><rect x="168" y="104" width="22" height="38" fill="#f6f2e8" stroke="#12161f" stroke-width="2"/>'
-    + '<rect x="172" y="110" width="14" height="6" fill="#1b2436"/></g>'
+    // The wake, BEHIND and streaming away -- not a stack on top of the runner.
+    + '<rect x="96" y="118" width="86" height="32" fill="url(#rr-w)"/>'
+    + runner(196, 150)
     + '</svg>';
 }
 /**
