@@ -13,7 +13,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { CIRCLE_TUNING, Circle, PAIRS, PHASE } from '../games/impostor-circle/circle.js';
+import { CIRCLE_TUNING, Circle, PAIRS, PHASE, SKIP } from '../games/impostor-circle/circle.js';
 
 function rngFrom(seed) {
   let a = seed >>> 0;
@@ -192,6 +192,97 @@ test('a caught impostor who names the word still takes something home', () => {
   assert.equal(game.steal(` ${game.tableWord.toLowerCase()} `), true);
   assert.equal(game.scores[guilty], before + CIRCLE_TUNING.pointsForStealing);
   assert.equal(game.phase, PHASE.RESULT);
+});
+
+// Deals the cards round so a test can get straight to the vote.
+function toVote(game) {
+  while (game.phase === PHASE.HANDOFF || game.phase === PHASE.WORD) {
+    if (game.phase === PHASE.HANDOFF) game.reveal(); else game.seen();
+  }
+  game.startVote();
+}
+
+test('THE TABLE MAY NAME NOBODY, and then nobody is accused', () => {
+  // Being made to accuse somebody every round meant a wrong guess was free and
+  // a right one was a coin toss on a quiet round. A table that is not sure can
+  // now say so.
+  const game = new Circle({ players: 4, rng: rngFrom(7) });
+  toVote(game);
+  const guilty = game.impostor;
+  while (game.phase === PHASE.VOTE) game.vote(SKIP);
+  assert.equal(game.skips(), 4);
+  assert.equal(game.accused(), -1);
+  assert.equal(game.outcome.skipped, true);
+  assert.equal(game.outcome.wrong, false);
+  assert.equal(game.outcome.caught, false);
+  // The impostor got away with it, and is paid as such. Nobody is punished for
+  // an accusation nobody made.
+  assert.equal(game.scores[guilty], CIRCLE_TUNING.pointsForSurviving);
+  for (let p = 0; p < 4; p++) if (p !== guilty) assert.equal(game.scores[p], 0);
+  assert.equal(game.phase, PHASE.RESULT, 'a skipped round offered a steal');
+});
+
+test('a skip is decided by the table, not by one voter', () => {
+  // One abstention against three votes for the same name is an accusation.
+  // Two abstentions against two votes is not: doubt wins the tie, because the
+  // accusation is the thing that costs.
+  const one = new Circle({ players: 4, rng: rngFrom(8) });
+  toVote(one);
+  const target = (one.seat + 1) % 4;
+  for (let i = 0; i < 4; i++) {
+    const me = one.seat;
+    if (i === 0) one.vote(SKIP);
+    else one.vote(me === target ? (target + 1) % 4 : target);
+  }
+  assert.equal(one.accused() === -1, false, 'one abstention overrode three votes');
+
+  const two = new Circle({ players: 4, rng: rngFrom(8) });
+  toVote(two);
+  const named = (two.seat + 1) % 4;
+  two.vote(SKIP);
+  two.vote(two.seat === named ? (named + 1) % 4 : named);
+  two.vote(SKIP);
+  two.vote(two.seat === named ? (named + 1) % 4 : named);
+  // Whichever way the seats fell, no name has more votes than there are skips.
+  assert.equal(two.accused(), -1, 'a name with as many votes as nobody was accused anyway');
+});
+
+test('A WRONG ACCUSATION IS A LOSS FOR THE TABLE -- everybody but the impostor pays', () => {
+  // This is what gives the impostor a way to win rather than merely a way to
+  // not lose. Before it, a wrong guess cost nothing, so there was no reason not
+  // to guess.
+  const game = new Circle({ players: 4, rng: rngFrom(9) });
+  toVote(game);
+  const guilty = game.impostor;
+  const innocent = (guilty + 1) % 4;
+  while (game.phase === PHASE.VOTE) {
+    // Everybody names the innocent; the innocent names somebody else.
+    game.vote(game.seat === innocent ? (innocent + 1) % 4 : innocent);
+  }
+  assert.equal(game.outcome.wrong, true);
+  assert.equal(game.outcome.accused, innocent);
+  assert.equal(game.scores[guilty], CIRCLE_TUNING.pointsForSurviving);
+  for (let p = 0; p < 4; p++) {
+    if (p === guilty) continue;
+    assert.equal(game.scores[p], -CIRCLE_TUNING.pointsLostForWrongAccusation,
+      `player ${p} did not pay for the table's wrong accusation`);
+  }
+  // Including the innocent who voted for somebody else: the table accused
+  // together, and "I pointed elsewhere" is not a defence.
+  assert.equal(game.scores[innocent], -CIRCLE_TUNING.pointsLostForWrongAccusation);
+  assert.equal(game.phase, PHASE.RESULT);
+});
+
+test('the three endings are told apart, and a tie is a skip rather than a wrong accusation', () => {
+  const game = new Circle({ players: 4, rng: rngFrom(11) });
+  toVote(game);
+  game.vote(1); game.vote(0); game.vote(1); game.vote(0);
+  assert.deepEqual(
+    { caught: game.outcome.caught, wrong: game.outcome.wrong, skipped: game.outcome.skipped },
+    { caught: false, wrong: false, skipped: true },
+  );
+  // Nobody paid for a tie.
+  for (let p = 0; p < 4; p++) if (p !== game.impostor) assert.equal(game.scores[p], 0);
 });
 
 test('being the impostor is worth more than one vote, because there is one of you', () => {

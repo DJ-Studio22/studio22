@@ -29,7 +29,7 @@ import { GameShell } from '../../engine/shell.js';
 import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
-import { CIRCLE_TUNING, Circle, PHASE } from './circle.js';
+import { CIRCLE_TUNING, Circle, PHASE, SKIP } from './circle.js';
 
 const GAME_ID = 'impostor-circle';
 const W = 960;
@@ -62,7 +62,15 @@ const screen = new GameCanvas({ width: W, height: H });
 const ctx = screen.ctx;
 const audio = new AudioManager();
 
-Input.clearTouchLayout();
+// ONE PAD, LABELLED A, because every card on screen says "press A". The first
+// version cleared the layout and relied on tap-anywhere, so a phone showed
+// "Press A when you are holding it" with no A anywhere on it. Tapping the card
+// still works -- the pad is the thing the words point at. No stick: nothing
+// here steers, and the stick would claim half the screen from the taps.
+Input.setDirectionalTouch(false);
+Input.setTouchLayout([
+  { name: 'a', xRatio: 0.90, yRatio: 0.84, radius: 52, label: 'A' },
+]);
 Session.setScoreDirection(GAME_ID, 'high');
 
 audio.define({
@@ -96,6 +104,11 @@ function reset() {
   lock = 0.35;
   stealChoices = [];
 }
+
+// The vote list is every seat and then one more row, NOBODY. Its index is the
+// player count, so the seats keep the same buttons they had.
+const voteRows = () => game.players + 1;
+const isSkipRow = (i) => i === game.players;
 
 function armCursorForPhase() {
   if (game.phase === PHASE.VOTE) {
@@ -157,7 +170,7 @@ function update(dt) {
   const pad = Input.get();
 
   if (game.phase === PHASE.VOTE || game.phase === PHASE.STEAL) {
-    const count = game.phase === PHASE.VOTE ? game.players : stealChoices.length;
+    const count = game.phase === PHASE.VOTE ? voteRows() : stealChoices.length;
     const dx = Math.abs(pad.x) > 0.5 ? Math.sign(pad.x) : 0;
     const dy = Math.abs(pad.y) > 0.5 ? Math.sign(pad.y) : 0;
     const step = dx || dy;
@@ -191,7 +204,7 @@ function update(dt) {
 function commitChoice() {
   if (game.phase === PHASE.VOTE) {
     audio.play('vote');
-    const more = game.vote(cursor);
+    const more = game.vote(isSkipRow(cursor) ? SKIP : cursor);
     if (more) armCursorForPhase();
     else {
       if (game.phase === PHASE.STEAL) {
@@ -212,11 +225,26 @@ function commitChoice() {
 const CHOICE_TOP = 190;
 const CHOICE_H = 62;
 const CHOICE_GAP = 8;
+// The list must end above the bottom edge with room for a caption.
+const CHOICE_BOTTOM = H - 30;
+
+/**
+ * Where row i of a list of `count` sits. The rows are the comfortable size
+ * when they fit and shrink together when they do not: six players and a NOBODY
+ * row is seven, and seven rows at full height run off the bottom of the card.
+ */
+function rowRect(i, count) {
+  const pitch = Math.min(CHOICE_H + CHOICE_GAP, (CHOICE_BOTTOM - CHOICE_TOP) / Math.max(1, count));
+  const h = pitch * (CHOICE_H / (CHOICE_H + CHOICE_GAP));
+  const w = Math.min(560, screen.stageWidth - 120);
+  const x = screen.left + (screen.stageWidth - w) / 2;
+  return { x, y: CHOICE_TOP + i * pitch, w, h };
+}
 
 function choiceAt(y, count) {
   for (let i = 0; i < count; i++) {
-    const top = CHOICE_TOP + i * (CHOICE_H + CHOICE_GAP);
-    if (y >= top && y <= top + CHOICE_H) return i;
+    const r = rowRect(i, count);
+    if (y >= r.y && y <= r.y + r.h) return i;
   }
   return -1;
 }
@@ -242,23 +270,23 @@ function roundRect(x, y, w, h, r) {
 }
 
 /** The wide button used for every choice, so votes and guesses look the same. */
-function choiceButton(i, label, selected, colour) {
-  const w = Math.min(560, screen.stageWidth - 120);
-  const x = screen.left + (screen.stageWidth - w) / 2;
-  const y = CHOICE_TOP + i * (CHOICE_H + CHOICE_GAP);
-  ctx.fillStyle = selected ? colour : 'rgba(255,255,255,.07)';
-  roundRect(x, y, w, CHOICE_H, 12);
+function choiceButton(i, count, label, selected, colour, { dim = false } = {}) {
+  const { x, y, w, h } = rowRect(i, count);
+  ctx.fillStyle = selected ? colour : dim ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.07)';
+  roundRect(x, y, w, h, 12);
   ctx.fill();
   if (selected) {
     ctx.strokeStyle = 'rgba(255,255,255,.85)';
     ctx.lineWidth = 3;
     ctx.stroke();
   }
-  ctx.font = `${selected ? 700 : 600} 30px system-ui, sans-serif`;
-  ctx.fillStyle = selected ? '#191622' : ART.text;
+  // Type follows the row: 30px in a 62px row, smaller as the rows shrink.
+  const size = Math.round(Math.min(30, h * 0.48));
+  ctx.font = `${selected ? 700 : 600} ${size}px system-ui, sans-serif`;
+  ctx.fillStyle = selected ? '#191622' : dim ? 'rgba(243,238,230,.28)' : ART.text;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(label, x + w / 2, y + CHOICE_H / 2 + 1);
+  ctx.fillText(label, x + w / 2, y + h / 2 + 1);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -356,27 +384,20 @@ function drawVote() {
   centred(`Player ${NAMES[who]} — who was the odd one out?`, 122,
     '700 34px system-ui, sans-serif', ART.players[who]);
 
+  const count = voteRows();
   for (let p = 0; p < game.players; p++) {
     if (p === who) {
       // Your own name stays on screen, greyed. Removing it would renumber the
       // list under everybody's fingers and make the same seat a different
       // button on every turn.
-      const w = Math.min(560, screen.stageWidth - 120);
-      const x = screen.left + (screen.stageWidth - w) / 2;
-      const y = CHOICE_TOP + p * (CHOICE_H + CHOICE_GAP);
-      ctx.fillStyle = 'rgba(255,255,255,.03)';
-      roundRect(x, y, w, CHOICE_H, 12);
-      ctx.fill();
-      ctx.font = '600 26px system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(243,238,230,.28)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(`Player ${NAMES[p]} — you`, x + w / 2, y + CHOICE_H / 2 + 1);
-      ctx.textBaseline = 'alphabetic';
+      choiceButton(p, count, `Player ${NAMES[p]} — you`, false, ART.players[p], { dim: true });
       continue;
     }
-    choiceButton(p, `Player ${NAMES[p]}`, cursor === p, ART.players[p]);
+    choiceButton(p, count, `Player ${NAMES[p]}`, cursor === p, ART.players[p]);
   }
+  // The way out. Naming nobody is a real choice with a real price -- the
+  // impostor is paid for surviving -- but it is not the price of being wrong.
+  choiceButton(game.players, count, 'Nobody — skip the vote', cursor === game.players, ART.text);
 }
 
 function drawSteal() {
@@ -386,7 +407,7 @@ function drawSteal() {
   centred(`Caught. Player ${NAMES[game.impostor]} — what was everyone else's word?`,
     122, '700 30px system-ui, sans-serif', ART.text);
   stealChoices.forEach((word, i) => {
-    choiceButton(i, word, cursor === i, ART.players[game.impostor]);
+    choiceButton(i, stealChoices.length, word, cursor === i, ART.players[game.impostor]);
   });
 }
 
@@ -395,19 +416,26 @@ function drawResult() {
   ctx.fillRect(screen.left, 0, screen.stageWidth, H);
   drawRoundStrip();
 
-  const caught = game.outcome.caught;
-  centred(caught ? 'Caught' : 'Got away with it', 118,
-    '800 52px system-ui, sans-serif', caught ? ART.good : ART.bad);
-  centred(`Player ${NAMES[game.impostor]} had ${game.impostorWord}`, 168,
+  const { caught, wrong, accused } = game.outcome;
+  // Three endings, three headlines. A wrong accusation is a loss for the table
+  // and says so; a skipped vote is the impostor getting away, not a defeat.
+  const headline = caught ? 'Caught' : wrong ? 'Wrong — the table loses' : 'Nobody accused';
+  centred(headline, 118, '800 52px system-ui, sans-serif', caught ? ART.good : ART.bad);
+  if (wrong) {
+    centred(`Player ${NAMES[accused]} was innocent. Everyone but the impostor loses ${CIRCLE_TUNING.pointsLostForWrongAccusation}.`,
+      150, '600 18px system-ui, sans-serif', ART.bad);
+  }
+  centred(`Player ${NAMES[game.impostor]} had ${game.impostorWord}`, 182,
     '600 26px system-ui, sans-serif', ART.text);
-  centred(`Everyone else had ${game.tableWord}`, 204,
+  centred(`Everyone else had ${game.tableWord}`, 214,
     '600 26px system-ui, sans-serif', ART.textDim);
   if (game.outcome.stolen) {
-    centred('…and named it anyway', 240, '700 24px system-ui, sans-serif', ART.bad);
+    centred('…and named it anyway', 246, '700 24px system-ui, sans-serif', ART.bad);
   }
 
   // Who voted for whom, so a table can argue about it with the evidence up.
   const counts = game.tally();
+  const skips = game.skips();
   const barTop = 290;
   const w = Math.min(560, screen.stageWidth - 120);
   const x = screen.left + (screen.stageWidth - w) / 2;
@@ -419,6 +447,15 @@ function drawResult() {
     ctx.fillText(`Player ${NAMES[p]}`, x, y);
     ctx.textAlign = 'right';
     ctx.fillText(`${counts[p]} vote${counts[p] === 1 ? '' : 's'}   ${game.scores[p]} pts`, x + w, y);
+  }
+  if (skips > 0) {
+    const y = barTop + game.players * 30;
+    ctx.fillStyle = 'rgba(255,255,255,.35)';
+    ctx.font = '600 18px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Nobody', x, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(`${skips} vote${skips === 1 ? '' : 's'}`, x + w, y);
   }
   centred('A to carry on', 512, '600 20px system-ui, sans-serif', ART.textDim);
 }
@@ -462,6 +499,8 @@ shell = new GameShell({
   controls: [
     { action: 'Carry on', gamepad: 'A', keyboard: 'Space', touch: 'Tap' },
     { action: 'Choose', gamepad: 'Left stick or D-pad', keyboard: 'Arrows', touch: 'Tap a name' },
+    { action: 'Not sure', gamepad: 'Vote for Nobody', keyboard: 'Vote for Nobody', touch: 'Tap Nobody' },
+    { action: 'Wrong accusation', gamepad: 'Everyone but the impostor loses a point', keyboard: 'Everyone but the impostor loses a point', touch: 'Everyone but the impostor loses a point' },
     { action: 'Pause', gamepad: 'Start', keyboard: 'Escape', touch: 'Top-right button' },
   ],
 });
