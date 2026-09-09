@@ -18,15 +18,15 @@ import { GameShell } from '../../engine/shell.js';
 import { Input } from '../../engine/input.js';
 import { Session } from '../../engine/session.js';
 import { AudioManager } from '../../engine/audio.js';
-import { chaseCeiling, isSafeLanding, isSpikeAt, ledgeSegments, makeLedge, SHAFT_TUNING } from './shaft.js';
+import { Descent, PHYSICS, isSafeLanding, isSpikeAt, ledgeSegments, SHAFT_TUNING } from './shaft.js';
 import { ParticleSystem, randRange as R, clamp } from '../../engine/util.js';
 
 const GAME_ID = 'sinkhole';
 
 // Portrait: the whole game is a vertical column, and a wide canvas would be
 // mostly empty wall on either side.
-const W = 480;
-const H = 720;
+const W = PHYSICS.width;
+const H = PHYSICS.height;
 const TAU = Math.PI * 2;
 
 // --- Art palette ---------------------------------------------------------
@@ -95,16 +95,8 @@ audio.define({
 
 // --- Tuning --------------------------------------------------------------
 
-const GRAVITY = 1500;          // units/sec²
-const DIVE_GRAVITY = 3400;
-const MAX_FALL = 760;
-const MAX_DIVE_FALL = 1150;
-const MOVE_ACCEL = 3200;
-const MAX_MOVE = 320;
-const GROUND_DRAG_PER_SECOND = 0.0005;   // fraction of horizontal speed kept
-const AIR_DRAG_PER_SECOND = 0.06;
 
-const PLAYER_R = 14;
+const PLAYER_R = PHYSICS.playerRadius;
 
 // Thick enough to be the shelf engine/shell.js draws its HUD on. A thin
 // ceiling put the score on top of the spikes, where it was unreadable — and
@@ -112,16 +104,10 @@ const PLAYER_R = 14;
 // Where the ceiling STARTS. It does not stay there: see chaseCeiling in
 // shaft.js. Kept as the starting value and as the thickness of the slab the
 // HUD is drawn on.
-const CEILING_H = 100;
-const LEDGE_H = 16;
-const LEDGE_SPACING = 132;
+const CEILING_H = PHYSICS.ceilingHeight;
+const LEDGE_H = PHYSICS.ledgeHeight;
 
-const BASE_SCROLL = 62;        // units/sec at depth 0
-const SCROLL_PER_DEPTH = 0.011;
-const MAX_SCROLL = 235;
 
-const START_LIVES = 3;
-const INVULN_TIME = 1.6;
 
 // --- The camera ---------------------------------------------------------
 //
@@ -136,30 +122,22 @@ const INVULN_TIME = 1.6;
 // was: the ceiling in frame, the spikes visible, the crush legible. It only
 // moves when the player has bought themselves room, which is the moment they
 // need to see what is underneath them instead.
-const CAM_ANCHOR = H * 0.42;   // where on screen the player sits once it moves
-const CAM_LOOKAHEAD = 130;     // extra view below at full dive speed
-const CAM_FOLLOW = 7;          // exponential follow rate, per second
 // The least room ever left between the top of the view and the player. The
 // ceiling is clamped into the view (see chaseCeiling), so this is in effect the
 // closest the spikes are ever held while the player is running -- and therefore
 // the real "max lead" of the game, in the units the player experiences it in.
-const CEILING_ROOM = 280;
 
 // --- State ---------------------------------------------------------------
 
-let depth = 0;
-let lives = START_LIVES;
-let invuln = 0;
+// THE RUN. Every rule lives in shaft.js; this file holds a reference to it and
+// draws it. Reassigned by reset() rather than mutated, so there is never a
+// half-restarted world.
+let run = new Descent();
+
+// Presentation only. A squash when the feet land and a shake when something
+// hurts -- neither decides anything, and neither belongs in the rules.
 let shake = 0;
-let ledges = [];
-
-// Where the ceiling has closed to. Starts at CEILING_H and descends —
-// chaseCeiling in shaft.js decides how fast.
-let ceilingY = CEILING_H;
-let dead = false;
-let camY = 0;              // how far the view has scrolled below the shaft top
-
-const P = { x: W / 2, y: 220, vx: 0, vy: 0, onGround: false, squash: 0 };
+const P = { squash: 0 };
 
 // Wall texture, generated once. Regenerating it per frame would be the
 // single most expensive thing in the game for no visual gain.
@@ -177,274 +155,77 @@ const SKY = (() => {
 
 // --- Level ---------------------------------------------------------------
 
-function scrollSpeed() {
-  return Math.min(BASE_SCROLL + depth * SCROLL_PER_DEPTH, MAX_SCROLL);
-}
-
-// A floor is built by shaft.js, which also holds the guarantee that every
-// one of them has somewhere survivable to land. See the header there.
-const newLedge = (y) => makeLedge(y, depth, SHAFT_TUNING);
-
-function lowestLedgeY() {
-  let low = -Infinity;
-  for (const ledge of ledges) low = Math.max(low, ledge.y);
-  return low === -Infinity ? 0 : low;
-}
-
 function reset() {
-  depth = 0;
-  lives = START_LIVES;
-  invuln = 0;
+  run = new Descent();
   shake = 0;
-  dead = false;
-  camY = 0;
-  particles.clear();
-
-  P.x = W / 2;
-  P.y = 200;
-  P.vx = 0;
-  P.vy = 0;
-  P.onGround = false;
   P.squash = 0;
-
-  ceilingY = CEILING_H;
-  ledges = [];
-  for (let y = 360; y < H + LEDGE_SPACING; y += LEDGE_SPACING) {
-    ledges.push(newLedge(y));
-  }
+  particles.clear();
 }
 
 // --- Update --------------------------------------------------------------
+//
+// THE SIMULATION IS NOT IN THIS FILE ANY MORE.
+//
+// Every rule -- the player, the ledges, the ceiling, and the camera, which
+// became a rule the moment the spikes were clamped to the top of the view --
+// lives in shaft.js, with no canvas anywhere near it. This file reads that
+// state and draws it, and reacts to it with sound and particles.
+//
+// That split is what let a bot play Sinkhole for the first time. It is also
+// the reason the same fault shipped three times before: with the physics
+// tangled up in a canvas there was nothing any test could drive, so "the
+// spikes leave the top of the screen" could only ever be found by a person
+// noticing.
 
 function update(dt) {
   if (!shell.update()) return;
-  if (dead) return;
+  if (run.dead) return;
 
   const pad = Input.get();
+  const before = { hits: run.hits, onGround: run.onGround, dead: run.dead };
+
+  run.step(dt, { x: pad.x, dive: pad.a || pad.rt || pad.b });
+
+  // --- Everything below is presentation reacting to what the rules did ---
+
+  if (run.onGround && !before.onGround) {
+    if (P.squash <= 0) audio.play('land');
+    P.squash = 1;
+  }
+
+  if (run.hits > before.hits) {
+    shake = 1;
+    audio.play(run.dead ? 'death' : 'hurt');
+    particles.emit(run.x, run.y, {
+      count: 20, colors: [ART.puffHurt], speed: [80, 300], life: [0.3, 0.7],
+      size: [3, 3], gravity: 300, drag: 0.9, shape: 'circle', shrink: true,
+    });
+  }
+
+  if (run.dead && !before.dead) {
+    shell.showGameOver(run.metres, {
+      depthReached: `${run.metres} m`,
+      fallSpeed: `${Math.round(run.scrollSpeed)} u/s`,
+    });
+  }
+
+  // The dive plume, which is the only thing on screen that says the player is
+  // going faster than gravity would take them.
   const diving = pad.a || pad.rt || pad.b;
-
-  // Horizontal. Accelerated rather than instant, so a ledge edge can be
-  // overshot — which is what makes threading a narrowing gap a skill rather
-  // than a reflex.
-  P.vx += pad.x * MOVE_ACCEL * dt;
-  const drag = P.onGround ? GROUND_DRAG_PER_SECOND : AIR_DRAG_PER_SECOND;
-  P.vx *= drag ** dt;
-  P.vx = clamp(P.vx, -MAX_MOVE, MAX_MOVE);
-  P.x = clamp(P.x + P.vx * dt, PLAYER_R, W - PLAYER_R);
-
-  // Vertical. Diving is the answer to hesitating: it costs nothing but the
-  // control you give up by falling faster.
-  const gravity = diving ? DIVE_GRAVITY : GRAVITY;
-  const terminal = diving ? MAX_DIVE_FALL : MAX_FALL;
-  P.vy = Math.min(P.vy + gravity * dt, terminal);
-
-  if (diving && P.vy > 300 && Math.random() < dt * 30) {
-    particles.emit(P.x, P.y - PLAYER_R, {
+  if (diving && run.vy > 300 && Math.random() < dt * 30) {
+    particles.emit(run.x, run.y - PLAYER_R, {
       count: 1, colors: [ART.puffDive], speed: [10, 60], life: [0.15, 0.35],
       size: [2, 3], shape: 'circle', shrink: true,
     });
   }
 
-  // Both bodies move this tick, so both endpoints are needed to test the
-  // crossing. bottomBefore is sampled while the ledges are still where they
-  // were; `rise` lets landOnLedges put them back there.
-  const bottomBefore = P.y + PLAYER_R;
-  P.y += P.vy * dt;
+  // Particles live in world space and the world rises under them.
+  particles.shift(0, -run.scrollSpeed * dt);
 
-  // The world rises. Everything moves up by the same amount, which is what
-  // makes the ledges feel like a floor coming up rather than the player
-  // sinking.
-  const rise = scrollSpeed() * dt;
-  depth += rise;
-  for (const ledge of ledges) ledge.y -= rise;
-  particles.shift(0, -rise);
-
-  P.onGround = false;
-  landOnLedges(bottomBefore, rise);
-
-  // Standing on a rising ledge carries the player up with it. Without this
-  // the player would sink through a ledge that is moving underneath them.
-  if (P.onGround) P.y -= rise;
-
-  recycleLedges();
-
-  // The ceiling closes rather than sitting still. A dive used to outrun it
-  // permanently, which removed the threat the game is named for at exactly
-  // the moment the player got good at it.
-  // THE CAMERA MOVES FIRST, and the order matters rather than being tidiness.
-  // The ceiling is now clamped against the top of the view, so it has to be
-  // clamped against where the view IS this frame; doing it after left the
-  // ceiling chasing last frame's camera, which at a full dive is sixteen
-  // pixels of drift a frame and reads as the spikes juddering.
-  updateCamera(dt);
-
-  // camY is the world position of the top of the view, and passing it is what
-  // keeps the spikes in frame.
-  ceilingY = chaseCeiling(ceilingY, P.y, scrollSpeed(), dt, SHAFT_TUNING, camY);
-
-  if (P.y - PLAYER_R < ceilingY) {
-    P.y = ceilingY + PLAYER_R;
-    hurt();
-  }
-
-  if (invuln > 0) invuln = Math.max(0, invuln - dt);
   if (shake > 0) shake = Math.max(0, shake - dt * 24);
   if (P.squash > 0) P.squash = Math.max(0, P.squash - dt * 5);
   particles.update(dt);
 }
-
-/**
- * Where the view wants to be: far enough down to keep the player on screen,
- * plus a lookahead that grows with fall speed.
- *
- * The lookahead is the point. Falling at full dive speed shifts the view a
- * further 130 units down, so the faster you commit the more of the shaft
- * below you can see -- which is exactly when you need to be picking the next
- * gap. Diving blind into ledges you cannot see yet would make speed a
- * punishment rather than the answer to hesitating.
- */
-function cameraTarget() {
-  const dive = clamp(P.vy / MAX_DIVE_FALL, 0, 1);
-  const want = Math.max(0, P.y - CAM_ANCHOR + dive * CAM_LOOKAHEAD);
-  // THE LOOKAHEAD MAY NOT EAT THE ROOM THE DANGER LIVES IN.
-  //
-  // Diving slides the view down to show more of what is coming, which pushes
-  // the player UP the screen -- from 302 pixels below the top to 172. The
-  // ceiling is now held at the top of the view, so that lookahead was directly
-  // shortening the gap between the spikes and the player, and doing it hardest
-  // at the exact moment the player is going fastest. Looking further ahead
-  // should cost you what is behind, and the spikes are not behind you, they
-  // are the thing you are running from.
-  return Math.min(want, Math.max(0, P.y - CEILING_ROOM));
-}
-
-function updateCamera(dt) {
-  // Frame-rate independent easing, the same shape used everywhere else in
-  // the suite. Eased rather than snapped so landing does not jolt the view.
-  camY += (cameraTarget() - camY) * (1 - Math.exp(-dt * CAM_FOLLOW));
-}
-
-/**
- * Does the player fit through this ledge's gap?
- *
- * The WHOLE player has to fit. The first version asked only whether the
- * player overlapped the gap at all, which made every gap effectively a
- * player-width wider than it looked and meant clipping the very edge of one
- * dropped you through it. Steering to actually line up is the game.
- */
-function fitsThroughGap(ledge) {
-  return P.x - PLAYER_R >= ledge.gapX
-    && P.x + PLAYER_R <= ledge.gapX + ledge.gapW;
-}
-
-/**
- * Lands the player on the first solid ledge their feet crossed this tick.
- *
- * SWEPT AGAINST A MOVING PLANE, and that is the whole point. Both bodies
- * move every tick: the player falls, and the ledges rise. The first version
- * sampled the player's position BEFORE the ledges moved and then compared it
- * against where the ledges ended up, which is two different moments of the
- * world in one test. A player resting on a ledge therefore measured as being
- * already below it — its own floor was skipped, and it fell through every
- * platform in the game without ever needing to find a gap.
- *
- * That was NOT tunnelling. Instrumenting it showed the player's feet
- * overshooting the plane by about one unit, exactly the distance the ledge
- * had risen; tunnelling at this game's speeds would need nineteen. Capping
- * the fall speed or thickening the ledges would have hidden it without
- * fixing it.
- *
- * Testing the player's travel against the LEDGE'S OWN travel over the same
- * interval fixes it and is swept, so no fall speed can slip through either.
- */
-function landOnLedges(bottomBefore, rise) {
-  if (P.vy < 0) return;
-  const bottomAfter = P.y + PLAYER_R;
-
-  // Every ledge whose plane the feet crossed this tick. Normally none or
-  // one: at terminal dive speed the player covers about 23 units and the
-  // ledges are 132 apart.
-  const crossed = [];
-  for (const ledge of ledges) {
-    const yBefore = ledge.y + rise;   // where this ledge was at the top of the tick
-    const yAfter = ledge.y;
-    if (bottomBefore > yBefore) continue;   // already below it when the tick began
-    if (bottomAfter < yAfter) continue;     // still above it when the tick ended
-    crossed.push(ledge);
-  }
-  if (crossed.length === 0) return;
-
-  // Highest first, so a fast fall stops at the first thing it should have
-  // hit rather than at whichever happened to be first in the array.
-  crossed.sort((a, b) => a.y - b.y);
-
-  for (const ledge of crossed) {
-    if (fitsThroughGap(ledge)) continue;
-
-    // A spiked floor is no longer uniformly deadly: shaft.js guarantees a
-    // safe band on every one of them, so the question is where the player
-    // landed rather than which kind of floor it was.
-    if (isSpikeAt(ledge, P.x, PLAYER_R)) {
-      hurt();
-      return;
-    }
-
-    P.y = ledge.y - PLAYER_R;
-    P.vy = 0;
-    P.onGround = true;
-    if (P.squash <= 0) audio.play('land');
-    P.squash = 1;
-    return;
-  }
-}
-
-function recycleLedges() {
-  // Off the top past the ceiling: gone, and fresh ones are added below so
-  // the column never runs out of floor.
-  //
-  // Generated to the bottom of the CAMERA'S view, not the canvas. That is
-  // the half of the camera fix that is not cosmetic: a player who dives past
-  // the last generated ledge has nothing left to land on, and falls for ever.
-  ledges = ledges.filter((ledge) => ledge.y > -LEDGE_H * 2);
-  while (lowestLedgeY() < camY + H + LEDGE_SPACING) {
-    ledges.push(newLedge(lowestLedgeY() + LEDGE_SPACING));
-  }
-}
-
-function hurt() {
-  if (invuln > 0) return;
-
-  lives--;
-  shake = 1;
-  audio.play(lives > 0 ? 'hurt' : 'death');
-  particles.emit(P.x, P.y, {
-    count: 20, colors: [ART.puffHurt], speed: [80, 300], life: [0.3, 0.7],
-    size: [3, 3], gravity: 300, drag: 0.9, shape: 'circle', shrink: true,
-  });
-
-  if (lives <= 0) {
-    dead = true;
-    shell.showGameOver(Math.floor(depth / 10), {
-      depthReached: `${Math.floor(depth / 10)} m`,
-      fallSpeed: `${Math.round(scrollSpeed())} u/s`,
-    });
-    return;
-  }
-
-  // Dropped back to a safe height with a moment of grace, rather than
-  // respawned into the same crush. Measured from the CEILING rather than
-  // from the canvas: the ceiling is the thing being given clearance from,
-  // and the canvas no longer says where that is.
-  invuln = INVULN_TIME;
-  P.y = CEILING_H + H * 0.34;
-  P.vy = 0;
-  P.vx = 0;
-  // Snapped, not eased. A respawn is a cut, and gliding the camera across
-  // to it would spend the grace period travelling.
-  camY = cameraTarget();
-}
-
-// --- Draw ----------------------------------------------------------------
 
 function render() {
   ctx.save();
@@ -465,25 +246,25 @@ function render() {
   ctx.globalAlpha = 1;
 
   // Everything from here down is in SHAFT coordinates -- the frame the
-  // ledges, the player and the ceiling all share. The wall and its grit stay
+  // run.ledges, the player and the ceiling all share. The wall and its grit stay
   // outside it: they are the backdrop, and scrolling them would turn a
   // camera move into the whole world sliding.
   ctx.save();
-  ctx.translate(0, -camY);
+  ctx.translate(0, -run.camY);
 
   // A lamp glow around the player, so the eye goes to the thing it controls.
-  const lamp = ctx.createRadialGradient(P.x, P.y, 10, P.x, P.y, 210);
+  const lamp = ctx.createRadialGradient(run.x, run.y, 10, run.x, run.y, 210);
   lamp.addColorStop(0, ART.lamp);
   lamp.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = lamp;
-  ctx.fillRect(screen.left, camY, screen.stageWidth, H);
+  ctx.fillRect(screen.left, run.camY, screen.stageWidth, H);
 
-  for (const ledge of ledges) {
+  for (const ledge of run.ledges) {
     // Cull what the camera has left behind. Ledges above the ceiling are
     // deleted, but ones between the ceiling and the top of a moved view are
     // still live -- the player can be carried back up to them.
-    if (ledge.y < camY - LEDGE_H * 2) continue;
-    if (ledge.y > camY + H) continue;
+    if (ledge.y < run.camY - LEDGE_H * 2) continue;
+    if (ledge.y > run.camY + H) continue;
     drawLedge(ledge);
   }
   drawCeiling();
@@ -497,9 +278,9 @@ function render() {
   drawDepth();
 
   shell.drawHud({
-    score: Math.floor(depth / 10),
+    score: Math.floor(run.depth / 10),
     best: Session.getBest(GAME_ID),
-    lives,
+    lives: run.lives,
   });
 
   shell.render();
@@ -540,26 +321,26 @@ function drawLedge(ledge) {
 
 function drawCeiling() {
   ctx.fillStyle = ART.ceiling;
-  ctx.fillRect(screen.left, 0, screen.stageWidth, ceilingY);
+  ctx.fillRect(screen.left, 0, screen.stageWidth, run.ceilingY);
 
   ctx.fillStyle = ART.ceilingSpike;
   const step = 24;
   for (let x = screen.left; x < screen.right; x += step) {
     ctx.beginPath();
-    ctx.moveTo(x, ceilingY);
-    ctx.lineTo(x + step / 2, ceilingY + 16);
-    ctx.lineTo(x + step, ceilingY);
+    ctx.moveTo(x, run.ceilingY);
+    ctx.lineTo(x + step / 2, run.ceilingY + 16);
+    ctx.lineTo(x + step, run.ceilingY);
     ctx.closePath();
     ctx.fill();
   }
 
   // A warning wash that grows as the player nears the spikes, so the danger
   // is legible before it is fatal.
-  const nearness = clamp(1 - (P.y - ceilingY) / 220, 0, 1);
+  const nearness = clamp(1 - (run.y - run.ceilingY) / 220, 0, 1);
   if (nearness > 0) {
     ctx.globalAlpha = nearness;
     ctx.fillStyle = ART.ceilingWarn;
-    ctx.fillRect(screen.left, ceilingY, screen.stageWidth, 150);
+    ctx.fillRect(screen.left, run.ceilingY, screen.stageWidth, 150);
     ctx.globalAlpha = 1;
   }
 }
@@ -567,14 +348,14 @@ function drawCeiling() {
 function drawPlayer() {
   // Blink through the grace period, the arcade shorthand for "you cannot be
   // hit right now".
-  if (invuln > 0 && Math.floor(invuln * 12) % 2 !== 0) return;
+  if (run.invuln > 0 && Math.floor(run.invuln * 12) % 2 !== 0) return;
 
   const squash = 1 - P.squash * 0.28;
   ctx.save();
-  ctx.translate(P.x, P.y);
+  ctx.translate(run.x, run.y);
   ctx.scale(1 + P.squash * 0.22, squash);
 
-  ctx.fillStyle = invuln > 0 ? ART.playerHurt : ART.player;
+  ctx.fillStyle = run.invuln > 0 ? ART.playerHurt : ART.player;
   ctx.beginPath();
   ctx.arc(0, 0, PLAYER_R, 0, TAU);
   ctx.fill();
@@ -584,7 +365,7 @@ function drawPlayer() {
 
   // Eyes look the way you are moving, which is the cheapest possible way to
   // make a circle read as a creature.
-  const look = clamp(P.vx / MAX_MOVE, -1, 1) * 4;
+  const look = clamp(run.vx / PHYSICS.maxMove, -1, 1) * 4;
   ctx.fillStyle = ART.playerEye;
   ctx.beginPath();
   ctx.arc(-4 + look, -3, 2.6, 0, TAU);
@@ -605,11 +386,11 @@ function drawPlayer() {
  * abruptly, so the two never both read as the ceiling at once.
  */
 function drawCeilingMarker() {
-  const ceilingOnScreen = ceilingY - camY;
+  const ceilingOnScreen = run.ceilingY - run.camY;
   const hidden = clamp(-ceilingOnScreen / 40, 0, 1);
   if (hidden <= 0) return;
 
-  const clearance = Math.max(0, Math.round(P.y - PLAYER_R - ceilingY));
+  const clearance = Math.max(0, Math.round(run.y - PLAYER_R - run.ceilingY));
 
   ctx.save();
   ctx.globalAlpha = hidden;
@@ -631,8 +412,8 @@ function drawCeilingMarker() {
     ctx.fill();
   }
 
-  // Centred: the shell puts the score top-left and the lives top-right, and
-  // the distance landed underneath the lives.
+  // Centred: the shell puts the score top-left and the run.lives top-right, and
+  // the distance landed underneath the run.lives.
   ctx.font = '700 12px system-ui, sans-serif';
   ctx.fillStyle = ART.ceilingSpike;
   ctx.textAlign = 'center';
@@ -646,7 +427,7 @@ function drawDepth() {
   ctx.font = '600 13px system-ui, sans-serif';
   ctx.fillStyle = ART.depthText;
   ctx.textAlign = 'center';
-  ctx.fillText(`${Math.floor(depth / 10)} m down`, W / 2, H - 22);
+  ctx.fillText(`${Math.floor(run.depth / 10)} m down`, W / 2, H - 22);
   ctx.restore();
 }
 
