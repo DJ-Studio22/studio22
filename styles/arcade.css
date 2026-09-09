@@ -13,41 +13,9 @@
 
 /* --- Top bar ------------------------------------------------------------- */
 
-.topbar {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-lg);
-  padding: var(--space-lg) var(--gutter);
-  border-bottom: 1px solid var(--color-bg-4);
-}
-
-.wordmark-link {
-  font-family: var(--font-display);
-  font-weight: var(--wordmark-weight);
-  letter-spacing: var(--wordmark-tracking);
-  font-size: clamp(1.25rem, 3vw, 1.75rem);
-  text-transform: uppercase;
-  color: var(--color-text-primary);
-  text-decoration: none;
-  line-height: 1;
-}
-
-.wordmark-link span { color: var(--color-accent); }
-
-.topbar__link {
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--color-text-secondary);
-  text-decoration: none;
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--color-bg-4);
-  border-radius: var(--radius-full);
-}
+/* .topbar, .wordmark-link and .topbar__link moved to site.css when the
+   About page needed the same header. Shared chrome belongs in the shared
+   stylesheet; two copies is how two pages drift apart. */
 
 /* --- Page head ----------------------------------------------------------- */
 

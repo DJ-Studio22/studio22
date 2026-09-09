@@ -23,26 +23,26 @@
     "status": "live"
   },
   {
-    "id": "comet",
-    "title": "Comet",
-    "tagline": "Your tail is the weapon.",
-    "description": "Survive an arena that keeps filling up. You trail fire behind you. Anything that touches it burns away, so every escape route is also a trap.",
+    "id": "bigger-fish",
+    "title": "Bigger Fish",
+    "tagline": "Mass is speed, spent.",
+    "description": "A pond far larger than the screen, scattered with pellets and with other fish who want the same ones. Eat to grow, eat anything meaningfully smaller than you, and find out that growing is the thing that makes you catchable: speed falls with mass, so prey outruns you exactly when you most want it, and spikes that a small fish swims straight under take two fifths of a big one and scatter what is left. Splitting is the only way to close on something faster than you, and putting yourself back together is something you do rather than something you wait for -- the pieces merge after twenty seconds of unbroken contact, and they only gather while you ease off the stick, so knitting up means slowing down in a pond that has just watched you divide yourself. The bots hunt each other rather than only you, at three skill levels chosen before the run that differ in judgement rather than in speed or reflexes. The score is the area under your mass curve, so surviving big is worth more than briefly being big -- which is what makes a selective player beat a greedy one, measured across three separate blocks of sixty runs.",
     "category": "arcade",
-    "path": "/games/comet/index.html",
+    "path": "/games/bigger-fish/index.html",
     "difficulty": "medium",
     "ageRange": "all",
     "inputRequirement": "universal",
     "tags": [
-      "survival",
       "arena",
-      "fire",
-      "arcade",
-      "reflex",
+      "growth",
+      "strategy",
+      "endless",
+      "single-player",
       "high-score"
     ],
     "featured": true,
     "tournamentReady": true,
-    "estimatedRunTime": 120,
+    "estimatedRunTime": 240,
     "status": "live"
   },
   {
@@ -503,26 +503,26 @@
     "status": "live"
   },
   {
-    "id": "bigger-fish",
-    "title": "Bigger Fish",
-    "tagline": "Mass is speed, spent.",
-    "description": "A pond far larger than the screen, scattered with pellets and with other fish who want the same ones. Eat to grow, eat anything meaningfully smaller than you, and find out that growing is the thing that makes you catchable: speed falls with mass, so prey outruns you exactly when you most want it, and spikes that a small fish swims straight under take two fifths of a big one and scatter what is left. Splitting is the only way to close on something faster than you, and putting yourself back together is something you do rather than something you wait for -- the pieces merge after twenty seconds of unbroken contact, and they only gather while you ease off the stick, so knitting up means slowing down in a pond that has just watched you divide yourself. The bots hunt each other rather than only you, at three skill levels chosen before the run that differ in judgement rather than in speed or reflexes. The score is the area under your mass curve, so surviving big is worth more than briefly being big -- which is what makes a selective player beat a greedy one, measured across three separate blocks of sixty runs.",
+    "id": "comet",
+    "title": "Comet",
+    "tagline": "Your tail is the weapon.",
+    "description": "Survive an arena that keeps filling up. You trail fire behind you. Anything that touches it burns away, so every escape route is also a trap.",
     "category": "arcade",
-    "path": "/games/bigger-fish/index.html",
+    "path": "/games/comet/index.html",
     "difficulty": "medium",
     "ageRange": "all",
     "inputRequirement": "universal",
     "tags": [
+      "survival",
       "arena",
-      "growth",
-      "strategy",
-      "endless",
-      "single-player",
+      "fire",
+      "arcade",
+      "reflex",
       "high-score"
     ],
     "featured": false,
     "tournamentReady": true,
-    "estimatedRunTime": 240,
+    "estimatedRunTime": 120,
     "status": "live"
   }
 ]

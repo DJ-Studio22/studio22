@@ -1,0 +1,117 @@
+/* styles/about.css
+ *
+ * The About page, and only it. Everything here is site chrome, so every colour,
+ * space and font comes from styles/tokens.css -- see CLAUDE.md. The page reuses
+ * .topbar, .index, .button and .footer from site.css and adds nothing but the
+ * reading column.
+ *
+ * A reading column is the whole design. This is the one page on the site that
+ * is words, and the only thing words need is a measure short enough to read and
+ * enough air around them to look deliberate.
+ */
+
+.about-page {
+  background: var(--color-bg-0);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.about {
+  flex: 1;
+  width: min(66ch, calc(100% - var(--space-xl) * 2));
+  margin: 0 auto;
+  padding: clamp(var(--space-xl), 10vh, var(--space-2xl)) 0 var(--space-2xl);
+}
+
+.about__title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  /* Tracks the display sizes on the landing page rather than inventing a
+     third scale. */
+  font-size: clamp(2.1rem, 6vw, 3.4rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: var(--space-lg) 0 var(--space-xl);
+}
+
+/* The opening paragraph carries the idea, so it is set larger than the rest
+   and in the secondary colour -- present, but not competing with the heading. */
+.about__lead {
+  font-size: clamp(1.05rem, 2.4vw, 1.3rem);
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-2xl);
+}
+
+.about__block { margin-bottom: var(--space-2xl); }
+
+.about__heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+  letter-spacing: 0.01em;
+  color: var(--color-accent);
+  margin: 0 0 var(--space-md);
+}
+
+.about__text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-md);
+}
+
+.about__text:last-child { margin-bottom: 0; }
+
+/* The promises. A list rather than a paragraph because they are a list: five
+   separate commitments that each have to be checkable on their own. */
+.about__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.about__list li {
+  position: relative;
+  padding-left: var(--space-lg);
+  margin-bottom: var(--space-md);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.about__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 10px;
+  height: 2px;
+  background: var(--color-accent);
+}
+
+.about__list b { color: var(--color-text-primary); font-weight: 700; }
+
+.about__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+  margin-top: var(--space-2xl);
+}
+
+.about__quiet {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  font-size: 0.95rem;
+}
+
+.about__quiet:hover,
+.about__quiet:focus-visible { border-bottom-color: var(--color-accent); }
+
+@media (max-width: 640px) {
+  .about { padding-top: var(--space-2xl); }
+}
