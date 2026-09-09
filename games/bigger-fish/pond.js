@@ -134,10 +134,19 @@ export const TUNING = {
   // swings the outside piece wide and pulls it off the inside one; a piece of a
   // different size arrives at a different time. Contact becomes something the
   // player's hands are doing.
-  // How fast a follower chases the head, as a share of its own top speed.
-  // Under 1 so a piece genuinely trails rather than gluing itself on, and high
-  // enough that it is never left behind by a head of similar size.
-  followShare: 0.92,
+  // How fast a follower chases the head, as a share of the FASTER of its own
+  // top speed and the head's.
+  //
+  // Was 0.92 of its own speed, "under 1 so a piece genuinely trails". A piece
+  // that trails at 0.92 of a head moving at 1.0 never arrives: the gap only
+  // grows while the stick is held, and the followers were strung out behind
+  // the head for the whole of a run. Over 1, and measured against the head's
+  // speed as well as its own, a follower always closes on a head that is
+  // moving away -- it cannot overtake, because it is aimed AT the head and
+  // stops on arrival, and #separate keeps it from sitting inside. So a split
+  // comes back together behind you while you carry on, which is what the
+  // pieces flying back to the main body is supposed to look like.
+  followShare: 1.6,
 
   // YOUR OWN PIECES ARE SOLID, and this is the other half of being able to
   // break contact.
@@ -158,15 +167,18 @@ export const TUNING = {
   // and the contact clock never starts at all. Measured: nought seconds of
   // contact over eight seconds of running straight.
   cellRest: 0.9,
-  // AND HOW FAR THEY STRING OUT WHEN YOU RUN.
+  // HOW FAR THEY STRING OUT WHEN YOU RUN. Zero, and it was 0.7.
   //
-  // The rest distance is not a constant: at full stick the pieces spread to
-  // well beyond touching, and easing off lets them close again. Without this
-  // the push stopped the moment they were just touching, so running flat out
-  // held them at exactly the distance that still counts as contact and the
-  // merge clock ran on regardless -- 5.5 seconds to 8.5 through three seconds
-  // of full stick.
-  cellSpread: 0.7,
+  // At 0.7 the rest distance grew with the stick: full deflection spread the
+  // pieces to 1.6 times their combined radius, so the merge clock only ran
+  // while you eased off, and "knitting up means slowing down" was the design.
+  // It was also the second half of the fault reported twice as "I get stuck at
+  // four pieces": a heavy follower was HELD 220 units off the head for as long
+  // as the stick was pushed, and looked like a piece refusing to come back.
+  // With the head now a fixed cell and the followers paced to reach it, the
+  // pieces close to touching while you carry on and the clock runs from there.
+  // Contact still breaks when a turn or a shove genuinely parts them.
+  cellSpread: 0,
   contactSlack: 3,
 
   // EJECT.
@@ -619,7 +631,8 @@ export class Pond {
   #spawnPlayer() {
     const at = this.#randomPoint();
     const cell = this.#newCell('player', at.x, at.y, this.t.startMass);
-    return { id: 'player', cells: [cell], alive: true, peak: this.t.startMass };
+    // headId is the cell the stick drives, for life. See mainCell().
+    return { id: 'player', cells: [cell], alive: true, peak: this.t.startMass, headId: cell.id };
   }
 
   #spawnBot(index) {
@@ -843,13 +856,51 @@ export class Pond {
   get score() { return Math.round(this.massSeconds / this.t.scoreDivisor); }
 
   /**
-   * The biggest of the player's cells. THE one the stick drives.
+   * THE cell the stick drives. For the player, the same cell for as long as it
+   * lives; for a bot, its biggest.
    *
-   * Ties broken by id so the answer cannot flicker between two equal halves
-   * frame to frame, which would hand the stick back and forth and feel like a
-   * fault in the controller.
+   * WHY THIS IS AN IDENTITY AND NOT "THE BIGGEST", which it was, twice.
+   *
+   * Picking the biggest piece every frame reads as harmless and it is what made
+   * the controls come apart at four pieces and not at two. A split halves the
+   * cell into two equal pieces, and the tie went to the lower id -- the piece
+   * that stayed -- so with two pieces the stick seemed to hold. The moment a
+   * follower grazed a pellet it outweighed the head by a crumb and the stick
+   * jumped to it; the old head became a follower and turned round to chase.
+   * At two pieces the piece you were driving was usually the one grazing, so
+   * it rarely showed. At four or more the pieces are spread over their own
+   * patches of food, the lead changes hands every few frames, and every change
+   * turns the pack round: the player is stuck in a shoal arguing with itself.
+   * A coefficient cannot fix that, because the rule is what is wrong.
+   *
+   * So the player's head is a CELL, remembered by id. Splitting keeps it -- the
+   * launched half is the new cell, the head is the one that stays. Merging
+   * keeps it -- see #merge, where the head is always the survivor. A spike
+   * bursting it keeps it -- the pieces fly off and the head is what is left.
+   * Growing does not move it, in either direction. The only way the stick
+   * passes to another piece is the head being eaten, and then it goes to the
+   * biggest piece left, once, and stays there.
    */
   mainCell(owner = 'player') {
+    if (owner === 'player' && this.player) {
+      const head = this.#cellById(this.player.headId);
+      if (head && head.mass > 0) return head;
+      // The head has gone. Control passes to the largest piece left, and that
+      // piece becomes the head from here on.
+      const next = this.#biggestCell(owner);
+      this.player.headId = next ? next.id : -1;
+      return next;
+    }
+    return this.#biggestCell(owner);
+  }
+
+  #cellById(id) {
+    for (const cell of this.cells) if (cell.id === id) return cell;
+    return null;
+  }
+
+  // Ties broken by id so the answer cannot flicker between two equal halves.
+  #biggestCell(owner) {
     let best = null;
     for (const cell of this.cells) {
       if (cell.owner !== owner) continue;
@@ -895,15 +946,26 @@ export class Pond {
 
     // The followers swim at the head rather than at a point in space, so they
     // trail behind it the way a shoal does instead of racing it to a spot.
+    // Paced against the head as well as themselves: a follower heavier than
+    // the head would otherwise be slower than it and fall further behind for
+    // as long as the stick was held. See followShare.
+    const headSpeed = speedOf(main.mass, t);
     for (const cell of this.cells) {
       if (cell.owner !== 'player' || cell === main) continue;
       const dx = main.x - cell.x;
       const dy = main.y - cell.y;
       const d = Math.hypot(dx, dy);
       if (d < 0.001) continue;
-      const speed = speedOf(cell.mass, t) * t.followShare;
-      cell.x += (dx / d) * Math.min(speed * dt, d);
-      cell.y += (dy / d) * Math.min(speed * dt, d);
+      const speed = Math.max(speedOf(cell.mass, t), headSpeed) * t.followShare;
+      // To the head's FLANK, not its centre. A follower that aims at the
+      // centre drives inside the head faster than #separate can push it out,
+      // and the two draw as one blurred fish. Stopping at touching distance
+      // leaves them side by side, in contact, which is where the merge clock
+      // wants them and what a shoal looks like.
+      const flank = (radiusOf(cell.mass, t) + radiusOf(main.mass, t)) * t.cellRest;
+      const closing = Math.max(0, d - flank);
+      cell.x += (dx / d) * Math.min(speed * dt, closing);
+      cell.y += (dy / d) * Math.min(speed * dt, closing);
     }
   }
 
@@ -1241,8 +1303,15 @@ export class Pond {
           const held = (this.contact.get(key) ?? 0) + dt;
           this.contact.set(key, held);
           if (held >= t.mergeContactSeconds) {
-            a.mass += b.mass;
-            b.mass = 0;
+            // THE HEAD IS ALWAYS THE SURVIVOR. Absorbing it into a follower
+            // would delete the cell the stick drives and hand control to
+            // whatever mainCell() fell back on -- the biggest -- which is the
+            // exact fault the persistent head exists to remove.
+            const headId = owner === 'player' ? this.player.headId : -1;
+            const keep = b.id === headId ? b : a;
+            const gone = keep === a ? b : a;
+            keep.mass += gone.mass;
+            gone.mass = 0;
             this.contact.delete(key);
             if (owner === 'player') this.merges++;
           }
