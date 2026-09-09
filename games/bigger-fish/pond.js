@@ -93,10 +93,29 @@ export const TUNING = {
   // rather than for density would have quietly rewritten the growth curve, and
   // with it every claim measured against it.
   //
-  // Fifteen thousand of anything is a lot to touch every frame, which is why
-  // the pellet grid below is built once and maintained rather than rebuilt --
+  // THEN A QUARTER OF THAT, on purpose, September 2026. At 15360 the pond grew
+  // faster than anybody could watch: with the player sitting still the median
+  // bot was 200 mass at sixty seconds and the biggest 777, and 4000 by two
+  // minutes. From the player's seat that is indistinguishable from bots
+  // spawning huge -- which is what got reported, twice, after the spawn rule
+  // itself had already been fixed. Growth was the fault, and pellet density is
+  // its dial: everything in the pond grazes at the same rate, so a quarter of
+  // the food is the same ladder at a quarter of the speed, for the player and
+  // the bots alike. Measured over six seeds, sixty seconds:
+  //
+  //                        15360         3840
+  //   median bot            200           44
+  //   biggest bot           777          175   (two minutes: 4035 -> 728)
+  //   selective policy      200           23
+  //   idle player survives   30s          71s
+  //
+  // The bot count is NOT the dial, and was left alone: see botCount below for
+  // why forty bots made the two skill policies indistinguishable.
+  //
+  // Thousands of anything is a lot to touch every frame, which is why the
+  // pellet grid below is built once and maintained rather than rebuilt --
   // see #eatPellets.
-  pellets: 15360,
+  pellets: 3840,
   pelletMass: 1.6,
 
   // SPLIT.

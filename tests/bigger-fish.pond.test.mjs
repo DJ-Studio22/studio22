@@ -810,18 +810,48 @@ test('NO TWO SPIKES ARE EVER CLOSE ENOUGH TO FENCE A BIG CELL IN', () => {
     + `fences in anything over ${Math.round(passes)} mass`);
 });
 
-test('the pond grew with the sizes it produces, and the food grew with it', () => {
-  // Ten times the area, and the SAME pellet density -- 1 per 2667 square units,
-  // which is what it has always been. Density is the growth curve: a pond ten
-  // times bigger with the same 1500 pellets would have quietly made grazing ten
-  // times worse and rewritten every measurement in this file without changing a
-  // line of the rules.
+test('the pond grew with the sizes it produces, and the food is a QUARTER of what it was', () => {
+  // Density is the growth curve, so it is pinned here on purpose and changing
+  // it is meant to fail this test until the numbers are re-read.
+  //
+  // It was 1 per 2667 square units -- the original 1500 pellets over four
+  // million, carried into the ten-times pond unchanged. In September 2026 it
+  // went to a quarter of that, deliberately: at 1 per 2667 the median bot was
+  // 200 mass at sixty seconds and the biggest 777, which from the player's
+  // seat looked like bots spawning huge. At 1 per 10667 the same figures are
+  // 44 and 175. Everything grazes at the same rate, so this is the same ladder
+  // at a quarter of the speed. See the comment on TUNING.pellets.
   const area = TUNING.width * TUNING.height;
   assert.ok(area >= 4e7, `the pond is ${area} square units`);
   const perPellet = area / TUNING.pellets;
-  assert.ok(perPellet > 2400 && perPellet < 2900,
+  assert.ok(perPellet > 9600 && perPellet < 11800,
     `one pellet per ${Math.round(perPellet)} square units, which is not the density `
-    + 'every growth measurement in this file was taken at');
+    + 'the growth figures in this file were taken at');
+});
+
+test('GROWTH IS WATCHABLE: nothing in the pond is big a minute in', () => {
+  // The claim the density change was made for. With the player sitting still
+  // for sixty seconds, the biggest bot in the pond is something a person could
+  // have watched eat its way there, not a thousand-mass cell that was simply
+  // there. Six seeds; the pond keeps simulating after the idle player is eaten.
+  const tops = [];
+  const medians = [];
+  for (let seed = 1; seed <= 6; seed++) {
+    withSeed(seed, () => {
+      const pond = new Pond();
+      for (let i = 0; i < 60 * 60; i++) {
+        pond.step(1 / 60, {});
+        pond.running = true; // the bots' growth is the subject, not the player's survival
+      }
+      const masses = pond.bots.map((b) => pond.massOf(b.id)).sort((a, b) => b - a);
+      tops.push(masses[0]);
+      medians.push(masses[Math.floor(masses.length / 2)]);
+    });
+  }
+  assert.ok(summarise(tops).median < 400,
+    `the biggest bot is ${Math.round(summarise(tops).median)} mass at sixty seconds`);
+  assert.ok(summarise(medians).median < 100,
+    `the median bot is ${Math.round(summarise(medians).median)} mass at sixty seconds`);
 });
 
 test('the pellet grid finds exactly what a brute-force search finds', () => {
