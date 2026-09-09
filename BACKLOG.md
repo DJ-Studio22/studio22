@@ -6,8 +6,8 @@ has to satisfy, and how to tell it is done.
 Tick a task only when its verification actually passed, not when the code was
 written.
 
-**Open right now:** items 13 to 17. Item 13 (real hardware) is the big one and
-cannot be closed from this machine; 14 to 17 are small and known. Everything
+**Open right now:** items 13 to 16. Item 13 (real hardware) is the big one and
+cannot be closed from this machine; 14 to 16 are small and known. Everything
 above 13 is done. Last reviewed 9 September 2026.
 
 ---
@@ -383,17 +383,18 @@ a list of games rather than a list of essays.
 
 ---
 
-## 17. Forty-eight stale remote branches — OPEN
+## 17. Forty-eight stale remote branches — [x] DONE, and it was a misdiagnosis
 
-Every remote branch except `main` is a merged PR (checked 9 September 2026:
-54 merged PRs, no branch with commits newer than its merge). `npm run merge`
-passes `--delete-branch` but the remote copies survive, so the list keeps
-growing.
+The remote branches were never there. `git ls-remote --heads origin` listed
+one branch, `main`: `--delete-branch` had deleted every one. What survived
+were the LOCAL remote-tracking refs (`refs/remotes/origin/*`), which only a
+fetch with `--prune` updates, and nothing had ever run one -- so `git branch
+-r` showed forty-eight branches that did not exist on the server.
 
-**Do:** delete the merged remote branches, and find out why `--delete-branch`
-leaves them (a repo setting, or the local checkout being on the branch at the
-time).
+**Done:** `git remote prune origin`, `fetch.prune true` in this clone's
+config, and `tools/merge-pr.mjs` runs `git fetch --prune` after every
+merge so the list cannot go stale again.
 
-**Verify:** `git branch -r` shows `main` and whatever is genuinely in flight.
+**Verified:** `git branch -r` shows `origin/main` only.
 
 ---
