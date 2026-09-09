@@ -1,32 +1,43 @@
 // tests/helpers/gravity-bot.mjs
 //
-// Two pilots for Gravity Well, differing in ONE field: `usesPrediction`.
+// Pilots for Gravity Well.
 //
-// The planner chooses what to do by flying the choice first -- it runs the same
+// THE FIRST AXIS is whether a pilot can see the future at all -- `usesPrediction`.
+// The planner chooses what to do by flying the choice first: it runs the same
 // predict() the game draws on screen over each of a handful of candidate
-// controls, and takes the one that ends furthest down the corridor without
+// controls and takes the one that ends furthest down the corridor without
 // ending in a planet. That is precisely the skill the game claims to be about,
-// performed by a machine.
+// performed by a machine. The chaser has the same craft, fuel, turn rate and
+// impatience and simply cannot see: it points down the corridor, or at a fuel
+// ring when the tank is low, and burns. It is the null hypothesis -- if it kept
+// up, the line on screen would be decoration.
 //
-// The chaser has the same craft, the same fuel, the same turn rate and the same
-// impatience. It just cannot see the future: it points down the corridor, or at
-// a fuel ring when the tank is low, and burns. It is not a weak pilot -- it is
-// the null hypothesis, and if it kept up, the line on screen would be
-// decoration.
+// THE SECOND AXIS is how well a pilot reads the line, and this is where the
+// project's competent/good pair lives (see tests/README.md, convention 3):
+//
+//   competent  reads about a second and a half of the five-second line, and
+//              changes its mind twice a second. A person who has understood
+//              what the line means and is still flying by the near end of it.
+//   good       reads the whole line and re-decides four times a second. The
+//              player the game is tuned to reward, not the ceiling.
+//
+// One bot cannot tell forgiveness from an easier game from a flattened ceiling;
+// two can. A tuning change that helps the competent pilot without touching the
+// good one is forgiveness, which is what "make it easier" should mean here.
 
 import { Flight, TUNING, advance, predict, speedOf } from '../../games/gravity-well/orbit.js';
 
 export const SKILLS = {
-  planner: { usesPrediction: true },
-  chaser: { usesPrediction: false },
+  chaser: { usesPrediction: false, horizon: 0, decideEvery: 0.25 },
+  competent: { usesPrediction: true, horizon: 1.5, decideEvery: 0.5 },
+  good: { usesPrediction: true, horizon: TUNING.predictSeconds, decideEvery: 0.25 },
 };
+// The planner of the earlier write-ups is the good pilot; the name is kept so
+// the foresight sweep reads the same as its own comments.
+SKILLS.planner = SKILLS.good;
 
-// How often a pilot changes its mind. Not every frame: a pilot that re-decides
-// a hundred and twenty times a second is not flying, it is averaging.
-const DECIDE_EVERY = 0.25;
-
-// What it is allowed to do. The same set for both; only whether the choice is
-// made by looking ahead differs.
+// What it is allowed to do. The same set for every pilot; only how the choice
+// is made differs.
 // Any path that ends badly costs more than any path that does not, and among
 // the bad ones, later is better.
 const DOOMED = 1e6;
@@ -92,11 +103,14 @@ function scorePath(flight, control, t, seconds) {
   return { cost: -copy.x - ringsHit * 260 + (dry ? 400 : 0) };
 }
 
-function decidePlanner(flight, t) {
+// `horizon` is how much of the line this pilot reads. The line itself is
+// t.predictSeconds long; a pilot cannot read past the end of what is drawn.
+function decidePlanner(flight, t, horizon) {
+  const seconds = Math.min(horizon, t.predictSeconds);
   let best = null;
   for (const control of CONTROLS) {
     if (control.burn && flight.craft.fuel <= 0) continue;
-    const { cost } = scorePath(flight, control, t, t.predictSeconds);
+    const { cost } = scorePath(flight, control, t, seconds);
     if (!best || cost < best.cost) best = { cost, control };
   }
   // If every candidate ends in a planet, do SOMETHING rather than nothing:
@@ -134,22 +148,27 @@ function decideChaser(flight, t) {
  *
  * `seconds` caps it: the corridor has no end, so a run that is going well would
  * otherwise finish only when the harness got bored.
+ *
+ * `options.horizon` overrides the pilot's own, for the foresight sweep, which
+ * asks how the SAME pilot does with more or less of the line to read.
  */
 export function runOnce(skillName, tuning = TUNING, options = {}) {
   const { seconds = 90 } = options;
   const skill = SKILLS[skillName];
+  if (!skill) throw new Error(`no such pilot: ${skillName}`);
+  const horizon = options.horizon ?? skill.horizon;
   const flight = new Flight(tuning);
   const t = tuning;
 
-  let sinceDecision = DECIDE_EVERY;
+  let sinceDecision = skill.decideEvery;
   let control = { turn: 0, burn: false };
   let guard = 0;
 
   while (flight.running && flight.time < seconds && guard++ < 2_000_000) {
     sinceDecision += t.step;
-    if (sinceDecision >= DECIDE_EVERY) {
+    if (sinceDecision >= skill.decideEvery) {
       sinceDecision = 0;
-      control = skill.usesPrediction ? decidePlanner(flight, t) : decideChaser(flight, t);
+      control = skill.usesPrediction ? decidePlanner(flight, t, horizon) : decideChaser(flight, t);
     }
     // NOTHING MOVES UNTIL THE PLAYER TOUCHES A CONTROL, which is right for a
     // person reading the corridor and a trap for a bot: a pilot that decides to

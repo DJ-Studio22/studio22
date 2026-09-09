@@ -59,8 +59,32 @@ export const TUNING = {
   thrust: 34,
   turnRate: 3.0,              // radians a second
   fuel: 140,
-  fuelPerSecond: 15,
+  // 15 before the September 2026 easing. Runs last three times longer under the
+  // top speed below, so the tank had become the thing that ended them.
+  fuelPerSecond: 11,
   craftRadius: 1.4,
+
+  // THE TOP SPEED, in units a second, and the single change that made the game
+  // playable on a phone.
+  //
+  // There was none, and the numbers said why the game was too hard: a pilot
+  // that reads a second and a half of the line -- a competent person, not a
+  // careless one -- died at a median of 14.5 seconds, averaging 215 units a
+  // second. That is one full screen a second, so the five-second line was
+  // showing five screens of corridor and a body arrived from off-screen faster
+  // than a thumb could answer. Everything else tried (fewer bodies, weaker
+  // pull, a faster turn, a wider lane, more fuel) helped the pilot that reads
+  // the whole line and left the competent one dying at the same 14 seconds.
+  //
+  // A cap of 100 changes the failure. The competent pilot's median run went to
+  // 42 seconds and the good pilot stopped crashing at all -- its runs now end
+  // on fuel, or not at all inside a minute. Flying under the cap the line shows
+  // about two screens ahead, which is a distance a person can plan across.
+  //
+  // Enforced in advance(), so the prediction is capped by the same arithmetic
+  // as the flight. Burning at the cap still costs fuel: the engine is the thing
+  // that cannot push harder, not the tank.
+  maxSpeed: 100,
 
   // What the prediction draws: how far ahead, and at what resolution. Long
   // enough to show a whole swing round a body, and it is the same arithmetic
@@ -79,6 +103,15 @@ export const TUNING = {
   // the assumption you never move the stick is a fifteen-second lie. Five is in
   // the middle of the plateau and long enough to show a whole swing round a
   // body.
+  //
+  // RE-MEASURED after the top speed went in (thirty seeds, sixty seconds, the
+  // good pilot): 0.5s 1013 | 1s 1432 | 1.5s 3672 | 2s 4819 | 3s 4793 | 5s 4057.
+  // Same shape -- worthless under a second, four times better by two -- but the
+  // plateau now starts at two rather than three, because at the slower pace
+  // two seconds of line is a whole screen. The five-second figure sits a little
+  // under the three because the bot burns into the cap and runs dry; a person
+  // eases off when the craft stops accelerating, and the part of the line past
+  // the screen edge is not read by anyone, so five stays.
   predictSeconds: 5,
   predictEvery: 4,            // keep one point in four, to draw
 
@@ -100,11 +133,15 @@ export const TUNING = {
   chunkWidth: 150,
   corridor: {
     lookAhead: 3,
-    bodiesBase: 1.2,
-    bodiesPerChunk: 0.16,
+    // Density and pull both climb with the chunk index. Eased with the top
+    // speed above (from 1.2 / 0.16 / 0.02): at the slower pace a run reaches
+    // chunk thirty rather than dying at chunk twenty, so the same escalation
+    // per chunk would have been steeper per minute of play.
+    bodiesBase: 1.0,
+    bodiesPerChunk: 0.10,
     bodiesMax: 6,
     massBase: 1.0,
-    massPerChunk: 0.02,
+    massPerChunk: 0.012,
     // A ring in every chunk, and a second one this often.
     ringChance: 0.45,
     // The clear lane a chunk must leave somewhere across its height.
@@ -292,6 +329,18 @@ export function advance(state, bodies, control, dt, t = TUNING) {
 
   state.vx += 0.5 * (ax + bx) * dt;
   state.vy += 0.5 * (ay + by) * dt;
+
+  // THE TOP SPEED. See TUNING.maxSpeed for why there is one. Applied inside the
+  // integrator and nowhere else, so the prediction is capped by the identical
+  // arithmetic as the flight and the honest line stays honest.
+  if (t.maxSpeed) {
+    const speed = Math.hypot(state.vx, state.vy);
+    if (speed > t.maxSpeed) {
+      const k = t.maxSpeed / speed;
+      state.vx *= k;
+      state.vy *= k;
+    }
+  }
   return state;
 }
 

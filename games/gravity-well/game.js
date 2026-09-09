@@ -111,10 +111,18 @@ const ctx = screen.ctx;
 const audio = new AudioManager();
 const particles = new ParticleSystem({ max: 260 });
 
+// NO VIRTUAL STICK. Turning is a binary decision -- left or right, held for as
+// long as the line says -- and a stick on a phone made it analogue and vague:
+// a thumb resting slightly off centre turned the craft slowly the whole time,
+// and the stick claimed the bottom-left corner so the two turn pads had to be
+// shoved out of the way of it. Two buttons at bottom-left, burn at bottom-right.
+// Keyboard and gamepad still turn on the axis (arrows, d-pad, left stick),
+// because those are precise; only the touchscreen stick is gone.
+Input.setDirectionalTouch(false);
 Input.setTouchLayout([
-  { name: 'lb', xRatio: 0.11, yRatio: 0.80, radius: 48, label: '◀' },
-  { name: 'rb', xRatio: 0.31, yRatio: 0.80, radius: 48, label: '▶' },
-  { name: 'a', xRatio: 0.87, yRatio: 0.76, radius: 60, label: 'BURN' },
+  { name: 'lb', xRatio: 0.10, yRatio: 0.82, radius: 48, label: '◀' },
+  { name: 'rb', xRatio: 0.27, yRatio: 0.82, radius: 48, label: '▶' },
+  { name: 'a', xRatio: 0.87, yRatio: 0.78, radius: 60, label: 'BURN' },
 ]);
 
 Session.setScoreDirection(GAME_ID, 'high');
