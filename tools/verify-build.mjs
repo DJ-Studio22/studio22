@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { listTracks } from './music-tracks.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
@@ -98,6 +99,37 @@ if (exists('reference')) {
   problems.push('reference/ was copied into dist/ — the prototypes must not be deployed');
 }
 
+// --- The music: every song in the folder shipped, and every one is played ----
+//
+// Two of seven songs once shipped and never played: the playlist was a list in
+// engine/music.js and the folder had moved on. The playlist is compiled from
+// the folder now, and this checks both halves of that -- the file is in dist/
+// AND its id is in the compiled music chunk. A green build with a song nobody
+// can hear is the quiet failure this whole file exists for.
+let tracks = [];
+try {
+  tracks = listTracks(path.join(ROOT, 'public', 'music'));
+} catch (error) {
+  problems.push(error.message);
+}
+const chunkDir = path.join(DIST, 'assets');
+const musicChunk = fs.existsSync(chunkDir)
+  ? fs.readdirSync(chunkDir)
+    .filter((f) => /^music-.*\.js$/.test(f))
+    .map((f) => fs.readFileSync(path.join(chunkDir, f), 'utf8'))
+    .join('\n')
+  : '';
+let musicBytes = 0;
+for (const id of tracks) {
+  require_(`music/${id}.mp3`, 'a song in public/music that the build did not copy');
+  if (!musicChunk.includes(`"${id}"`)) {
+    problems.push(`music/${id}.mp3 shipped but is not in the compiled playlist — the define in vite.config.js did not run`);
+  }
+  const file = path.join(DIST, 'music', `${id}.mp3`);
+  if (fs.existsSync(file)) musicBytes += fs.statSync(file).size;
+}
+if (tracks.length === 0) problems.push('no tracks found in public/music');
+
 // --- Report ---------------------------------------------------------------
 
 const assets = fs.existsSync(path.join(DIST, 'assets'));
@@ -111,3 +143,4 @@ if (problems.length) {
 }
 
 console.log(`\nBuild verified: ${live.length} live games, ${checked.length} required files all present.`);
+console.log(`Music: ${tracks.length} tracks in the playlist, ${(musicBytes / 1048576).toFixed(1)} MB in dist/music, fetched one at a time.`);

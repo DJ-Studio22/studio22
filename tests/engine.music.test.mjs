@@ -57,3 +57,42 @@ test('a degenerate track does not divide by zero', () => {
   // must still produce a finite number.
   assert.ok(Number.isFinite(needleAt(5, 3, 3)));
 });
+
+// --- The playlist is the folder -------------------------------------------
+
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { listTracks } from '../tools/music-tracks.mjs';
+
+const MUSIC_DIR = fileURLToPath(new URL('../public/music/', import.meta.url));
+
+test('EVERY SONG IN public/music IS IN THE PLAYLIST, and the build reads the folder', () => {
+  // The sixth and seventh songs shipped and never played, because the playlist
+  // was a list of five names in engine/music.js. It is now read from the folder
+  // at build time through this function, so the claim to check is that the
+  // function sees everything that is there.
+  const ids = listTracks(MUSIC_DIR);
+  assert.ok(ids.length >= 7, `only ${ids.length} tracks found; there should be at least seven`);
+  for (const id of ids) {
+    assert.match(id, /^[a-z0-9]+(-[a-z0-9]+)*$/, `${id} is not a URL-safe track id`);
+  }
+  // Sorted, so the order the shuffle starts from is the same on every machine.
+  assert.deepEqual(ids, [...ids].sort());
+});
+
+test('a track name with a space or a capital is a build error, not a silent miss', () => {
+  // " Today.mp3" and "Half The Sky.mp3" are the two that arrived. A leading
+  // space does not survive a URL at all, and a capital is a different file on a
+  // case-sensitive host. The build refuses so the fix is a rename.
+  const dir = mkdtempSync(join(tmpdir(), 'music-'));
+  try {
+    writeFileSync(join(dir, 'fine-name.mp3'), '');
+    assert.deepEqual(listTracks(dir), ['fine-name']);
+    writeFileSync(join(dir, 'Half The Sky.mp3'), '');
+    assert.throws(() => listTracks(dir), /URL-safe/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

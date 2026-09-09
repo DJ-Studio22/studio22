@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { existsSync, readdirSync, statSync } from 'node:fs'
+import { listTracks } from './tools/music-tracks.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const gamesDir = resolve(__dirname, 'games')
@@ -26,6 +27,12 @@ function findGameEntries() {
 }
 
 export default defineConfig({
+  // The playlist, read from public/music/ at build time and compiled into
+  // engine/music.js as a constant. Dropping a new .mp3 into the folder is the
+  // whole job; see tools/music-tracks.mjs for the naming rule it enforces.
+  define: {
+    __MUSIC_TRACKS__: JSON.stringify(listTracks(resolve(__dirname, 'public', 'music'))),
+  },
   build: {
     rollupOptions: {
       input: {
