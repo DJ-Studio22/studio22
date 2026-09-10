@@ -12,13 +12,14 @@
 # is the mechanism.
 #
 # Cloudflare Pages builds independently of this workflow, so a red check here
-# does not by itself stop a deploy. Nor does branch protection: this is a
-# private repository on GitHub's free plan, which has neither branch
-# protection nor rulesets (the API answers 403). What stops a red merge is
-# `npm run merge` -- tools/merge-pr.mjs -- which waits for these checks and
-# refuses on a failure. A push straight to main, including the web uploader,
-# runs this workflow after the fact and turns main red; nothing on this plan
-# can refuse the push itself. Written up in DEPLOY.md and CLAUDE.md.
+# does not by itself stop a deploy. What stops a red MERGE is two things: the
+# `main` ruleset (Settings > Rules) requires both jobs below to pass and
+# requires a pull request, with no bypass, so a direct push to main -- web
+# uploader included -- is refused by the server; and `npm run merge`
+# (tools/merge-pr.mjs) waits for these checks and refuses on a failure before
+# GitHub is even asked. The job names below are the ones the ruleset lists:
+# rename one here and the ruleset must be updated or every PR blocks.
+# Written up in DEPLOY.md and CLAUDE.md.
 
 name: CI
 

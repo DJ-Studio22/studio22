@@ -167,32 +167,39 @@ descriptions, for a link preview most visitors never see.
 two post-build checks on every pull request and every push to `main`, on Node
 22 and 24. Locally, `npm run ci` is the same sequence.
 
-### `main` is NOT protected, and cannot be
+### `main` is protected by a ruleset, since 10 September 2026
 
-Worth stating plainly, because the rest of this section reads like it is.
+For its first weeks this was a private repository on GitHub's free plan, and
+the free plan has neither branch protection nor rulesets on a private repo:
+the API answered `"protected": false` and 403 on the protection endpoints,
+and the pull-request flow was a discipline rather than a gate. Two music files
+went straight to `main` through the web uploader on 9 September, which is
+what a discipline is worth on a busy day.
 
-GitHub does not offer branch protection or rulesets on a **private repository
-on the free plan**. Configuring one in the UI does not take effect. Checked
-against the API rather than assumed:
+The repository is public now (the code is a portfolio piece; the site was
+always public), which makes rulesets free. The ruleset is named `main`,
+under **Settings > Rules > Rulesets**, targets the default branch, and holds:
 
-```
-GET /repos/:owner/:repo/branches/main              -> "protected": false
-GET /repos/:owner/:repo/branches/main/protection   -> 403 "Upgrade to GitHub Pro
-GET /repos/:owner/:repo/rulesets                   -> 403  or make this repository
-                                                            public to enable this
-                                                            feature."
-```
+- Require a pull request before merging (0 approvals; there is one reviewer).
+- Require status checks to pass: `test and build (node 22)` and
+  `test and build (node 24)`. "Up to date" is not required, or the merge
+  script would refuse stale-but-green branches.
+- Block force pushes. Restrict deletions.
+- **Bypass list: empty.** This is the line that matters. A ruleset binds
+  administrators unless they are listed, and an admin bypass is exactly how an
+  upload to `main` would still go through.
 
-(`git push --dry-run` is not a test of this. It reports success because it
-never reaches the server's ruleset check.)
+Verified the day it went live: an empty commit pushed to `main` was refused
+with "Changes must be made through a pull request" and "2 of 2 required
+status checks are expected", and a PR showed both checks as required.
 
-Three ways that changes: make the repository public, which enables rulesets
-for free; pay for GitHub Pro; or leave it. **It is currently left.**
+(`git push --dry-run` is not a test of any of this. It reports success
+because it never reaches the server's ruleset check. Push something.)
 
-So the pull-request flow below is a *discipline*, not a gate. What it buys is
-still real — every change gets a CI run, a diff worth reading, and a revert
-that undoes one thing — but nothing on the server will stop a direct push to
-`main`, and `gh pr merge` will merge a PR whose checks are red.
+Two older rulesets, `main-1` and `main-2`, were created on 6 September
+while the repo was still private and did nothing then. `main-2` carries an
+administrator bypass. Rulesets combine, so the `main` ruleset still refuses,
+but the two should be deleted rather than left to confuse the next reader.
 
 Cloudflare Pages also builds independently of GitHub Actions, so a red check
 has never been able to stop a *deploy*. It tells you promptly that `main` is
