@@ -19,6 +19,17 @@ Deployed as a static site to Cloudflare Pages.
   because every game is its own page, and a full navigation to the arcade
   tears down memory that a score was just written into.
 - NO data collection of any kind. No names stored, no analytics, no tracking.
+- THE ONE EXCEPTION TO THE STORAGE RULE IS BEARFALL (games/bearfall/). It is
+  a base-building game that runs for hours, and a camp that vanished with the
+  tab would be no game at all, so it keeps its save on the player's device
+  (localStorage, IndexedDB, a cookie and the Cache API, newest copy wins) and
+  offers a copy-and-paste save code for moving between devices. Nothing leaves
+  the device: no server, no account, no analytics, and the site-wide
+  `connect-src 'self'` still holds. It is declared as an exception here, in the
+  game's own Settings screen ("Progress is saved on this device") and in its
+  games.json description, so the limitation of the promise is visible before a
+  player relies on it. No other game may do this without the same three
+  declarations.
 - NO online multiplayer. Local hot-seat and pass-and-play only.
 - NEVER commit on `main`: branch, push, open a PR, wait for both CI checks,
   merge. Since 10 September 2026 the server enforces this too -- a ruleset
@@ -31,6 +42,13 @@ Deployed as a static site to Cloudflare Pages.
 ## Architecture rules
 - Games import FROM engine/. Nothing in engine/ ever imports FROM games/.
   This dependency is one-way, always.
+- Bearfall is the sanctioned exception to "always use the engine": it is a
+  WebGL2 game with its own renderer, input, loop, audio and UI, built in a
+  separate repository and dropped in as one ES module (games/bearfall/game.js
+  is generated -- edit it upstream, never here). It imports nothing from
+  engine/ and engine/ knows nothing about it. It still honours the universal
+  input requirement (touch, keyboard, gamepad), the CSP (no inline script, no
+  workers, nothing third-party) and the no-server rule.
 - Never reimplement input, canvas scaling, the game loop, audio, or session
   scoring inside a game. Always use the engine module.
 - Every game lives in its own folder under games/ with its own index.html

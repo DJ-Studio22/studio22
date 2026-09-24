@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Bearfall — Studio 22</title>
+  <meta name="description" content="Chop wood, hunt bears, hire a crew and wall in your camp before the night raids come. An idle survival builder that saves on your device." />
+
+  <!-- BEGIN generated metadata — tools/inject-meta.mjs -->
+  <link rel="canonical" href="https://studio22.games/games/bearfall/index.html" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Studio 22" />
+  <meta property="og:title" content="Bearfall — Studio 22" />
+  <meta property="og:description" content="Run a snowbound camp: chop wood, hunt bears, hire a crew, wall in your base and hold out through the night raids. Five zones, a Bear King, and offline earnings while you're away. The one game here that keeps your camp — on your device, no account." />
+  <meta property="og:url" content="https://studio22.games/games/bearfall/index.html" />
+  <meta property="og:image" content="https://studio22.games/social-card.png" />
+  <meta property="og:image:width" content="1731" />
+  <meta property="og:image:height" content="909" />
+  <meta property="og:image:alt" content="The Studio 22 wordmark, gold on black." />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Bearfall — Studio 22" />
+  <meta name="twitter:description" content="Run a snowbound camp: chop wood, hunt bears, hire a crew, wall in your base and hold out through the night raids. Five zones, a Bear King, and offline earnings while you're away. The one game here that keeps your camp — on your device, no account." />
+  <meta name="twitter:image" content="https://studio22.games/social-card.png" />
+  <meta name="twitter:image:alt" content="The Studio 22 wordmark, gold on black." />
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "Bearfall",
+    "url": "https://studio22.games/games/bearfall/index.html",
+    "description": "Run a snowbound camp: chop wood, hunt bears, hire a crew, wall in your base and hold out through the night raids. Five zones, a Bear King, and offline earnings while you're away. The one game here that keeps your camp — on your device, no account.",
+    "genre": "strategy",
+    "gamePlatform": "Web browser",
+    "playMode": "SinglePlayer",
+    "applicationCategory": "Game",
+    "operatingSystem": "Any",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "isAccessibleForFree": true
+  }
+  </script>
+  <!-- END generated metadata -->
+
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/games/bearfall/icon-180.png" />
+  <!-- Bearfall installs on its own (a phone game that keeps its camp), so it carries its own manifest rather than the site's. -->
+  <link rel="manifest" href="/games/bearfall/manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Bearfall" />
+  <meta name="format-detection" content="telephone=no" />
+  <!-- Bearfall's own sky, not a site token: the game is artwork and paints the whole viewport itself. -->
+  <meta name="theme-color" content="#132a4d" />
+  <style>
+:root { --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
+  --ink: #fff; --glass: rgba(16,24,38,.62); --glass2: rgba(16,24,38,.85); --green: #3fbf5f; --green2: #2a9d4b; --gold: #f2c14e; --red: #ff5b6e; }
+html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0f1a26; }
+body { position: fixed; inset: 0; width: 100%; height: 100%; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overscroll-behavior: none; color: var(--ink); }
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#ui { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#err { position: absolute; left: 8px; right: 8px; bottom: 8px; color: #fff; background: rgba(160,30,30,.92); padding: 10px; font: 12px/1.4 monospace; white-space: pre-wrap; display: none; z-index: 99; border-radius: 10px; }
+.hidden { display: none !important; }
+button { font-family: inherit; }
+/* joystick */
+#joy { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: rgba(255,255,255,.14); border: 2px solid rgba(255,255,255,.45); display: none; pointer-events: none; z-index: 5; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+#joyKnob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; background: rgba(255,255,255,.85); box-shadow: 0 3px 10px rgba(0,0,0,.25); }
+/* HUD */
+#hud { position: absolute; inset: 0; pointer-events: none; }
+
+.pill { display: inline-flex; align-items: center; gap: 7px; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 999px; padding: 7px 13px 7px 11px; font-weight: 800; font-size: 16px; text-shadow: 0 1px 2px rgba(0,0,0,.4); box-shadow: 0 2px 10px rgba(0,0,0,.2); }
+.pill.big { font-size: 22px; padding: 8px 16px 8px 12px; }
+.pill.small { font-size: 14px; padding: 5px 11px 5px 9px; }
+.pill.bump { animation: bump .35s ease; }
+@keyframes bump { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+#topLeft { position: absolute; left: calc(12px + var(--sal)); top: calc(12px + var(--sat)); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; max-width: 62%; }
+#topRight { position: absolute; right: calc(12px + var(--sar)); top: calc(12px + var(--sat)); display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+#dayPill { position: relative; overflow: hidden; }
+#dayBar { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: rgba(255,255,255,.15); }
+#dayBar i { display: block; height: 100%; width: 0; background: #ffd23f; }
+.card { background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 14px; padding: 9px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.2); min-width: 170px; max-width: 230px; }
+.qhead { font-size: 10px; letter-spacing: 2px; font-weight: 800; opacity: .75; }
+.qtext { font-size: 14px; font-weight: 700; line-height: 1.25; margin: 3px 0 6px; }
+.qbar { height: 6px; border-radius: 3px; background: rgba(255,255,255,.18); overflow: hidden; }
+.qbar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ffd23f, #4ade80); transition: width .3s; }
+.qmeta { display: flex; justify-content: space-between; font-size: 12px; margin-top: 5px; opacity: .9; font-weight: 700; }
+#qreward { color: var(--gold); }
+#toasts { position: absolute; left: 50%; top: calc(110px + var(--sat)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; width: 90%; max-width: 420px; z-index: 45; }
+.toast { background: var(--glass2); color: #fff; padding: 9px 16px; border-radius: 12px; font-weight: 700; font-size: 14px; text-align: center; opacity: 0; transform: translateY(-10px) scale(.95); transition: all .3s; box-shadow: 0 4px 16px rgba(0,0,0,.3); border-left: 4px solid #8ab; }
+.toast.show { opacity: 1; transform: none; }
+.toast.good { border-color: var(--green); } .toast.warn { border-color: var(--red); } .toast.gold { border-color: var(--gold); } .toast.night { border-color: #7f8cff; background: rgba(20,20,60,.9); }
+#bars .bar { position: absolute; left: 0; top: 0; width: 48px; height: 6px; background: rgba(0,0,0,.55); border-radius: 3px; overflow: visible; }
+#bars .bar i { display: block; height: 100%; background: #ff5b6e; border-radius: 3px; }
+#bars .bar.worker i { background: #4ade80; } #bars .bar.wall { width: 60px; } #bars .bar.wall i { background: #ffd23f; }
+#bars .bar.boss { width: 120px; height: 10px; border: 1px solid #ffd23f; }
+#bars .bar span { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); font-size: 10px; font-weight: 800; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+#hpbar { position: absolute; left: 0; top: 0; width: 68px; height: 8px; background: rgba(0,0,0,.55); border-radius: 4px; transition: opacity .3s; }
+#hpfill { height: 100%; width: 100%; background: #4ade80; border-radius: 4px; }
+#hptxt { display: none; }
+#carryTag { position: absolute; left: 0; top: 0; font-size: 12px; font-weight: 800; background: rgba(0,0,0,.5); padding: 2px 7px; border-radius: 9px; transition: opacity .3s; }
+#carryTag.full { background: var(--red); }
+#carryTag.full span { display:inline-block; animation: bump .6s infinite; }
+.floater { position: absolute; left: 0; top: 0; font-weight: 900; font-size: 16px; text-shadow: 0 2px 3px rgba(0,0,0,.5), 0 0 2px rgba(0,0,0,.8); white-space: nowrap; color: #fff; }
+.floater.dmg { color: #ffd23f; font-size: 15px; } .floater.cash { color: #7bf29a; font-size: 18px; } .floater.warn { color: #ff7b8a; } .floater.good { color: #8fe3ff; } .floater.gold { color: var(--gold); font-size: 18px; } .floater.stone { color: #d7dde5; }
+#guide { position: absolute; left: 0; top: 0; width: 28px; height: 28px; display: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.4)); animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100% { opacity: .8; } 50% { opacity: 1; } }
+.btn { pointer-events: auto; border: none; border-radius: 12px; background: rgba(255,255,255,.14); color: #fff; font-weight: 800; font-size: 15px; padding: 10px 16px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25); transition: transform .08s, filter .15s; -webkit-tap-highlight-color: transparent; }
+.btn:active { transform: scale(.95); }
+.btn.primary { background: linear-gradient(180deg, #4fd47a, #2a9d4b); text-shadow: 0 1px 1px rgba(0,0,0,.3); }
+.btn.gold { background: linear-gradient(180deg, #ffd66b, #d59a1e); color: #3a2a05; text-shadow: none; }
+.btn.danger { background: linear-gradient(180deg, #ff7b8a, #c8303f); }
+.btn.ghost { background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.4); }
+.btn[disabled] { filter: grayscale(.8) brightness(.7); cursor: default; }
+.btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+.btn.wide { width: 100%; padding: 14px; font-size: 18px; margin-top: 8px; }
+.btn.x { background: rgba(255,255,255,.15); padding: 6px 12px; font-size: 16px; }
+.btn.round { width: 50px; height: 50px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; background: var(--glass); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+#bottomRight { position: absolute; right: calc(14px + var(--sar)); bottom: calc(16px + var(--sab)); display: flex; flex-direction: column; gap: 10px; }
+#ctxBtn { position: absolute; left: 50%; bottom: calc(22px + var(--sab)); transform: translateX(-50%); background: var(--glass2); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 2px solid rgba(255,255,255,.35); padding: 10px 18px; border-radius: 999px; white-space: nowrap; font-size: 14px; }
+#ctxBtn b { color: var(--gold); } #ctxBtn span { opacity: .8; font-weight: 700; }
+#hint { position: absolute; left: 50%; bottom: calc(90px + var(--sab)); transform: translateX(-50%); width: min(88%, 380px); background: var(--glass2); border-radius: 14px; padding: 12px 16px; pointer-events: auto; font-weight: 700; font-size: 14px; line-height: 1.35; box-shadow: 0 6px 24px rgba(0,0,0,.35); border-left: 4px solid var(--gold); z-index: 7; }
+.hintTap { font-size: 11px; opacity: .6; margin-top: 6px; font-weight: 600; }
+#nightVignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at center, rgba(0,0,30,0) 45%, rgba(0,0,30,.9) 100%); transition: opacity 1s; }
+.cashfly { position: absolute; width: 26px; height: 16px; pointer-events: none; z-index: 8; transform: translate(0,0) scale(1); filter: drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+/* modal */
+.modal { position: absolute; inset: 0; background: rgba(5,10,20,.55); display: flex; align-items: center; justify-content: center; pointer-events: auto; z-index: 20; padding: calc(12px + var(--sat)) 12px calc(12px + var(--sab)); }
+.panel { background: linear-gradient(180deg, #24344a, #16202f); border-radius: 18px; width: min(96%, 440px); max-height: min(86vh, 700px); overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 14px 16px 18px; box-shadow: 0 20px 60px rgba(0,0,0,.5); border: 1px solid rgba(255,255,255,.12); font-size: 14px; }
+.phead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.ptitle { font-size: 20px; font-weight: 900; }
+.lv { font-size: 12px; font-weight: 800; background: rgba(255,255,255,.15); padding: 2px 7px; border-radius: 8px; margin-left: 4px; vertical-align: middle; }
+.pdesc { opacity: .85; line-height: 1.35; margin-bottom: 8px; }
+.prow { display: flex; gap: 12px; background: rgba(0,0,0,.2); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
+.prow > div { flex: 1; } .plabel { font-size: 10px; letter-spacing: 1.5px; opacity: .6; font-weight: 800; margin-bottom: 2px; }
+.pinfo { background: rgba(0,0,0,.2); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; line-height: 1.4; }
+.pnote { font-size: 12px; opacity: .65; margin-top: 6px; line-height: 1.35; }
+.pbuy { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 6px 0 10px; padding: 8px 10px; background: rgba(255,255,255,.06); border-radius: 12px; }
+.cost { display: inline-flex; align-items: center; gap: 5px; font-weight: 800; margin-right: 8px; white-space: nowrap; }
+.cost.no { color: #ff8a97; }
+.psec { font-weight: 900; margin: 10px 0 6px; font-size: 15px; }
+.urow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.08); }
+.urow.dim { opacity: .6; } .urow.done { opacity: .55; }
+.uinfo { flex: 1; min-width: 0; } .udesc { font-size: 12px; opacity: .75; margin-top: 2px; line-height: 1.3; }
+.warn { color: var(--red); }
+.vault { background: rgba(0,0,0,.2); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
+.vbtns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.tabs { display: flex; gap: 6px; } .tab { padding: 6px 12px; border-radius: 10px; font-weight: 800; background: rgba(255,255,255,.08); cursor: pointer; pointer-events: auto; } .tab.on { background: var(--green2); }
+.srow { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.08); gap: 8px; }
+textarea#savecode { width: 100%; box-sizing: border-box; height: 56px; border-radius: 10px; border: 1px solid rgba(255,255,255,.2); background: rgba(0,0,0,.3); color: #fff; font-size: 11px; padding: 6px; margin: 4px 0 8px; pointer-events: auto; }
+.bigcash { font-size: 32px; font-weight: 900; text-align: center; color: #7bf29a; margin: 12px 0; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.bigcash svg { width: 44px; height: 28px; }
+/* title */
+.title { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 30%, #2f5f8f 0%, #10203a 70%); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; z-index: 30; text-align: center; padding: 20px; }
+.title::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,.55) 1.5px, transparent 2px), radial-gradient(circle, rgba(255,255,255,.35) 1px, transparent 1.5px); background-size: 90px 90px, 50px 50px; background-position: 0 0, 25px 30px; animation: snow 12s linear infinite; opacity: .6; }
+@keyframes snow { from { background-position: 0 0, 25px 30px; } to { background-position: 40px 90px, 45px 80px; } }
+.tlogo { position: relative; line-height: .9; margin-bottom: 14px; }
+.t1 { font-size: 64px; font-weight: 900; letter-spacing: 6px; color: #fff; text-shadow: 0 6px 0 #2a5b8a, 0 10px 20px rgba(0,0,0,.4); }
+.t2 { font-size: 64px; font-weight: 900; letter-spacing: 6px; color: #ffd23f; text-shadow: 0 6px 0 #9a6a10, 0 10px 20px rgba(0,0,0,.4); }
+.tsub { position: relative; font-size: 15px; font-weight: 700; opacity: .9; margin-bottom: 28px; }
+#titleBtns { position: relative; width: min(80%, 300px); display: flex; flex-direction: column; gap: 10px; }
+.tctrl { position: relative; margin-top: 26px; font-size: 12px; opacity: .7; line-height: 1.5; }
+.tver { position: absolute; bottom: calc(14px + var(--sab)); font-size: 11px; opacity: .5; }
+@media (max-width: 380px) { .card { min-width: 150px; max-width: 190px; } .pill.big { font-size: 19px; } .t1, .t2 { font-size: 52px; } }
+@media (min-width: 900px) { .card { max-width: 260px; } }
+.confirmbox { z-index: 40; background: rgba(5,10,20,.6); }
+.panel.small { width: min(92%, 360px); }
+.crow { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+.sstat { font-size: 12px; text-align: right; max-width: 62%; opacity: .9; }
+.sstat.good { color: #8fe3a2; } .sstat.warn { color: #ffb36b; }
+.tstat { position: relative; margin-top: 14px; font-size: 12px; opacity: .8; max-width: 300px; }
+.tstat.warn { color: #ffb36b; opacity: 1; } .tstat.good { color: #a9ecb8; }
+.tspin { width: 28px; height: 28px; margin: 12px auto; border-radius: 50%; border: 3px solid rgba(255,255,255,.25); border-top-color: #fff; animation: tspin .9s linear infinite; }
+@keyframes tspin { to { transform: rotate(360deg); } }
+.warnpill { margin-top: 6px; background: rgba(120,60,10,.85); color: #ffd39a; border: 1px solid rgba(255,180,90,.6); font-size: 12px; font-weight: 700; padding: 6px 10px; border-radius: 10px; pointer-events: auto; text-align: left; }
+.diag { font: 10px/1.45 ui-monospace, Menlo, monospace; opacity: .75; background: rgba(0,0,0,.25); border-radius: 8px; padding: 6px 8px; margin: 2px 0 8px; word-break: break-all; }
+.diag .btn { margin-top: 4px; }
+.pnote.warn { color: #ffd39a; opacity: .95; background: rgba(120,60,10,.35); border-left: 3px solid rgba(255,180,90,.7); padding: 8px 10px; border-radius: 8px; }
+.warnpill.good { background: rgba(20,90,50,.9); color: #c8f5d6; border-color: rgba(120,230,160,.6); }
+.tver a { color: inherit; text-decoration: none; border-bottom: 1px dotted rgba(255,255,255,.4); pointer-events: auto; }
+
+    #boot-fallback { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: 8px; text-align: center; padding: 24px; color: #f5f0e8; background: #132a4d; font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif; z-index: 50; }
+    #boot-fallback h1 { font-size: 1.4rem; margin: 0 0 12px; color: #f2c14e; }
+    #boot-fallback p { margin: 0 0 8px; max-width: 32rem; }
+    #boot-fallback a { color: #c8d3e0; }
+  </style>
+</head>
+<body>
+  <!-- Shown until the game boots, and NOT removed by script that could itself be the thing that failed:
+       game.js deletes it once the renderer is up. If the module never parses, this stays on screen and says so. -->
+  <div id="boot-fallback">
+    <h1>Loading&hellip;</h1>
+    <p>If this message stays, the game failed to start. Reloading usually fixes it. Bearfall needs WebGL2, which every current phone and desktop browser has.</p>
+    <p><a href="/arcade.html">Back to the arcade</a></p>
+  </div>
+  <canvas id="gl"></canvas>
+  <div id="ui"></div>
+  <div id="err"></div>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

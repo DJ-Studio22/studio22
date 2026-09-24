@@ -1291,8 +1291,54 @@ function biggerFish() {
 
 // --- The lookup ----------------------------------------------------------
 
+/**
+ * Bearfall -- the camp at dusk.
+ *
+ * A palisade with a lit gate, the sawmill roof behind it, a pine line, and
+ * one bear on the snow outside the wall. The eye lands on the gate lantern:
+ * the night is coming and the wall is what stands between the two.
+ */
+function bearfall() {
+  return '<svg ' + VIEW + '>'
+    + '<defs><linearGradient id="bf-sky" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#132a4d"/><stop offset="1" stop-color="#3a7bc8"/>'
+    + '</linearGradient>'
+    + '<linearGradient id="bf-snow" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0" stop-color="#f4f8fc"/><stop offset="1" stop-color="#cfdcea"/>'
+    + '</linearGradient></defs>'
+    + '<rect width="320" height="200" fill="url(#bf-sky)"/>'
+    + '<circle cx="262" cy="38" r="14" fill="#f7f3e6" opacity=".9"/>'
+    + '<circle cx="40" cy="30" r="1.5" fill="#e8f0ff" opacity=".8"/><circle cx="118" cy="22" r="1.2" fill="#e8f0ff" opacity=".6"/><circle cx="196" cy="52" r="1.4" fill="#e8f0ff" opacity=".7"/>'
+    // distant pines
+    + '<path d="M0 112 L14 84 L28 112 Z M26 114 L42 78 L58 114 Z M292 110 L306 80 L320 110 Z M268 116 L282 88 L296 116 Z" fill="#1c3e6e"/>'
+    // snow field
+    + '<path d="M0 118 Q80 104 160 116 T320 112 L320 200 L0 200 Z" fill="url(#bf-snow)"/>'
+    // sawmill roof behind the wall
+    + '<path d="M120 96 L160 70 L200 96 Z" fill="#b8552e"/><rect x="128" y="96" width="64" height="16" fill="#8f4a2b"/>'
+    // palisade: posts with pointed tops
+    + Array.from({ length: 13 }, (_, i) => {
+      const x = 96 + i * 10.5;
+      return '<path d="M' + x + ' 128 L' + (x + 4) + ' 118 L' + (x + 8) + ' 128 L' + (x + 8) + ' 150 L' + x + ' 150 Z" fill="#c98a4b"/>';
+    }).join('')
+    + '<rect x="96" y="132" width="136" height="3" fill="#8f5a2e" opacity=".8"/>'
+    // gate, opened, with lantern glow
+    + '<rect x="156" y="124" width="24" height="26" fill="#6e3d22"/>'
+    + '<circle cx="168" cy="120" r="9" fill="#ffd45a" opacity=".55"/><circle cx="168" cy="120" r="3.5" fill="#fff0b0"/>'
+    // bear outside the wall
+    + '<ellipse cx="60" cy="166" rx="26" ry="14" fill="#f7f7f4"/><circle cx="84" cy="156" r="9" fill="#f7f7f4"/>'
+    + '<circle cx="80" cy="150" r="3" fill="#f7f7f4"/><circle cx="90" cy="150" r="3" fill="#f7f7f4"/>'
+    + '<circle cx="87" cy="156" r="1.6" fill="#1b2230"/><rect x="40" y="172" width="7" height="10" rx="2" fill="#e6e8ea"/><rect x="70" y="172" width="7" height="10" rx="2" fill="#e6e8ea"/>'
+    // the player, small, with an axe, walking to the gate
+    + '<rect x="130" y="158" width="8" height="14" rx="3" fill="#59a6e8"/><circle cx="134" cy="154" r="4.5" fill="#f1d6b8"/>'
+    + '<path d="M140 156 L146 148" stroke="#8a5a3a" stroke-width="2"/><path d="M144 146 L150 150 L146 152 Z" fill="#c7ccd2"/>'
+    // logs stacked by the gate
+    + '<circle cx="204" cy="164" r="4" fill="#a86a3a"/><circle cx="212" cy="164" r="4" fill="#a86a3a"/><circle cx="208" cy="157" r="4" fill="#c98a4b"/>'
+    + '</svg>';
+}
+
 const ART = {
   updraft,
+  bearfall,
   comet,
   'number-crunch': numberCrunch,
   keystroke,
