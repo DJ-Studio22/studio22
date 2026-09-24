@@ -946,7 +946,11 @@ const G = {
   // ---- save / load
   serialize() {
     const bl = {}; for (const id in this.b) { const b = this.b[id]; bl[id] = { level: b.level, built: b.built, funded: b.funded, cash: b.cash, queue: b.queue, hp: b.hp, visible: b.visible, mode: b.mode }; }
-    return { v: DATA.version, qv: 2, t: Date.now(), money: this.money, vault: this.vault, stats: this.stats, day: this.day, dayT: this.dayT, zones: this.zones, zoneFund: this.zoneFund || {}, b: bl, upgrades: this.upgrades, questIdx: this.questIdx, questPrestigeBase: this.questPrestigeBase, questCycle: this.questCycle, qBase: this.qBase, event: this.event, eventT: this.eventT, nextEventT: this.nextEventT, ach: this.ach, legacy: this.legacy, prestigeCount: this.prestigeCount, settings: this.settings, tutorial: this.tutorial, offlineRate: this.passiveRate(), player: this.player ? { x: this.player.x, z: this.player.z, hp: this.player.hp, carry: this.player.carry.map(c => c.type) } : null, walls: this.walls };
+    return { v: DATA.version, qv: 2, t: Date.now(), money: this.money, vault: this.vault, stats: this.stats, day: this.day, dayT: this.dayT, zones: this.zones, zoneFund: this.zoneFund || {}, b: bl, upgrades: this.upgrades, questIdx: this.questIdx, questPrestigeBase: this.questPrestigeBase, questCycle: this.questCycle, qBase: this.qBase, event: this.event, eventT: this.eventT, nextEventT: this.nextEventT, ach: this.ach, legacy: this.legacy, prestigeCount: this.prestigeCount, settings: this.settings, tutorial: this.tutorial, offlineRate: this.passiveRate(), player: this.player ? { x: this.player.x, z: this.player.z, hp: this.player.hp, carry: this.player.carry.map(c => c.type) } : null, walls: this.walls,
+      // the crew and the forest, so a reload carries on where it was instead of everyone walking out from home into a fresh forest
+      workers: this.workers.filter(w => !w.dead).map(w => { const t = w.target && (w.target.kind === 'tree' || w.target.kind === 'rock') ? (w.target.kind === 'tree' ? this.trees.indexOf(w.target) : this.rocks.indexOf(w.target)) : -1; return { h: w.homeId, r: w.role, x: +w.x.toFixed(2), z: +w.z.toFixed(2), hp: Math.round(w.hp), s: w.state, c: w.carry.map(it => [it.type, it.mult]), hid: w.hidden ? 1 : 0, t, d: w.deliverTo ? w.deliverTo.id : '' }; }),
+      nodes: this.trees.map((t, i) => (!t.alive || t.hp < t.maxHp) ? [i, t.alive ? t.hp : 0, +Math.max(0, t.regrow).toFixed(1)] : null).filter(Boolean),
+      rocksState: this.rocks.map((r, i) => (!r.alive || r.hp < r.maxHp) ? [i, r.alive ? r.hp : 0, +Math.max(0, r.regrow).toFixed(1)] : null).filter(Boolean) };
   },
   save() {
     if (!this.running) return; const s = this.serialize(); this.lastSave = this.time; this.saveDirty = false;
@@ -957,7 +961,7 @@ const G = {
     if (!s || s.v !== DATA.version) return false;
     this.money = s.money || 0; this.vault = Object.assign({ stone: 0, gold: 0 }, s.vault); Object.assign(this.stats, s.stats); this.day = s.day || 1; this.dayT = s.dayT || 0.25; this.zones = s.zones || this.zones; this.zoneFund = s.zoneFund || {};
     this.upgrades = Object.assign({ cap: 0, dmg: 0, atk: 0, speed: 0, hp: 0, chop: 0 }, s.upgrades); this.questIdx = s.questIdx || 0; if (!s.qv && this.questIdx >= 2) this.questIdx++; this.qBase = s.qBase || null; this.event = s.event || null; this.eventT = s.eventT || 0; this.nextEventT = s.nextEventT || 420; this.questPrestigeBase = s.questPrestigeBase || 0; this.questCycle = s.questCycle || 0; this.ach = s.ach || {}; this.legacy = s.legacy || 0; this.prestigeCount = s.prestigeCount || 0;
-    this.settings = Object.assign(this.settings, s.settings); this.tutorial = s.tutorial || {}; this.offlineRate = s.offlineRate || 0; this.savedPlayer = s.player; this.savedBuildings = s.b || {}; this.savedWalls = s.walls; this.savedAt = s.t || Date.now();
+    this.settings = Object.assign(this.settings, s.settings); this.tutorial = s.tutorial || {}; this.offlineRate = s.offlineRate || 0; this.savedPlayer = s.player; this.savedBuildings = s.b || {}; this.savedWalls = s.walls; this.savedAt = s.t || Date.now(); this.savedWorkers = s.workers || null; this.savedNodes = s.nodes || null; this.savedRocks = s.rocksState || null;
     return true;
   },
   exportCode() { const s = this.running ? this.serialize() : (Store.mem || Store.readLocal()); return s ? Store.encode(s) : Promise.resolve(''); },
@@ -1275,6 +1279,11 @@ Object.assign(G, {
       }
     }
     return null;
+  },
+  // restore chopped / regrowing trees and rocks from a save (indices are stable: the world is generated from a fixed seed)
+  applyNodeStates() {
+    const apply = (list, saved) => { if (!saved) return; for (const e of saved) { const n = list[e[0]]; if (!n) continue; if (e[1] <= 0) { n.alive = false; n.hp = 0; n.fall = 0; n.regrow = e[2] > 0 ? e[2] : 5; } else { n.alive = true; n.hp = Math.min(n.maxHp, e[1]); } } };
+    apply(this.trees, this.savedNodes); apply(this.rocks, this.savedRocks); this.savedNodes = null; this.savedRocks = null; this.navInvalidate(); if (NAV.trees) this.navBuildTrees();
   },
   // ---- per-frame world updates: trees regrow, gates animate, flakes
   updateWorld(dt) {
@@ -2023,12 +2032,23 @@ Object.assign(G, {
   workerRig(role) { if (!this.workerRigs[role]) { const d = DATA.workers[role]; this.workerRigs[role] = Models.human({ id: 'w_' + role, parka: hex(d.parka), pants: C.navy, helmet: d.helmet, mitt: C.brownD }); } return this.workerRigs[role]; },
   workerTool(role) { const t = DATA.workers[role].tool; return t === 'axe' ? Models.axe() : t === 'spear' ? Models.spear() : Models.pickaxe(); },
   syncWorkers() {
+    // a save carries the crew's positions and jobs: put them back first, then fill any gaps from home
+    if (this.savedWorkers) { for (const sw of this.savedWorkers) { const b = this.b[sw.h]; const d = b && DATA.buildings[b.type]; if (!b || !b.built || !d || d.worker !== sw.r) continue; if (this.workers.filter(w => w.homeId === sw.h && !w.dead).length >= b.level) continue; this.restoreWorker(sw, b); } this.savedWorkers = null; }
     for (const id in this.b) {
       const b = this.b[id]; const d = DATA.buildings[b.type]; if (!d.worker) continue; const want = b.built ? b.level : 0;
       const have = this.workers.filter(w => w.role === d.worker && w.homeId === id && !w.dead);
       for (let i = have.length; i < want; i++) this.makeWorker(d.worker, b);
       for (const w of have) this.applyWorkerStats(w, b);
     }
+  },
+  restoreWorker(sw, b) {
+    const w = this.makeWorker(sw.r, b); w.pop = 0; w.x = sw.x; w.z = sw.z; w.hp = Math.max(1, Math.min(w.maxHp, sw.hp || w.maxHp)); w.hidden = !!sw.hid;
+    w.carry = (sw.c || []).slice(0, w.cap).map(c => ({ type: c[0], mult: c[1] || 1, pop: 0 }));
+    const keep = ['seek', 'idle', 'go', 'work', 'deliver', 'waitfull', 'gohome', 'patrol']; w.state = keep.includes(sw.s) ? sw.s : 'seek'; // fights and pickups restart from a fresh look around
+    if ((w.state === 'go' || w.state === 'work') && sw.t >= 0) { const list = w.role === 'lumber' ? this.trees : this.rocks; const n = list[sw.t]; if (n && n.alive) { w.target = n; n.claimed = w.id; n.claimedT = this.time; } else w.state = 'seek'; }
+    if (w.state === 'deliver' && sw.d && this.b[sw.d] && this.b[sw.d].built) w.deliverTo = this.b[sw.d];
+    if (w.hidden) { w.state = 'gohome'; }
+    return w;
   },
   applyWorkerStats(w, b) { const d = DATA.workers[w.role]; const wh = this.level('warehouse'); w.cap = d.cap + 3 * wh; w.speed = d.speed * (1 + 0.04 * (b.level - 1)) * (1 + this.legacy * 0.02); w.maxHp = d.hp + 20 * (b.level - 1); if (w.role === 'hunter') { w.dmg = 8 + 8 * (b.level - 1); w.maxHp = 80 + 30 * (b.level - 1); } if (w.role === 'guard') w.dmg = 15 + 8 * (b.level - 1); w.rangeZone = Math.max(DATA.buildings[b.type].zone || 0, Math.min(this.stats.king > 0 ? 4 : 3, Math.floor((b.level + 1) / 2))); },
   homeSpot(b) { const d = DATA.buildings[b.type]; const x = b.x - d.w / 2 + 1.2, z = b.z + d.d / 2 + 1.2; if (!d.zone && !this.inBase(x, z, -0.6)) return [x, b.z - d.d / 2 - 1.2]; /* backs onto the wall (Barracks): door on the north side */ return [x, z]; },
@@ -2414,7 +2434,7 @@ const UI = {
         <div id="nightVignette"></div>
       </div>
       <div id="modal" class="modal hidden"><div id="panel" class="panel"></div></div>
-      <div id="title" class="title"><div class="tlogo"><div class="t1">BEAR</div><div class="t2">FALL</div></div><div class="tsub">Chop. Fight. Build. Survive the frost.</div><div id="titleBtns"></div><div class="tctrl">Drag anywhere to move · Walk into trees to chop · Walk into bears to fight<br>WASD on desktop · gamepad: stick to move, A open, B back, Y camp</div><div class="tver">v2.1 · <a id="homeLink" href="https://studio22.games/" target="_blank" rel="noopener">a Studio 22 game</a></div></div>`;
+      <div id="title" class="title"><div class="tlogo"><div class="t1">BEAR</div><div class="t2">FALL</div></div><div class="tsub">Chop. Fight. Build. Survive the frost.</div><div id="titleBtns"></div><div class="tctrl">Drag anywhere to move · Walk into trees to chop · Walk into bears to fight<br>WASD on desktop · gamepad: stick to move, A open, B back, Y camp</div><div class="tver">v2.2 · <a id="homeLink" href="https://studio22.games/" target="_blank" rel="noopener">a Studio 22 game</a></div></div>`;
     if (typeof BUILD_FLAGS !== 'undefined' && BUILD_FLAGS.site === 'studio22') { const a = root.querySelector('#homeLink'); a.href = '/arcade.html'; a.target = '_self'; a.textContent = 'a Studio 22 game · back to the arcade'; }
     const E = (id) => document.getElementById(id); for (const id of ['dayTxt', 'dayBar', 'qtext', 'qfill', 'qprog', 'qreward', 'cashTxt', 'cashPill', 'stonePill', 'stoneTxt', 'goldPill', 'goldTxt', 'legacyPill', 'legacyTxt', 'toasts', 'bars', 'floaters', 'hpbar', 'hpfill', 'hptxt', 'carryTag', 'guide', 'ctxBtn', 'btnCamp', 'btnSettings', 'hint', 'hintTxt', 'modal', 'panel', 'title', 'titleBtns', 'dayPill', 'nightVignette', 'saveWarn', 'updatePill']) this.els[id] = E(id);
     this.els.saveWarn.addEventListener('click', () => { Sound.play('click'); this.openSettings(); });
@@ -2564,7 +2584,7 @@ const UI = {
       h += `<div class="srow"><span>Load a code</span><span>${navigator.clipboard && navigator.clipboard.readText ? this.btn('Paste', 'small', async () => { try { const t = await navigator.clipboard.readText(); const ta = document.getElementById('savecode'); if (t && ta) { ta.value = t; this.toast('Pasted — now tap Load', ''); } else this.toast('Clipboard is empty', 'warn'); } catch (e) { this.toast('Tap the box, hold, and choose Paste', ''); } }) : ''} ${this.btn('Load', 'small primary', async () => { const ta = document.getElementById('savecode'); const code = ta ? ta.value : ''; if (!code.trim()) return this.toast('Paste a save code in the box first', 'warn'); const why = await G.importCode(code); if (why) this.toast(why, 'warn'); else { this.toast('Save loaded — starting your camp…', 'good'); G.running = false; setTimeout(() => location.reload(), 500); } })}</span></div>`;
       h += `<div class="pnote">A save code is a backup of your whole camp. Copy it to Notes or a message to yourself; load it here on another device or after a reset.</div>`;
       h += `<div class="srow"><span>Reset game</span>${this.btn('Reset', 'small danger', () => { this.confirm('Reset everything?', 'Deletes your camp, progress and Legacy. This cannot be undone.', () => { G.wipe(); G.running = false; location.reload(); }, 'Delete & reset') })}</div>`;
-      h += `<div class="pnote">Bearfall v2.1 · A Studio 22 game. Progress saves automatically on this device — add to Home Screen for full-screen play and the safest saves. Made with ❤ and a lot of snow.</div>`;
+      h += `<div class="pnote">Bearfall v2.2 · A Studio 22 game. Progress saves automatically on this device — add to Home Screen for full-screen play and the safest saves. Made with ❤ and a lot of snow.</div>`;
       this.els.panel.innerHTML = h; };
     render();
   },
@@ -2615,7 +2635,7 @@ const UI = {
   function start(fresh) {
     if (!fresh && hasSave) G.applySave(saved); else { G.wipe(); G.savedPlayer = null; G.savedBuildings = {}; }
     Sound.setSfx(G.settings.sfx); Sound.setMusic(G.settings.music); R.setQuality(G.settings.quality === undefined ? 2 : G.settings.quality);
-    G.buildWorld(); G.initBuildings(); G.initPlayer(); G.spawnBears(); G.syncWorkers(); G.refreshPads(); G.running = true; UI.hideTitle();
+    G.buildWorld(); G.applyNodeStates(); G.initBuildings(); G.initPlayer(); G.spawnBears(); G.syncWorkers(); G.refreshPads(); G.running = true; UI.hideTitle();
     UI.shownCash = G.money;
     if (!fresh && hasSave) { const away = (Date.now() - G.savedAt) / 1000; const cap = (2 + G.level('warehouse')) * 3600; if (away > 90 && G.offlineRate > 0) { const amt = Math.floor(G.offlineRate * Math.min(away, cap) * 0.5); if (amt >= 1) setTimeout(() => UI.showOffline(amt, away), 600); } }
     else { setTimeout(() => UI.hint('Drag anywhere to move. Walk up to a tree and stop — your axe does the rest. Fill your backpack, then sell at the Trading Post.'), 800); }
@@ -2656,7 +2676,7 @@ const UI = {
   window.addEventListener('pagehide', () => { G.save(); Store.flushCloud(true); }); window.addEventListener('beforeunload', () => G.save());
   window.addEventListener('resize', () => R.resize());
   // ---- installable web app: offline cache + "update ready" prompt (only when served over http(s) as a top-level page)
-  G.buildId = '20260924015127';
+  G.buildId = '20260924022709';
   const wantSw = typeof BUILD_FLAGS === 'undefined' || BUILD_FLAGS.sw !== false;
   if (wantSw && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !Store.ephemeral) {
     navigator.serviceWorker.register('./sw.js').then((reg) => {
