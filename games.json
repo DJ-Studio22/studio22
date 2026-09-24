@@ -593,5 +593,28 @@
     "tournamentReady": false,
     "estimatedRunTime": 420,
     "status": "live"
+  },
+  {
+    "id": "bearfall",
+    "title": "Bearfall",
+    "tagline": "Chop. Fight. Build. Survive the frost.",
+    "description": "Run a snowbound camp: chop wood, hunt bears, hire a crew, wall in your base and hold out through the night raids. Five zones, a Bear King, and offline earnings while you're away. The one game here that keeps your camp — on your device, no account.",
+    "category": "strategy",
+    "path": "/games/bearfall/index.html",
+    "difficulty": "medium",
+    "ageRange": "all",
+    "inputRequirement": "universal",
+    "tags": [
+      "survival",
+      "base-building",
+      "idle",
+      "resource-management",
+      "single-player",
+      "saves-progress"
+    ],
+    "featured": true,
+    "tournamentReady": false,
+    "estimatedRunTime": 900,
+    "status": "live"
   }
 ]
